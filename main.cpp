@@ -29,6 +29,8 @@ int main() {
         },
     };
 
+/*
+
     ImageDesc img_desc {
         .frame = {0, 0, 140, 38},
         .radius = 0,
@@ -37,8 +39,10 @@ int main() {
         .vertical_align = Align::Center
     };
 
+*/
+
     API::draw_rectangle(rect_desc);
-    API::draw_image(img_desc);
+    //API::draw_image(img_desc);
 
     API::run();
     return 0;

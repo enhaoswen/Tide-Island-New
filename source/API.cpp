@@ -26,6 +26,7 @@ void API::init() {
     Log::logger(Log::Debug, "Timer initialized successfully");
 
     Wayland::set_report_click(Object::click);
+    Wayland::set_need_draw(Island::request_redraw);
 
     Wayland::apply_config(
        config->island_width,
@@ -50,15 +51,18 @@ void API::draw_image(ImageDesc& desc) {
 }
 
 void API::run(){
+
     while (config->is_running) {
 
-        Log::logger(Log::Debug, "Start a new frame");
+        if (config->need_redraw) {
+            Log::logger(Log::Debug, "Start a new frame");
 
-        Renderer::begin_frame();
-        Object::draw();
-        Renderer::end_frame();
-
-        Timer::wait();
+            Renderer::begin_frame();
+            Object::draw();
+            Renderer::end_frame();
+        }
+        
+       Island::request_redraw(Timer::wait());
     }
 
 }

@@ -79,3 +79,7 @@ void Island::set_island_width(float width){
 void Island::set_island_height(float height){
     island.island_height = height;
 }
+
+void Island::request_redraw(bool redraw) {
+    island.need_redraw = redraw;
+}

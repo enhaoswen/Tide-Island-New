@@ -45,7 +45,7 @@ struct Island_conf {
     int zone{-1};
     float anchor_top{};
     float radius{};
-
+    bool need_redraw{true};
     bool is_running{true};
 };
 

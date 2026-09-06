@@ -11,5 +11,5 @@ void push(
 );
 void handle_events();
 int get_timer_fd();
-void wait();
+bool wait();
 }

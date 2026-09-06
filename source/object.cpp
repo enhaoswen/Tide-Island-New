@@ -230,7 +230,6 @@ public:
     }
 
     void draw() override {
-
         Renderer::draw_image(frame, horizontal_align, vertical_align, radius, path);
     }
 

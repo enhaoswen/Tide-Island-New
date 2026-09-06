@@ -18,6 +18,8 @@ std::array<int,2> get_surface_size();
 void swap_buffer();
 void apply_config(uint32_t width, uint32_t height, int32_t exclusive_zone, int32_t margin_top);
 void set_report_click(void (*callback)(float x, float y, bool left));
+void set_need_draw(void (*callback)(bool redraw));
+bool get_wayland_redraw();
 int get_wayland_fd();
 void shutdown();
 short prepare_events();

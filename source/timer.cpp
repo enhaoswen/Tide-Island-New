@@ -129,7 +129,7 @@ void Timer::handle_events() {
     }
 }
 
-void Timer::wait() {
+bool Timer::wait() {
     short wayland_events = Wayland::prepare_events();
 
     pollfd fds[] = {
@@ -167,5 +167,8 @@ void Timer::wait() {
 
     if (fds[1].revents & POLLIN) {
         handle_events();
+        return true;
     }
+
+    return Wayland::get_wayland_redraw();
 }

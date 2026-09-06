@@ -63,10 +63,12 @@ uint32_t current_height{};
 float pointer_x{};
 float pointer_y{};
 bool pointer_inside{};
+bool wayland_needs_redraw{false};
 
 int wayland_fd{-1};
 
 void (*report_click)(float x, float y, bool left){};
+void (*need_draw)(bool redraw){};
 
 // --- Wayland Registry Listeners ---
 
@@ -293,6 +295,8 @@ void layer_surface_configure(
             0,
             0
         );
+
+        wayland_needs_redraw = true;
     }
 }
 
@@ -537,6 +541,10 @@ void Wayland::set_report_click(void (*callback)(float x, float y, bool left)) {
     report_click = callback;
 }
 
+void Wayland::set_need_draw(void (*callback)(bool redraw)) {
+    need_draw = callback;
+}
+
 void Wayland::handle_events(short revents) {
     if (revents & (POLLERR | POLLHUP | POLLNVAL)) {
         wl_display_cancel_read(display.get());
@@ -631,4 +639,8 @@ void Wayland::shutdown() {
         egl_display = EGL_NO_DISPLAY;
         egl_config  = nullptr;
     }
+}
+
+bool Wayland::get_wayland_redraw() {
+    return exchange(wayland_needs_redraw, false);
 }
