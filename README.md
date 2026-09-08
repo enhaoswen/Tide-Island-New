@@ -15,7 +15,7 @@
 
 ## About this project
 
-This is a new version of `Tide Island` which is made using OpenGL (Still developing).
+This is a new version of [Tide Island](https://github.com/enhaoswen/Tide-island), made using OpenGL (still under development).
 
 ### Why making a new version?
 
