@@ -13,8 +13,9 @@ const auto config = Island::state();
 }
 
 void API::init() {
+
     Island::init();
-    Log::logger(Log::Debug, "Load config successfully");
+    Log::logger(Log::Debug, "Initialize Island successfully");
 
     Wayland::init();
     Log::logger(Log::Debug, "Wayland initialized successfully");

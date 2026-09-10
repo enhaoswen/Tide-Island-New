@@ -11,7 +11,7 @@
 //
 namespace Island {
 
-const Island_conf* state();
+const IslandConf* state();
 void init();
 void set_anchor_top(float distance);
 void set_is_running(bool state);

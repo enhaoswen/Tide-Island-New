@@ -11,7 +11,6 @@
 #include "config.hpp"
 
 using namespace std;
-using namespace nlohmann;
 
 // ============================================================================
 // [Internal Details]
@@ -19,7 +18,7 @@ using namespace nlohmann;
 
 namespace {
 
-Island_conf island{};
+IslandConf island{};
 
 } // namespace
 
@@ -27,14 +26,14 @@ Island_conf island{};
 // [Public API Implementation]
 // ============================================================================
 
-const Island_conf* Island::state() {
+const IslandConf* Island::state() {
     return &island;
 }
 
-Island_conf init_island(){
+IslandConf init_island(){
     json config = Config::get_config();
 
-    Island_conf island {
+    IslandConf island {
         .color = {0,0,0,1},
         .island_width = config["island_width"],
         .island_height = config["island_height"],

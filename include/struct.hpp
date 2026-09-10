@@ -2,6 +2,24 @@
 
 #include <array>
 #include <chrono>
+#include <vector>
+#include <string>
+#include <variant>
+#include <unordered_map>
+
+// Remember to change `types` in `create_str_config` if you add new types to the config variant. (config.cpp)
+
+using config = std::unordered_map<
+    std::string, 
+    std::variant<
+        int, 
+        float, 
+        std::string, 
+        bool, 
+        std::vector<float>, 
+        std::vector<int>, 
+        std::vector<std::string>
+>>;
 
 struct Frame {
     float x, y, width, height;
@@ -38,8 +56,10 @@ struct Event {
     void (*callback)();
 };
 
-struct Island_conf {
-    float color[4] = {0, 0, 0, 1};
+// Remember to change `conf_to_island_conf` in config.cpp if you changed `Island Conf`
+
+struct IslandConf {
+    std::array<float, 4> color{0,0,0,1};
     float island_width{};
     float island_height{};
     int zone{-1};
@@ -59,6 +79,12 @@ enum struct AnimationTarget : char {
     ColorG,
     ColorB,
     ColorA
+};
+
+enum struct ConfigType : char {
+    IslandConfig,
+
+    Count // DO NOT use, just to get the count of config types for loop.
 };
 
 struct Animation {

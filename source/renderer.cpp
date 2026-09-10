@@ -64,6 +64,16 @@ rect_proj_uniform_t projection() {
     return result;
 }
 
+template <typename T>
+T radius_uniform(Frame frame, float radius) {
+    T result{};
+    result.center[0] = frame.x + frame.width / 2.0F;
+    result.center[1] = frame.y + frame.height / 2.0F;
+    result.half_size[0] = frame.width / 2.0F;
+    result.half_size[1] = frame.height / 2.0F;
+    result.radius = radius;
+    return result;
+}
 rect_radius_uniform_t radius_uniform(Frame frame, float radius) {
     rect_radius_uniform_t result{};
     result.center[0] = frame.x + frame.width / 2.0F;

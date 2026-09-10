@@ -1,4 +1,4 @@
-//    #define STB_RECT_PACK_IMPLEMENTATION
+#define STB_RECT_PACK_IMPLEMENTATION
 
 #include "text.hpp"
 #include "log.hpp"
@@ -60,9 +60,7 @@ void load_glyph(hb_buffer_t* buffer){
 
     hb_glyph_info_t* infos = hb_buffer_get_glyph_infos(buffer, &glyph_count);
 
-
     hb_glyph_position_t* positions = hb_buffer_get_glyph_positions(buffer, &glyph_count);
-
 
     for (unsigned i = 0; i < glyph_count; ++i) {
         FT_Load_Glyph(ft_face, infos[i].codepoint ,FT_LOAD_DEFAULT);
@@ -70,7 +68,6 @@ void load_glyph(hb_buffer_t* buffer){
 
         FT_Bitmap& bitmap = ft_face->glyph->bitmap;
     }
-
 }
 
 void destroy_buffer(hb_buffer_t* buffer) {
