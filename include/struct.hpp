@@ -18,7 +18,8 @@ using config = std::unordered_map<
         bool, 
         std::vector<float>, 
         std::vector<int>, 
-        std::vector<std::string>
+        std::vector<std::string>,
+        std::array<float, 4>
 >>;
 
 struct Frame {
@@ -65,6 +66,8 @@ struct IslandConf {
     int zone{-1};
     float anchor_top{};
     float radius{};
+
+    // DO NOT init need_redraw, it should always be true in the beginning.
     bool need_redraw{true};
     bool is_running{true};
 };
