@@ -222,5 +222,6 @@ variant<IslandConf, void*> Config::read(ConfigType type) {
         Log::logger(Log::Error, "So use the default config file instead.");
 
         config& conf = get_default_config(static_cast<char>(type));
+        return config_map_to_struct<typename T>(ConfigType type, const config &conf)
     }
 }

@@ -5,6 +5,29 @@
 #include <unordered_map>
 #include <variant>
 
+class TConfig {
+
+public:
+
+    std::unordered_map<
+        std::string, 
+        std::variant<
+            int, 
+            float, 
+            std::string, 
+            bool, 
+            std::vector<float>, 
+            std::vector<int>, 
+            std::vector<std::string>,
+            std::array<float, 4>
+    >> config;
+
+    TConfig();
+    std::string to_string();
+
+
+};
+
 namespace Config {
 
 void init();
