@@ -9,8 +9,11 @@
 // ======== Tide Island Config Format ========
 
 // type: key = val
-
 // Ex. float: island_width = 140
+
+// for array & vector, we should write the config like this:
+// type: key = [v1,v2,v3]
+
 
 // Supported type:
 // int
@@ -20,7 +23,10 @@
 // vector <> (not include vector, array)
 // array <> (same)
 
+
 // if need to add more types, remember to change config.cpp add_config (tmp)
+
+// you can both you "//" and "#" for note
 
 
 class Config {

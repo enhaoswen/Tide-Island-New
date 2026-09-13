@@ -389,6 +389,20 @@ void assign_config(array<string,3> token, config_turn& target) {
             return;
         }
     }
+
+    else if (token[0].starts_with("//") || token[0].starts_with("#")) {
+        return;
+    }
+
+    else {
+        Log::logger(
+            Log::Error,
+            "Invalid type {}: {} = {}",
+            token[0],
+            token[1],
+            token[2]
+        );
+    }
 }
 
 
@@ -508,7 +522,7 @@ void Config::read(ConfigType type) {
     if (!file) {
         Log::logger(
             Log::Debug,
-            "Failed to create file {}: {}", 
+            "Failed to open file {}: {}", 
             file_path.string(),
             strerror(errno)
         );
@@ -527,7 +541,7 @@ void Config::read(ConfigType type) {
         }
 
         array<string, 3> tokens = split(line);
-        if (tokens.empty()) {
+        if (tokens[0].empty()) {
             Log::logger(
                 Log::Error, 
                 "Invalid config on \"{}\":{} ",
@@ -535,7 +549,16 @@ void Config::read(ConfigType type) {
                 count
             );
         }
-
+        
+        if (!conf.contains(tokens[1])) {
+            Log::logger(
+                Log::Error,
+                "Invalid config \"{}\" on \"{}\": {}",
+                tokens[1],
+                get_config_path(type).string(),
+                count
+            );
+        }
         assign_config(tokens, conf.at(tokens[1]));
     }
 
