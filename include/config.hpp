@@ -2,46 +2,42 @@
 
 #include "struct.hpp"
 
-#include <unordered_map>
 #include <variant>
 
-class TConfig {
+// todo: update notes in struct.hpp after rewrite config backend.
+
+// ======== Tide Island Config Format ========
+
+// type: key = val
+
+// Ex. float: island_width = 140
+
+// Supported type:
+// int
+// float
+// string
+// bool
+// vector <> (not include vector, array)
+// array <> (same)
+
+// if need to add more types, remember to change config.cpp add_config (tmp)
+
+
+class Config {
+private:
+
+config conf; 
 
 public:
 
-    std::unordered_map<
-        std::string, 
-        std::variant<
-            int, 
-            float, 
-            std::string, 
-            bool, 
-            std::vector<float>, 
-            std::vector<int>, 
-            std::vector<std::string>,
-            std::array<float, 4>
-    >> config;
+Config();
+Config(ConfigType type);
 
-    TConfig();
-    std::string to_string();
+std::string to_string();
+std::variant<IslandConf> to_struct();
 
+// we assume file already exist, but maybe not readable.
+void read(ConfigType type);
+void write(ConfigType type);
 
 };
-
-namespace Config {
-
-void init();
-
-// void* is the placeholder for other config types. we will add them later.
-std::variant<IslandConf,void*> read(ConfigType type);
-std::variant<IslandConf,void*> get_config(ConfigType type);
-
-void write(
-    ConfigType type,
-
-    std::unordered_map<
-        std::string, 
-        std::variant<int, float, std::string, bool>
-    >);
-
-}
