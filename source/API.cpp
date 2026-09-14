@@ -10,7 +10,7 @@
 
 namespace {
 
-const auto config = Island::state();
+const IslandConf* state{};
 
 }
 
@@ -35,10 +35,10 @@ void API::init() {
     Wayland::set_need_draw(Island::request_redraw);
 
     Wayland::apply_config(
-       config->island_width,
-       config->island_height,
-       config->zone,
-       config->anchor_top
+       state->island_width,
+       state->island_height,
+       state->zone,
+       state->anchor_top
     );
 
     Log::logger(Log::Debug, "Initialization completed successfully");
@@ -58,9 +58,9 @@ void API::draw_image(ImageDesc& desc) {
 
 void API::run(){
 
-    while (config->is_running) {
+    while (state->is_running) {
 
-        if (config->need_redraw) {
+        if (state->need_redraw) {
             Log::logger(Log::Debug, "Start a new frame");
 
             Renderer::begin_frame();

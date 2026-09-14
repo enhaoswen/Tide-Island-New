@@ -3,6 +3,8 @@
 #include "struct.hpp"
 #include "config.hpp"
 
+#include <source_location>
+
 // ============================================================================
 // Tide Island shared state API
 // ============================================================================
@@ -12,13 +14,14 @@
 //
 namespace Island {
 
-const IslandConf* state();
+const IslandConf& state();
 void init(Config& conf);
 void set_anchor_top(float distance);
 void set_is_running(bool state);
-void set_radius(float radius);
+void set_radius(float radius, std::source_location location = std::source_location::current());
 void set_zone(int zone);
 void request_redraw(bool redraw);
 void set_island_width(float width);
 void set_island_height(float height);
+
 } // namespace Island

@@ -3,6 +3,7 @@
 #include "struct.hpp"
 
 #include <variant>
+#include <source_location>
 
 // todo: update notes in struct.hpp after rewrite config backend.
 
@@ -32,17 +33,17 @@ class Config {
 private:
 
 config conf; 
+ConfigType type;
 
 public:
 
-Config();
-Config(ConfigType type);
+Config(ConfigType type, std::source_location location = std::source_location::current());
 
-std::string to_string();
 std::variant<IslandConf> to_struct();
 
 // we assume file already exist, but maybe not readable.
-void read(ConfigType type);
-void write(ConfigType type);
+void read();
+void write();
+void write(config& arg_config);
 
 };

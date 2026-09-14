@@ -9,6 +9,7 @@
 #include "struct.hpp"
 #include "log.hpp"
 #include "config.hpp"
+#include <source_location>
 
 using namespace std;
 
@@ -26,29 +27,12 @@ IslandConf island{};
 // [Public API Implementation]
 // ============================================================================
 
-const IslandConf* Island::state() {
-    return &island;
-}
-
-IslandConf init_island(){
-    json config = Config::get_config();
-
-    IslandConf island {
-        .color = {0,0,0,1},
-        .island_width = config["island_width"],
-        .island_height = config["island_height"],
-        .zone = config["zone"],
-        .anchor_top = config["anchor_top"],
-        .radius = config["radius"],
-        .is_running = true,
-    };
-
+const IslandConf& Island::state() {
     return island;
 }
 
-void Island::init(){
-    Config::init();
-    island = init_island();
+void Island::init(Config& config){
+    island = get<IslandConf>(config.to_struct());
 }
 
 void Island::set_anchor_top(float distance) {
@@ -59,9 +43,9 @@ void Island::set_is_running(bool state) {
     island.is_running = state;
 }
 
-void Island::set_radius(float radius) {
+void Island::set_radius(float radius, source_location location) {
     if (radius <= 0) {
-        Log::fatal("Radius has to be positive");
+        Log::logger(Log::Error, R"(Radius has to be positive "{}":{})",location.file_name(), location.line());
     }
 
     island.radius = radius;

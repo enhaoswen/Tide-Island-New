@@ -25,21 +25,21 @@ config default_config{
     {"island_height", 38},
     {"zone", 40},
     {"anchor_top", 2.0f},
-    {"radius", 0.0f},
+    {"radius", 19.0f},
     {"color", vector<float>{0.0f, 0.0f, 0.0f, 1.0f}}
 };
 
-// we assume that conf is already initialized. so when error occured, we don't give it a default value, but just leave it.
+// we assume that conf is already initialized. so when error occured, we don't give it a default value, but just leave it/.
 template <typename T>
 void set_config(
     string key,
     const config& conf,
-    T& target,
-    source_location location = source_location::current()) {
+    T& target
+) {
     auto it = conf.find(key);
 
     if (it == conf.end()) {
-        Log::logger(Log::Error, "key \"{}\" is not found in your config. \"{}\": {}", key, location.file_name(), location.line());
+        Log::logger(Log::Error, R"(key "{}" is not found in your config.)", key);
     }
     else {
 
@@ -47,31 +47,23 @@ void set_config(
             target = get<T>(it->second);
         }
         else {
-            Log::logger(Log::Error, "key \"{}\" has the wrong type. \"{}\": {}", key, location.file_name(), location.line());
+            Log::logger(Log::Error, R"(key "{}" has the wrong type.)", key);
         }
     }
 }
 
-template <typename T>
-T config_map_to_struct(ConfigType type, const config& conf, source_location location = source_location::current()) {
+template<typename T>
+void set_config(
+    string key, 
+    T& val, 
+    config_turn& target
+) {
 
-    if (type == ConfigType::IslandConfig) {
-
-        IslandConf island_conf{};
-
-        set_config("color", conf, island_conf.color);
-        set_config("island_width", conf, island_conf.island_width);
-        set_config("island_height", conf, island_conf.island_height);
-        set_config("zone", conf, island_conf.zone);
-        set_config("anchor_top", conf, island_conf.anchor_top);
-        set_config("radius", conf, island_conf.radius);
-        set_config("is_running", conf, island_conf.is_running);
-
-        return island_conf;
+    if (holds_alternative<T>(target)) {
+        target = val;
     }
-
-    else if (type == ConfigType::Count) {
-        Log::logger(Log::Error, "\"ConfigTYpe::Count\" is used to count the types, do not use it. \"{}\": {}", location.file_name(), location.line());
+    else {
+        Log::logger(Log::Error, R"(key "{}" has the wrong type.)", key);
     }
 }
 
@@ -87,7 +79,7 @@ path get_config_path(ConfigType type, source_location location = source_location
         return path(home) / ".config" / "Tide Island" / "config.tide";
 
     case ConfigType::Count:
-        Log::logger(Log::Error, "\"ConfigType::Count\" should not be used. \"{}\": {}", location.file_name(), location.line());
+        Log::logger(Log::Error, R"("ConfigType::Count" should not be used. "{}": {})", location.file_name(), location.line());
     }
 }
 
@@ -97,52 +89,9 @@ config& get_default_config(ConfigType type, source_location location = source_lo
         return default_config;
 
     case ConfigType::Count:
-        Log::fatal("ConfigType::Count is used to get the count of config types. It should not be used. \"{}\": {}", location.file_name(), location.line());
+        Log::fatal(R"(ConfigType::Count is used to get the count of config types. It should not be used. "{}": {})", location.file_name(), location.line());
 
     }
-}
-
-string create_str_config(const config& conf) {
-    array<string, 8> types = {
-        "int",
-        "float",
-        "string",
-        "bool",
-        "vector<float>",
-        "vector<int>",
-        "vector<string>",
-        "vector<bool>",
-    };
-    string result;
-
-    for (const auto& [key, value] : conf) {
-
-        if (const auto* p = get_if<int>(&value)) {
-            result += format("{}: {} = {}\n", types[value.index()], key, *p);
-        }
-        else {
-
-            // you just have to know that this load the default config if the value is incorrect (if the key exist).
-            // for example, "island_width" is a float, but if the config file has it as a string, it will load the default value of 140.
-
-            if (default_config.contains(key)) {
-                result += format(
-                    "{}: {} = {}\n",
-                    types[default_config[key].index()],
-                    key,
-                    visit([](const auto& value) {
-                        return format("{}", value);
-                    },
-                        default_config[key]));
-
-                Log::logger(Log::Error, "Config key {} has an invalid value type. Using default value instead.", key);
-            }
-            else {
-                Log::logger(Log::Error, "Unknown config key: {}", key);
-            }
-        }
-    }
-    return result;
 }
 
 array<string, 3> split(string& line) {
@@ -163,21 +112,6 @@ array<string, 3> split(string& line) {
     result[2] = line.substr(equal + 1);
 
     return result;
-}
-
-template<typename T>
-void add_config(
-    string key, 
-    T& val, 
-    config_turn& target
-) {
-
-    if (holds_alternative<T>(target)) {
-        target = val;
-    }
-    else {
-        Log::logger(Log::Error, "key \"{}\" has the wrong type.", key);
-    }
 }
 
 vector<string> split_and_trim(const string& s, char delim) {
@@ -201,7 +135,6 @@ vector<string> split_and_trim(const string& s, char delim) {
 void assign_config(array<string,3> token, config_turn& target) {
 
     if (token[0] == "int") {
-
         int val;
 
         try {
@@ -213,7 +146,7 @@ void assign_config(array<string,3> token, config_turn& target) {
         catch (const out_of_range&) {
             Log::logger(Log::Error, "Integer out of range: {}:{}", token[1], token[2]);
         }
-        add_config(token[1], val, target);
+        set_config(token[1], val, target);
     }
 
     else if (token[0] == "float") {
@@ -241,11 +174,11 @@ void assign_config(array<string,3> token, config_turn& target) {
             return;
         }
 
-        add_config(token[1], val, target);
+        set_config(token[1], val, target);
     }
 
     else if (token[0] == "string") {
-        add_config(token[1], token[2], target);
+        set_config(token[1], token[2], target);
     }
 
     else if (token[0] == "bool") {
@@ -268,7 +201,7 @@ void assign_config(array<string,3> token, config_turn& target) {
             return;
         }
 
-        add_config(token[1], val, target);
+        set_config(token[1], val, target);
     }
 
     else if (token[0].starts_with("list")) {
@@ -316,8 +249,9 @@ void assign_config(array<string,3> token, config_turn& target) {
                 }
                 values.push_back(v);
             }
-            add_config(token[1], values, target);
+            set_config(token[1], values, target);
         }
+
         else if (elem_type == "float") {
             vector<float> values;
             values.reserve(raw_values.size());
@@ -336,7 +270,7 @@ void assign_config(array<string,3> token, config_turn& target) {
                 }
                 values.push_back(v);
             }
-            add_config(token[1], values, target);
+            set_config(token[1], values, target);
         }
         else if (elem_type == "bool") {
             vector<bool> values;
@@ -349,11 +283,13 @@ void assign_config(array<string,3> token, config_turn& target) {
                     return;
                 }
             }
-            add_config(token[1], values, target);
+            set_config(token[1], values, target);
         }
+
         else if (elem_type == "string") {
-            add_config(token[1], raw_values, target);
+            set_config(token[1], raw_values, target);
         }
+
         else {
             Log::logger(Log::Error, "Unsupported element type in {}: {}", token[0], elem_type);
             return;
@@ -399,44 +335,15 @@ string format_list(const vector<T>& values) {
 
 } // namespace
 
-Config::Config() {
-    error_code parent_ec;
-    path parent_path = path(getenv("HOME")) / ".config" / "Tide Island";
-
-    if (!exists(parent_path, parent_ec)) {
-        create_directories(parent_path, parent_ec);
-    }
-
-    bool is_exist = exists(parent_path,parent_ec);
-
-    if (parent_ec) {
-        Log::logger(
-            Log::Error,
-            "Failed to access config directory {}: {} ({})",
-            parent_path.string(), parent_ec.message(), parent_ec.value());
-        Log::logger(Log::Error, "So use the default config file instead.");
-        return;
-    }
-
-    if (!is_exist) {
-        create_directories(parent_path, parent_ec);
-
-        if (parent_ec) {
-            Log::logger(
-                Log::Error,
-                "Failed to access config directory {}: {} ({})",
-                parent_path.string(), parent_ec.message(), parent_ec.value());
-            Log::logger(Log::Error, "So use the default config file instead.");
-            return;
-        }
-
-        Log::logger(Log::Debug,"Create directory {} successfully", parent_path.string());
-    }
-}
-
-Config::Config(ConfigType type) {
+Config::Config(ConfigType arg_type, source_location location) {
     error_code ec;
     path parent_path = path(getenv("HOME")) / ".config" / "Tide Island";
+
+    if (arg_type == ConfigType::Count) {
+        Log::fatal(R"(Config type should not be Count. "{}": {})", location.file_name(),location.line());
+    }
+
+    type = arg_type;
 
     bool is_exist = exists(parent_path,ec);
 
@@ -447,7 +354,7 @@ Config::Config(ConfigType type) {
             parent_path.string(), ec.message(), ec.value());
         Log::logger(Log::Error, "So use the default config file instead.");
 
-        conf = get_default_config(type);
+        conf = get_default_config(arg_type);
 
         return;
     }
@@ -462,7 +369,7 @@ Config::Config(ConfigType type) {
                 parent_path.string(), ec.message(), ec.value());
             Log::logger(Log::Error, "So use the default config file instead.");
 
-            conf = get_default_config(type);
+            conf = get_default_config(arg_type);
             
             return;
         }
@@ -470,7 +377,7 @@ Config::Config(ConfigType type) {
         Log::logger(Log::Debug,"Create directory {} successfully", parent_path.string());
     }
 
-    path file_path = get_config_path(type);
+    path file_path = get_config_path(arg_type);
     is_exist = exists(file_path, ec);
 
     if (ec) {
@@ -481,7 +388,7 @@ Config::Config(ConfigType type) {
 
         Log::logger(Log::Error, "So use the default config file instead.");
 
-        conf = get_default_config(type);
+        conf = get_default_config(arg_type);
         return;
     }
 
@@ -498,13 +405,21 @@ Config::Config(ConfigType type) {
             );
             conf = get_default_config(type);
         }
-    } else {
-        read(type);
+    } 
+
+    if (file_size(get_config_path(arg_type)) == 0) {
+        conf = get_default_config(type);
+        write(conf);
+    }
+    
+    else {
+        conf = get_default_config(arg_type);
+        read();
     }
 
 }
 
-void Config::read(ConfigType type) {
+void Config::read() {
     error_code ec;
     path file_path = get_config_path(type);
 
@@ -539,7 +454,7 @@ void Config::read(ConfigType type) {
         if (tokens[0].empty()) {
             Log::logger(
                 Log::Error, 
-                "Invalid config on \"{}\":{} ",
+                R"(Invalid config on "{}":{} )",
                 get_config_path(type).string(),
                 count
             );
@@ -548,7 +463,7 @@ void Config::read(ConfigType type) {
         if (!conf.contains(tokens[1])) {
             Log::logger(
                 Log::Error,
-                "Invalid config \"{}\" on \"{}\": {}",
+                R"(Invalid config "{}" on "{}": {})",
                 tokens[1],
                 get_config_path(type).string(),
                 count
@@ -556,10 +471,9 @@ void Config::read(ConfigType type) {
         }
         assign_config(tokens, conf.at(tokens[1]));
     }
-
 }
 
-void Config::write(ConfigType type) {
+void Config::write() {
     error_code ec;
     path file_path = get_config_path(type);
 
@@ -606,4 +520,74 @@ void Config::write(ConfigType type) {
             }
         }, value);
     }
+}
+
+void Config::write(config& arg_config) {
+    error_code ec;
+    path file_path = get_config_path(type);
+
+    ofstream file(file_path);
+
+    if (!file) {
+        Log::logger(
+            Log::Debug,
+            "Failed to open file {}: {}", 
+            file_path.string(),
+            strerror(errno)
+        );
+        Log::logger(Log::Error, "So stop trying");
+        return;
+    }
+
+    for (const auto& [key, value] : arg_config) {
+        std::visit([&](const auto& val) {
+            using T = decay_t<decltype(val)>;
+
+            if constexpr (is_same_v<T, int>) {
+                file << "int: " << key << " = " << val << "\n";
+            }
+            else if constexpr (is_same_v<T, float>) {
+                file << "float: " << key << " = " << val << "\n";
+            }
+            else if constexpr (is_same_v<T, bool>) {
+                file << "bool: " << key << " = " << (val ? "true" : "false") << "\n";
+            }
+            else if constexpr (is_same_v<T, string>) {
+                file << "string: " << key << " = " << val << "\n";
+            }
+            else if constexpr (is_same_v<T, vector<int>>) {
+                file << "list<int>: " << key << " = " << format_list(val) << "\n";
+            }
+            else if constexpr (is_same_v<T, vector<float>>) {
+                file << "list<float>: " << key << " = " << format_list(val) << "\n";
+            }
+            else if constexpr (is_same_v<T, vector<bool>>) {
+                file << "list<bool>: " << key << " = " << format_list(val) << "\n";
+            }
+            else if constexpr (is_same_v<T, vector<string>>) {
+                file << "list<string>: " << key << " = " << format_list(val) << "\n";
+            }
+        }, value);
+    }
+}
+
+
+variant<IslandConf> Config::to_struct(){
+    if (type == ConfigType::IslandConfig) {
+
+        IslandConf island_conf{};
+
+        set_config("color", conf, island_conf.color);
+        set_config("island_width", conf, island_conf.island_width);
+        set_config("island_height", conf, island_conf.island_height);
+        set_config("zone", conf, island_conf.zone);
+        set_config("anchor_top", conf, island_conf.anchor_top);
+        set_config("radius", conf, island_conf.radius);
+        set_config("is_running", conf, island_conf.is_running);
+
+        return island_conf;
+    }
+
+    return {};
+
 }
