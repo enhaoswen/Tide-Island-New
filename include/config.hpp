@@ -12,7 +12,7 @@
 // Ex. float: island_width = 140
 
 // for array & vector, we should write the config like this:
-// type: key = [v1,v2,v3]
+// list<type>: key = [v1,v2,v3]
 
 
 // Supported type:
@@ -20,11 +20,10 @@
 // float
 // string
 // bool
-// vector <> (not include vector, array)
-// array <> (same)
+// list <type> (not include list)
 
 
-// if need to add more types, remember to change config.cpp add_config (tmp)
+// if need to add more types, remember to change Config::Read && Config::Write
 
 // you can both you "//" and "#" for note
 

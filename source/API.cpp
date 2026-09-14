@@ -3,8 +3,10 @@
 #include "renderer.hpp"
 #include "object.hpp"
 #include "timer.hpp"
+#include "config.hpp"
 #include "island.hpp"
 #include "log.hpp"
+#include "struct.hpp"
 
 namespace {
 
@@ -14,7 +16,10 @@ const auto config = Island::state();
 
 void API::init() {
 
-    Island::init();
+    Config island_conf(ConfigType::IslandConfig);
+    Log::logger(Log::Debug, "Initialize Island successfully");
+
+    Island::init(island_conf);
     Log::logger(Log::Debug, "Initialize Island successfully");
 
     Wayland::init();

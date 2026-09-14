@@ -1,6 +1,7 @@
 #pragma once
 
 #include "struct.hpp"
+#include "config.hpp"
 
 // ============================================================================
 // Tide Island shared state API
@@ -12,7 +13,7 @@
 namespace Island {
 
 const IslandConf* state();
-void init();
+void init(Config& conf);
 void set_anchor_top(float distance);
 void set_is_running(bool state);
 void set_radius(float radius);

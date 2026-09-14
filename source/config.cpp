@@ -26,7 +26,8 @@ config default_config{
     {"zone", 40},
     {"anchor_top", 2.0f},
     {"radius", 0.0f},
-    {"color", vector<float>{0.0f, 0.0f, 0.0f, 1.0f}}};
+    {"color", vector<float>{0.0f, 0.0f, 0.0f, 1.0f}}
+};
 
 // we assume that conf is already initialized. so when error occured, we don't give it a default value, but just leave it.
 template <typename T>
@@ -101,8 +102,8 @@ config& get_default_config(ConfigType type, source_location location = source_lo
     }
 }
 
-string create_str_config(const config& conf, source_location location = source_location::current()) {
-    array<string, 9> types = {
+string create_str_config(const config& conf) {
+    array<string, 8> types = {
         "int",
         "float",
         "string",
@@ -111,7 +112,6 @@ string create_str_config(const config& conf, source_location location = source_l
         "vector<int>",
         "vector<string>",
         "vector<bool>",
-        "array<float,4>"
     };
     string result;
 
@@ -210,7 +210,7 @@ void assign_config(array<string,3> token, config_turn& target) {
         catch (invalid_argument&) {
             Log::logger(Log::Error, "Invalid integer: {}:{}", token[1], token[2]);
         }
-        catch (const std::out_of_range&) {
+        catch (const out_of_range&) {
             Log::logger(Log::Error, "Integer out of range: {}:{}", token[1], token[2]);
         }
         add_config(token[1], val, target);
@@ -271,44 +271,23 @@ void assign_config(array<string,3> token, config_turn& target) {
         add_config(token[1], val, target);
     }
 
-    else if (token[0].starts_with("array") || token[0].starts_with("vector")) {
-
-        bool is_array = token[0].starts_with("array");
+    else if (token[0].starts_with("list")) {
 
         token[0].erase(std::remove(token[0].begin(), token[0].end(), ' '), token[0].end());
 
         size_t info_begin = token[0].find('<');
         size_t info_end   = token[0].find('>');
-        string info = token[0].substr(info_begin + 1, info_end - info_begin - 1);
-
-        vector<string> info_parts = split_and_trim(info, ',');
-        if (info_parts.empty()) {
-            Log::logger(Log::Error, "Malformed container type: {}:{}", token[1], token[0]);
+        if (info_begin == string::npos || info_end == string::npos || info_end < info_begin) {
+            Log::logger(Log::Error, "Malformed list type: {}:{}", token[1], token[0]);
             return;
         }
-        const string& elem_type = info_parts[0];
-
-        size_t expected_size = 0;
-        if (is_array) {
-            if (info_parts.size() < 2) {
-                Log::logger(Log::Error, "Array missing size: {}:{}", token[1], token[0]);
-                return;
-            }
-            try {
-                expected_size = static_cast<size_t>(stoul(info_parts[1]));
-            }
-            catch (...) {
-                Log::logger(Log::Error, "Invalid array size: {}:{}", token[1], info_parts[1]);
-                return;
-            }
-        }
+        string elem_type = token[0].substr(info_begin + 1, info_end - info_begin - 1);
 
         string values_str = token[2];
         size_t lb = values_str.find('[');
         size_t rb = values_str.rfind(']');
         if (lb == string::npos || rb == string::npos || rb < lb) {
-            Log::logger(Log::Error, "Malformed {} value (missing brackets): {}:{}",
-                        is_array ? "array" : "vector", token[1], token[2]);
+            Log::logger(Log::Error, "Malformed list value (missing brackets): {}:{}", token[1], token[2]);
             return;
         }
         values_str = values_str.substr(lb + 1, rb - lb - 1);
@@ -317,15 +296,6 @@ void assign_config(array<string,3> token, config_turn& target) {
 
         if (raw_values.size() == 1 && raw_values[0].empty()) {
             raw_values.clear();
-        }
-
-        if (is_array && raw_values.size() != expected_size) {
-            Log::logger(
-                Log::Error,
-                "Array size mismatch for {}: expected {}, got {}",
-                token[1], expected_size, raw_values.size()
-            );
-            return;
         }
 
         if (elem_type == "int") {
@@ -390,10 +360,6 @@ void assign_config(array<string,3> token, config_turn& target) {
         }
     }
 
-    else if (token[0].starts_with("//") || token[0].starts_with("#")) {
-        return;
-    }
-
     else {
         Log::logger(
             Log::Error,
@@ -405,6 +371,31 @@ void assign_config(array<string,3> token, config_turn& target) {
     }
 }
 
+template <typename T>
+string format_element(const T& v) {
+    if constexpr (std::is_same_v<T, bool>) {
+        return v ? "true" : "false";
+    }
+    else if constexpr (std::is_same_v<T, string>) {
+        return v; // string 元素不带引号
+    }
+    else {
+        ostringstream oss;
+        oss << v;
+        return oss.str();
+    }
+}
+
+template <typename T>
+string format_list(const vector<T>& values) {
+    string out = "[";
+    for (size_t i = 0; i < values.size(); ++i) {
+        out += format_element<T>(values[i]);
+        if (i + 1 < values.size()) out += ",";
+    }
+    out += "]";
+    return out;
+}
 
 } // namespace
 
@@ -536,7 +527,11 @@ void Config::read(ConfigType type) {
     while (getline(file, line)) {
         ++count;
 
-        if (line.empty()) {
+        if (
+            line.empty() ||
+            line.starts_with("//") ||
+            line.starts_with("#")
+        ) {
             continue;
         }
 
@@ -562,4 +557,53 @@ void Config::read(ConfigType type) {
         assign_config(tokens, conf.at(tokens[1]));
     }
 
+}
+
+void Config::write(ConfigType type) {
+    error_code ec;
+    path file_path = get_config_path(type);
+
+    ofstream file(file_path);
+
+    if (!file) {
+        Log::logger(
+            Log::Debug,
+            "Failed to open file {}: {}", 
+            file_path.string(),
+            strerror(errno)
+        );
+        Log::logger(Log::Error, "So stop trying");
+        return;
+    }
+
+    for (const auto& [key, value] : conf) {
+        std::visit([&](const auto& val) {
+            using T = decay_t<decltype(val)>;
+
+            if constexpr (is_same_v<T, int>) {
+                file << "int: " << key << " = " << val << "\n";
+            }
+            else if constexpr (is_same_v<T, float>) {
+                file << "float: " << key << " = " << val << "\n";
+            }
+            else if constexpr (is_same_v<T, bool>) {
+                file << "bool: " << key << " = " << (val ? "true" : "false") << "\n";
+            }
+            else if constexpr (is_same_v<T, string>) {
+                file << "string: " << key << " = " << val << "\n";
+            }
+            else if constexpr (is_same_v<T, vector<int>>) {
+                file << "list<int>: " << key << " = " << format_list(val) << "\n";
+            }
+            else if constexpr (is_same_v<T, vector<float>>) {
+                file << "list<float>: " << key << " = " << format_list(val) << "\n";
+            }
+            else if constexpr (is_same_v<T, vector<bool>>) {
+                file << "list<bool>: " << key << " = " << format_list(val) << "\n";
+            }
+            else if constexpr (is_same_v<T, vector<string>>) {
+                file << "list<string>: " << key << " = " << format_list(val) << "\n";
+            }
+        }, value);
+    }
 }
