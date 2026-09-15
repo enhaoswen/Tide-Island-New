@@ -17,10 +17,11 @@ const IslandConf* state{};
 void API::init() {
 
     Config island_conf(ConfigType::IslandConfig);
-    Log::logger(Log::Debug, "Initialize Island successfully");
+    Log::logger(Log::Debug, "Config initialized successfully");
 
     Island::init(island_conf);
-    Log::logger(Log::Debug, "Initialize Island successfully");
+    state = &Island::state();
+    Log::logger(Log::Debug, "Island initialized successfully");
 
     Wayland::init();
     Log::logger(Log::Debug, "Wayland initialized successfully");

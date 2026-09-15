@@ -13,6 +13,8 @@
 #include <cstring>
 #include <string_view>
 #include <variant>
+#include <ranges>
+#include <tuple>
 
 using namespace std;
 using namespace std::filesystem;
@@ -21,33 +23,62 @@ namespace {
 
 // Remember to change funtion `get_default_config` if you add new config files.
 config default_config{
-    {"island_width", 140},
-    {"island_height", 38},
+    {"island_width", 140.0f},
+    {"island_height", 38.0f},
     {"zone", 40},
     {"anchor_top", 2.0f},
     {"radius", 19.0f},
     {"color", vector<float>{0.0f, 0.0f, 0.0f, 1.0f}}
 };
 
-// we assume that conf is already initialized. so when error occured, we don't give it a default value, but just leave it/.
+template <typename>
+struct is_std_array : false_type {};
+template <typename T, size_t N>
+struct is_std_array<array<T, N>> : std::true_type {};
 template <typename T>
-void set_config(
-    string key,
-    const config& conf,
-    T& target
-) {
+inline constexpr bool is_std_array_v = is_std_array<decay_t<T>>::value;
+
+template <typename T>
+bool convert(const string& key, const config_turn& val, T& target) {
+    if (const auto* p = get_if<T>(&val)) {
+        target = *p;
+        return true;
+    }
+
+    using target_t = decay_t<T>;
+    if constexpr (is_std_array_v<target_t>) {
+        using elem_t = typename target_t::value_type;
+        constexpr auto N = std::tuple_size_v<target_t>;
+        if (const auto* p = get_if<vector<elem_t>>(&val)) {
+            if (p->size() != N) {
+                Log::logger(Log::Error, R"(key "{}" expected {} elements, got {}.)", key, N, p->size());
+                return false;
+            }
+            ranges::copy(*p, target.begin());
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// we assume that conf is already initialized. so when error occurred, we don't give it a default value, but just leave it.
+template <typename T>
+void set_config(const string& key, const config& conf, T& target) {
     auto it = conf.find(key);
 
     if (it == conf.end()) {
         Log::logger(Log::Error, R"(key "{}" is not found in your config.)", key);
-    }
-    else {
-
-        if (holds_alternative<T>(it->second)) {
-            target = get<T>(it->second);
+        if (auto dit = default_config.find(key); dit != default_config.end()){
+            convert(key, dit->second, target);
         }
-        else {
-            Log::logger(Log::Error, R"(key "{}" has the wrong type.)", key);
+        return;
+    }
+
+    if (!convert(key, it->second, target)) {
+        Log::logger(Log::Error, R"(key "{}" has the wrong type.)", key);
+        if (auto dit = default_config.find(key); dit != default_config.end()) {
+            convert(key, dit->second, target);
         }
     }
 }
@@ -313,7 +344,7 @@ string format_element(const T& v) {
         return v ? "true" : "false";
     }
     else if constexpr (std::is_same_v<T, string>) {
-        return v; // string 元素不带引号
+        return v;
     }
     else {
         ostringstream oss;
@@ -571,7 +602,6 @@ void Config::write(config& arg_config) {
     }
 }
 
-
 variant<IslandConf> Config::to_struct(){
     if (type == ConfigType::IslandConfig) {
 
@@ -583,7 +613,6 @@ variant<IslandConf> Config::to_struct(){
         set_config("zone", conf, island_conf.zone);
         set_config("anchor_top", conf, island_conf.anchor_top);
         set_config("radius", conf, island_conf.radius);
-        set_config("is_running", conf, island_conf.is_running);
 
         return island_conf;
     }
