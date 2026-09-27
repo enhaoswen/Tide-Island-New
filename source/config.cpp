@@ -173,9 +173,11 @@ void assign_config(array<string,3> token, config_turn& target) {
         } 
         catch (invalid_argument&) {
             Log::logger(Log::Error, "Invalid integer: {}:{}", token[1], token[2]);
+            return;
         }
         catch (const out_of_range&) {
             Log::logger(Log::Error, "Integer out of range: {}:{}", token[1], token[2]);
+            return;
         }
         set_config(token[1], val, target);
     }
@@ -435,6 +437,7 @@ Config::Config(ConfigType arg_type, source_location location) {
                 strerror(errno)
             );
             conf = get_default_config(type);
+            return;
         }
     } 
 
@@ -489,6 +492,7 @@ void Config::read() {
                 get_config_path(type).string(),
                 count
             );
+            continue;
         }
         
         if (!conf.contains(tokens[1])) {
@@ -499,6 +503,7 @@ void Config::read() {
                 get_config_path(type).string(),
                 count
             );
+            continue;
         }
         assign_config(tokens, conf.at(tokens[1]));
     }
@@ -522,7 +527,7 @@ void Config::write() {
     }
 
     for (const auto& [key, value] : conf) {
-        std::visit([&](const auto& val) {
+        visit([&](const auto& val) {
             using T = decay_t<decltype(val)>;
 
             if constexpr (is_same_v<T, int>) {

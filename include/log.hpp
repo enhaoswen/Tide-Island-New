@@ -111,10 +111,12 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     for (std::string_view s : msgs) {
         size_t handled_char = 0;
         while (s.size() - handled_char > 80) {
-            out_msg += std::format("│ {:<{}} │\n", s.substr(handled_char, 80), msg_len);
+            std::string_view line = s.substr(handled_char, 80);
+            out_msg += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
             handled_char += 80;
         }
-        out_msg += std::format("│ {:<{}} │\n", s.substr(handled_char), msg_len);
+        std::string_view line = s.substr(handled_char);
+        out_msg += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
     }
 
     out_msg += "└";
