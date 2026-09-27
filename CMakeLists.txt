@@ -12,6 +12,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
 pkg_check_modules(WAYLAND_EGL REQUIRED wayland-egl)
 pkg_check_modules(HARFBUZZ REQUIRED harfbuzz)
+pkg_check_modules(FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
 
 find_package(OpenGL REQUIRED)
 
@@ -49,6 +50,7 @@ target_link_libraries(Tide-island PRIVATE
     ${WAYLAND_CLIENT_LIBRARIES}
     ${WAYLAND_EGL_LIBRARIES}
     ${HARFBUZZ_LIBRARIES}
+    PkgConfig::FONTCONFIG
     OpenGL::GLES3
     OpenGL::EGL
     Freetype::Freetype

@@ -14,7 +14,7 @@ int main() {
 
     API::init();
 
-    RectDesc rect_desc{
+    RectDesc main_land_desc{
         .frame = { 0, 0, 140, 38},
 
         .radius = 19,
@@ -29,7 +29,6 @@ int main() {
         },
     };
 
-/*
 
     ImageDesc img_desc {
         .frame = {0, 0, 140, 38},
@@ -39,10 +38,9 @@ int main() {
         .vertical_align = Align::Center
     };
 
-*/
 
-    API::draw_rectangle(rect_desc);
-    //API::draw_image(img_desc);
+    API::draw_rectangle(main_land_desc);
+    API::draw_image(img_desc);
 
     API::run();
     return 0;

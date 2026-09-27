@@ -9,20 +9,6 @@
 
 // Remember to change `types` in `create_str_config` if you add new types to the config variant. (config.cpp)
 
-using config_turn = std::variant<
-        int, 
-        float, 
-        std::string, 
-        bool, 
-        std::vector<float>, 
-        std::vector<int>, 
-        std::vector<std::string>,
-        std::vector<bool>,
-        std::array<float, 4>
->;
-
-using config = std::unordered_map<std::string, config_turn>;
-
 struct Frame {
     float x, y, width, height;
 };

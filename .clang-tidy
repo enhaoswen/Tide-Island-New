@@ -16,6 +16,7 @@ Checks: '
   -readability-identifier-length,
   -readability-math-missing-parentheses,
   -readability-implicit-bool-conversion,
+  -readability-braces-around-statements,
 '
 
 WarningsAsErrors: ''

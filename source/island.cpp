@@ -32,7 +32,7 @@ const IslandConf& Island::state() {
 }
 
 void Island::init(Config& config){
-    island = get<IslandConf>(config.to_struct());
+    island = config.to_struct();
 }
 
 void Island::set_anchor_top(float distance) {

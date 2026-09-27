@@ -21,13 +21,26 @@
 // float
 // string
 // bool
-// list <type> (not include list)
+// list<type> (not include list)
 
 
 // if need to add more types, remember to change Config::Read && Config::Write
 
 // you can both you "//" and "#" for note
 
+using config_turn = std::variant<
+        int, 
+        float, 
+        std::string, 
+        bool, 
+        std::vector<float>, 
+        std::vector<int>, 
+        std::vector<std::string>,
+        std::vector<bool>,
+        std::array<float, 4>
+>;
+
+using config = std::unordered_map<std::string, config_turn>;
 
 class Config {
 private:
@@ -39,7 +52,7 @@ public:
 
 Config(ConfigType type, std::source_location location = std::source_location::current());
 
-std::variant<IslandConf> to_struct();
+IslandConf to_struct();
 
 // we assume file already exist, but maybe not readable.
 void read();

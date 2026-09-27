@@ -607,7 +607,7 @@ void Config::write(config& arg_config) {
     }
 }
 
-variant<IslandConf> Config::to_struct(){
+IslandConf Config::to_struct(){
     if (type == ConfigType::IslandConfig) {
 
         IslandConf island_conf{};

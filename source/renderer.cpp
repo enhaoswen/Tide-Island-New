@@ -74,25 +74,6 @@ T radius_uniform(Frame frame, float radius) {
     result.radius = radius;
     return result;
 }
-rect_radius_uniform_t radius_uniform(Frame frame, float radius) {
-    rect_radius_uniform_t result{};
-    result.center[0] = frame.x + frame.width / 2.0F;
-    result.center[1] = frame.y + frame.height / 2.0F;
-    result.half_size[0] = frame.width / 2.0F;
-    result.half_size[1] = frame.height / 2.0F;
-    result.radius = radius;
-    return result;
-}
-
-img_radius_uniform_t img_radius_uniform(Frame frame, float radius) {
-    img_radius_uniform_t result{};
-    result.center[0] = frame.x + frame.width / 2.0f;
-    result.center[1] = frame.y + frame.height / 2.0f;
-    result.half_size[0] = frame.width / 2.0f;
-    result.half_size[1] = frame.height / 2.0f;
-    result.radius = radius;
-    return result;
-}
 
 void enable_blending(sg_pipeline_desc& descriptor) {
     auto& blend = descriptor.colors[0].blend;
@@ -251,7 +232,7 @@ void Renderer::draw_rectangle(
     sg_apply_pipeline(rectangle_pipeline);
     sg_apply_bindings(&bindings);
     auto project = projection();
-    auto radius_data = radius_uniform(frame, radius);
+    auto radius_data = radius_uniform<rect_radius_uniform_t>(frame, radius);
     sg_apply_uniforms(UB_rect_proj_uniform, SG_RANGE(project));
     sg_apply_uniforms(UB_rect_radius_uniform, SG_RANGE(radius_data));
     sg_draw(0, 4, 1);
@@ -348,7 +329,7 @@ void Renderer::draw_image(
     auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
 
-    img_radius_uniform_t radius_data = img_radius_uniform(frame, radius);
+    img_radius_uniform_t radius_data = radius_uniform<img_radius_uniform_t>(frame, radius);
     sg_apply_uniforms(UB_img_radius_uniform, SG_RANGE(radius_data));
 
     sg_draw(0, 4, 1);
