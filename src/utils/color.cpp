@@ -80,7 +80,9 @@ RGBA hex_to_rgba(string_view str, source_location l = source_location::current()
 
 } // namespace
 
-
+Color::Color() {
+    color = default_color;
+}
 
 Color::Color(string_view arg_color, source_location l) {
     color = hex_to_rgba(arg_color, l);
@@ -123,6 +125,21 @@ Color::Color(array<float, 4> arg_color, source_location l) {
     color = arg_color;
 
 }
+
+Color::Color(
+    float r,
+    float g,
+    float b,
+    source_location l
+) : Color(array<float, 4>{r, g, b, 1.0F}, l) {}
+
+Color::Color(
+    float r,
+    float g,
+    float b,
+    float a,
+    source_location l
+) : Color(array<float, 4>{r, g, b, a}, l) {}
 
 string Color::to_string() {
     auto byte = [](float value) {

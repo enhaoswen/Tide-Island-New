@@ -1,8 +1,11 @@
 #pragma once
 
+#include "color.hpp"
+
 #include <array>
 #include <chrono>
 #include <string>
+#include <string_view>
 
 // This file used to put the structure that developer might need in API.cpp / main.cpp.
 // because some struct / enum might not get displaied by clangd if their header is not
@@ -26,7 +29,7 @@ enum struct Align : char{
 struct RectDesc {
     Frame frame{};
     float radius{};
-    std::array<float, 4> color{};
+    Color color{};
     void (*click_callback_left) () = nullptr;
     void (*click_callback_right) () = nullptr;
 };
@@ -35,10 +38,21 @@ struct ImageDesc {
     Frame frame{};
     float radius{};
     std::string path;
-    void (*click_callback_left) () = nullptr;
-    void (*click_callback_right) () = nullptr;
     Align horizontal_align;
     Align vertical_align;
+    void (*click_callback_left) () = nullptr;
+    void (*click_callback_right) () = nullptr;
+
+};
+
+struct TextDesc {
+    Frame frame{};
+    std::string_view text;
+    Color color;
+    Align horizontal_align;
+    Align vertical_align;
+    void (*click_callback_left) () = nullptr;
+    void (*click_callback_right) () = nullptr;
 };
 
 struct Event {
@@ -49,12 +63,12 @@ struct Event {
 // Remember to change `conf_to_island_conf` in config.cpp if you changed `Island Conf`
 
 struct IslandConf {
-    std::array<float, 4> color{0,0,0,1};
     int island_width{};
     int island_height{};
     int zone{-1};
     float anchor_top{};
     float radius{};
+    Color color{};
 
     bool need_redraw{true};
     bool is_running{true};

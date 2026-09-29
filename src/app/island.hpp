@@ -11,7 +11,7 @@
 //
 // The island state is intentionally small and process-wide. Platform and render
 // backends read this state while public setters validate updates.
-//
+
 namespace Island {
 
 const IslandConf& state();

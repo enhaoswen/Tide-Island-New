@@ -78,7 +78,7 @@ public:
     Rectangle(RectDesc desc) {
         frame = desc.frame;
         radius = desc.radius;
-        color = desc.color;
+        color = desc.color.to_rgba();
         click_callback_left = desc.click_callback_left;
         click_callback_right = desc.click_callback_right;
     }
