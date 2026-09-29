@@ -3,6 +3,7 @@
 
 #include <string_view>
 #include <source_location>
+#include <cmath>
 
 using namespace std;
 using RGBA = array<float, 4>;
@@ -121,4 +122,24 @@ Color::Color(array<float, 4> arg_color, source_location l) {
 
     color = arg_color;
 
+}
+
+string Color::to_string() {
+    auto byte = [](float value) {
+        return static_cast<int>(
+            round(std::clamp(value, 0.0f, 1.0f) * 255.0f)
+        );
+    };
+
+    return format(
+        "#{:02x}{:02x}{:02x}{:02x}",
+        byte(color[0]),
+        byte(color[1]),
+        byte(color[2]),
+        byte(color[3])
+    );
+}
+
+array<float,4> Color::to_rgba() {
+    return color;
 }
