@@ -1,7 +1,5 @@
 #pragma once
 
-#include "struct.hpp"
-
 #include <source_location>
 #include <string>
 #include <string_view>

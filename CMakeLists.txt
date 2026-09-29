@@ -30,7 +30,6 @@ set(SRC
     source/timer.cpp
     source/object.cpp
     source/text.cpp
-    source/config.cpp
     source/color.cpp
 )
 

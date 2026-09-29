@@ -12,10 +12,21 @@ namespace {
 
 RGBA default_color = {0,0,0,1};
 
-RGBA hex_to_rgba(
-    string_view str,
-    source_location l = source_location::current()
-) {
+template<typename T, size_t N>
+string array_to_string(const array<T, N>& arr) {
+    string result;
+
+    for (size_t i = 0; i < N; ++i) {
+        if (i)
+            result += ',';
+
+        result += format("{}", arr[i]);
+    }
+
+    return result;
+}
+
+RGBA hex_to_rgba(string_view str, source_location l = source_location::current()) {
     auto error = [&](string_view msg) {
         Log::logger(
             Log::Error,
@@ -65,20 +76,6 @@ RGBA hex_to_rgba(
         b / 255.0f,
         a / 255.0f
     };
-}
-
-template<typename T, size_t N>
-string array_to_string(const array<T, N>& arr) {
-    string result;
-
-    for (size_t i = 0; i < N; ++i) {
-        if (i)
-            result += ',';
-
-        result += format("{}", arr[i]);
-    }
-
-    return result;
 }
 
 } // namespace
