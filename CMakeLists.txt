@@ -29,8 +29,8 @@ set(SRC
     src/graphics/renderer.cpp
     src/graphics/text.cpp
     src/scene/object.cpp
-    generated/wayland/wlr-layer-shell-unstable-v1-protocol.c
-    generated/wayland/xdg-shell-client-protocol.c
+    third_party/wayland/wlr-layer-shell-unstable-v1-protocol.c
+    third_party/wayland/xdg-shell-client-protocol.c
 )
 
 add_executable(Tide-island ${SRC})
@@ -40,7 +40,7 @@ target_compile_definitions(Tide-island PRIVATE SOKOL_GLES3)
 target_include_directories(Tide-island PRIVATE 
     src/
     third_party/
-    generated/wayland/
+    third_party/wayland/
     ${WAYLAND_CLIENT_INCLUDE_DIRS}
     ${WAYLAND_EGL_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
