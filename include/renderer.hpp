@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <string_view>
 
 #include "struct.hpp"
 
@@ -12,5 +13,5 @@ void end_frame();
 
 void draw_rectangle(Frame frame, float radius, std::array<float,4> color);
 void draw_image(Frame frame, Align horizontal_align, Align vertical_align, float radius, std::string path);
-
+void draw_text(Frame frame, Align horizontal_align, Align vertical_align,std::string_view text);
 }

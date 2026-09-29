@@ -2,8 +2,10 @@
 
 #include "struct.hpp"
 
+#include <filesystem>
 #include <variant>
 #include <source_location>
+#include <unordered_map>
 
 // todo: update notes in struct.hpp after rewrite config backend.
 
@@ -46,11 +48,11 @@ class Config {
 private:
 
 config conf; 
-ConfigType type;
+std::filesystem::path conf_path{};
 
 public:
 
-Config(ConfigType type, std::source_location location = std::source_location::current());
+Config(std::source_location location = std::source_location::current());
 
 IslandConf to_struct();
 

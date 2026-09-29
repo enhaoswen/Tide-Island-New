@@ -15,4 +15,5 @@ void to_clock_status();
 void clear_status();
 void run();
 
+void shutdown();
 }

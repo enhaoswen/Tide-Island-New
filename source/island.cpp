@@ -45,7 +45,7 @@ void Island::set_is_running(bool state) {
 
 void Island::set_radius(float radius, source_location location) {
     if (radius <= 0) {
-        Log::logger(Log::Error, R"(Radius has to be positive "{}":{})",location.file_name(), location.line());
+        Log::logger(Log::Error, "{}:{}: Radius has to be positive, value={}", location.file_name(), location.line(), radius);
         radius = 0;
     }
 

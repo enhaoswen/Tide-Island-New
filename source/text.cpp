@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -31,6 +32,13 @@ struct GlyphBitmap {
     unsigned width{};
     unsigned height{};
     vector<uint8_t> pixels;
+    bool failed{};
+
+    static GlyphBitmap failure() {
+        GlyphBitmap glyph;
+        glyph.failed = true;
+        return glyph;
+    }
 };
 
 struct FaceState {
@@ -64,26 +72,40 @@ struct FontQuery {
 
     FontQuery(const string& family, unsigned pixel_size) {
         config = FcInitLoadConfigAndFonts();
-        if (!config) Log::fatal("Failed to initialize Fontconfig");
+        if (!config) {
+            Log::logger(Log::Error, "Failed to initialize Fontconfig");
+            return;
+        }
 
         pattern = FcPatternCreate();
-        if (!pattern) Log::fatal("Failed to create font pattern");
+        if (!pattern) {
+            Log::logger(Log::Error, "Failed to create font pattern");
+            return;
+        }
         if (!FcPatternAddString(pattern, FC_FAMILY,
                                 reinterpret_cast<const FcChar8*>(family.c_str())) ||
-            !FcPatternAddDouble(pattern, FC_PIXEL_SIZE, pixel_size))
-            Log::fatal("Failed to configure font pattern");
-        if (!FcConfigSubstitute(config, pattern, FcMatchPattern))
-            Log::fatal("Failed to apply font configuration");
+            !FcPatternAddDouble(pattern, FC_PIXEL_SIZE, pixel_size)) {
+            Log::logger(Log::Error, "Failed to configure font pattern");
+            return;
+        }
+        if (!FcConfigSubstitute(config, pattern, FcMatchPattern)) {
+            Log::logger(Log::Error, "Failed to apply font configuration");
+            return;
+        }
         FcDefaultSubstitute(pattern);
 
         FcResult match_result{};
         matches = FcFontSort(config, pattern, FcTrue, nullptr, &match_result);
         if (!matches || matches->nfont == 0)
-            Log::fatal("No font matched {}", family);
+            Log::logger(Log::Error, "No font matched {}", family);
     }
 
     FontQuery(const FontQuery&) = delete;
     FontQuery& operator=(const FontQuery&) = delete;
+
+    [[nodiscard]] bool has_matches() const {
+        return matches && matches->nfont > 0;
+    }
 
     ~FontQuery() {
         if (matches) FcFontSetDestroy(matches);
@@ -198,27 +220,40 @@ unsigned choose_face(const LoadedFont& font, const vector<Codepoint>& cps,
     return static_cast<unsigned>(font.faces.size());
 }
 
-FaceState font_source(FcPattern* pattern) {
+optional<FaceState> font_source(FcPattern* pattern) {
     FcChar8* path{};
     int index = 0;
-    if (FcPatternGetString(pattern, FC_FILE, 0, &path) != FcResultMatch || !path)
-        Log::fatal("Matched font has no file");
+    if (FcPatternGetString(pattern, FC_FILE, 0, &path) != FcResultMatch || !path) {
+        Log::logger(Log::Error, "Matched font has no file");
+        return nullopt;
+    }
     FcPatternGetInteger(pattern, FC_INDEX, 0, &index);
-    return {reinterpret_cast<const char*>(path), index};
+    return FaceState{reinterpret_cast<const char*>(path), index};
 }
 
-FaceState& get_face(LoadedFont& font, unsigned index) {
+FaceState* get_face(LoadedFont& font, unsigned index) {
     auto& state = font.faces[index];
-    if (state.face) return state;
+    if (state.face && state.hb_font) return &state;
 
-    if (FT_New_Face(ft_library, state.path.c_str(), state.face_index, &state.face))
-        Log::fatal("Failed to load font file {}", state.path);
-    if (FT_Set_Pixel_Sizes(state.face, 0, font.pixel_size))
-        Log::fatal("Failed to set font size for {}", state.path);
+    if (FT_New_Face(ft_library, state.path.c_str(), state.face_index, &state.face)) {
+        Log::logger(Log::Error, R"@(Failed to load font file, path="{}")@", state.path);
+        return nullptr;
+    }
+    if (FT_Set_Pixel_Sizes(state.face, 0, font.pixel_size)) {
+        Log::logger(Log::Error, R"@(Failed to set font size, path="{}")@", state.path);
+        FT_Done_Face(state.face);
+        state.face = nullptr;
+        return nullptr;
+    }
 
     state.hb_font = hb_ft_font_create_referenced(state.face);
-    if (!state.hb_font) Log::fatal("Failed to initialize HarfBuzz font");
-    return state;
+    if (!state.hb_font) {
+        Log::logger(Log::Error, "Failed to initialize HarfBuzz font");
+        FT_Done_Face(state.face);
+        state.face = nullptr;
+        return nullptr;
+    }
+    return &state;
 }
 
 bool pattern_covers(FcPattern* pattern, const vector<Codepoint>& cps,
@@ -255,31 +290,41 @@ void resolve_missing_faces(LoadedFont& font, const vector<Codepoint>& cps) {
     // One short-lived Fontconfig lookup handles every missing cluster in this
     // line. Only copied paths and face indices remain after this function.
     FontQuery query(font.family, font.pixel_size);
+    if (!query.matches) return;
     for (const auto& cluster : missing) {
         if (choose_face(font, cps, cluster.begin, cluster.end) != font.faces.size())
             continue;
 
         bool resolved = false;
+        bool failed_candidate = false;
         for (int i = 0; i < query.matches->nfont; ++i) {
             FcPattern* pattern = query.matches->fonts[i];
             if (!pattern_covers(pattern, cps, cluster.begin, cluster.end)) continue;
 
-            FaceState source = font_source(pattern);
+            auto source = font_source(pattern);
+            if (!source) {
+                failed_candidate = true;
+                continue;
+            }
             bool loaded = ranges::any_of(font.faces, [&](const FaceState& face) {
-                return face.path == source.path && face.face_index == source.face_index;
+                return face.path == source->path && face.face_index == source->face_index;
             });
             if (loaded) continue;
 
-            font.faces.push_back(std::move(source));
+            font.faces.push_back(std::move(*source));
             unsigned index = static_cast<unsigned>(font.faces.size() - 1);
-            get_face(font, index);
+            if (!get_face(font, index)) {
+                font.faces.pop_back();
+                failed_candidate = true;
+                continue;
+            }
             if (choose_face(font, cps, cluster.begin, cluster.end) == index) {
                 resolved = true;
                 break;
             }
         }
 
-        if (!resolved) {
+        if (!resolved && !failed_candidate) {
             for (unsigned i = cluster.begin; i < cluster.end; ++i)
                 if (!ignorable_for_coverage(cps[i].value))
                     font.unsupported_codepoints.insert(cps[i].value);
@@ -322,9 +367,11 @@ uint64_t glyph_key(unsigned face_index, unsigned glyph_id) {
 }
 
 GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id) {
-    FT_Face face = get_face(font, face_index).face;
-    if (FT_Load_Glyph(face, glyph_id, FT_LOAD_RENDER | FT_LOAD_COLOR))
-        Log::fatal("Failed to rasterize glyph {}", glyph_id);
+    FT_Face face = font.faces[face_index].face;
+    if (FT_Load_Glyph(face, glyph_id, FT_LOAD_RENDER | FT_LOAD_COLOR)) {
+        Log::logger(Log::Error, "Failed to rasterize glyph {}", glyph_id);
+        return GlyphBitmap::failure();
+    }
 
     const FT_Bitmap& bitmap = face->glyph->bitmap;
     GlyphBitmap result;
@@ -332,12 +379,17 @@ GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id) 
     result.top = face->glyph->bitmap_top;
     result.width = bitmap.width;
     result.height = bitmap.rows;
-    if (result.height && result.width > numeric_limits<size_t>::max() / result.height)
-        Log::fatal("Glyph bitmap dimensions are too large");
+    if (result.height && result.width > numeric_limits<size_t>::max() / result.height) {
+        Log::logger(Log::Error, "Glyph bitmap dimensions are too large");
+        return GlyphBitmap::failure();
+    }
     result.pixels.resize(static_cast<size_t>(result.width) * result.height);
 
     if (!result.width || !result.height) return result;
-    if (!bitmap.buffer) Log::fatal("Glyph bitmap has no pixels");
+    if (!bitmap.buffer) {
+        Log::logger(Log::Error, "Glyph bitmap has no pixels");
+        return GlyphBitmap::failure();
+    }
 
     const auto pitch = static_cast<size_t>(abs(bitmap.pitch));
     for (unsigned y = 0; y < result.height; ++y) {
@@ -358,7 +410,8 @@ GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id) 
                     alpha = row[x * 4 + 3];
                     break;
                 default:
-                    Log::fatal("Unsupported glyph pixel mode {}", bitmap.pixel_mode);
+                    Log::logger(Log::Error, "Unsupported glyph pixel mode {}", bitmap.pixel_mode);
+                    return GlyphBitmap::failure();
             }
             result.pixels[static_cast<size_t>(y) * result.width + x] = alpha;
         }
@@ -369,42 +422,75 @@ GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id) 
 const GlyphBitmap& get_glyph(LoadedFont& font, const PositionedGlyph& placement,
                              unordered_map<uint64_t, GlyphBitmap>& scratch) {
     auto key = glyph_key(placement.face_index, placement.glyph_id);
-    auto& cache = placement.cacheable ? font.glyph_cache : scratch;
-    auto it = cache.find(key);
-    if (it == cache.end()) {
-        it = cache.emplace(key, rasterize(font, placement.face_index,
-                                          placement.glyph_id)).first;
+    if (placement.cacheable) {
+        auto cached = font.glyph_cache.find(key);
+        if (cached != font.glyph_cache.end()) return cached->second;
+    }
+
+    auto it = scratch.find(key);
+    if (it == scratch.end()) {
+        auto glyph = rasterize(font, placement.face_index, placement.glyph_id);
+        if (placement.cacheable && !glyph.failed)
+            return font.glyph_cache.emplace(key, std::move(glyph)).first->second;
+        it = scratch.emplace(key, std::move(glyph)).first;
     }
     return it->second;
 }
 
-LoadedFont& require_font(Text::FontHandle handle) {
+LoadedFont* require_font(Text::FontHandle handle) {
     auto it = loaded_fonts.find(handle.id);
-    if (it == loaded_fonts.end()) Log::fatal("Invalid text font handle {}", handle.id);
-    return *it->second;
+    if (it == loaded_fonts.end()) {
+        Log::logger(Log::Error, "Invalid text font handle {}", handle.id);
+        return nullptr;
+    }
+    return it->second.get();
 }
 
 } // namespace
 
 void Text::init() {
-    if (ft_library) Log::fatal("Text is already initialized");
-    if (FT_Init_FreeType(&ft_library)) Log::fatal("Failed to initialize FreeType");
+    if (ft_library) {
+        Log::logger(Log::Warning, "Text is already initialized");
+        return;
+    }
+    FT_Library library{};
+    if (FT_Init_FreeType(&library)) Log::fatal("Failed to initialize FreeType");
+    ft_library = library;
 }
 
 Text::FontHandle Text::load_font(string_view family, unsigned pixel_size) {
-    if (!ft_library) Log::fatal("Text is not initialized");
-    if (family.empty() || !pixel_size) Log::fatal("Font family and pixel size are required");
+    if (!ft_library) {
+        Log::logger(Log::Error, "Text is not initialized");
+        return {};
+    }
+    if (family.empty() || !pixel_size) {
+        Log::logger(Log::Error, "Font family and pixel size are required");
+        return {};
+    }
 
     auto font = make_unique<LoadedFont>();
     font->family = family;
     font->pixel_size = pixel_size;
     {
         FontQuery query(font->family, pixel_size);
-        font->faces.push_back(font_source(query.matches->fonts[0]));
-        get_face(*font, 0);
+        if (!query.has_matches()) return {};
+        for (int i = 0; i < query.matches->nfont; ++i) {
+            auto source = font_source(query.matches->fonts[i]);
+            if (!source) continue;
+            font->faces.push_back(std::move(*source));
+            if (get_face(*font, 0)) break;
+            font->faces.clear();
+        }
+    }
+    if (font->faces.empty()) {
+        Log::logger(Log::Error, "Failed to open a font for {}", family);
+        return {};
     }
 
-    if (!next_font_id) Log::fatal("Text font handle limit reached");
+    if (!next_font_id) {
+        Log::logger(Log::Error, "Text font handle limit reached");
+        return {};
+    }
     FontHandle handle{next_font_id++};
     loaded_fonts.emplace(handle.id, std::move(font));
     return handle;
@@ -412,19 +498,21 @@ Text::FontHandle Text::load_font(string_view family, unsigned pixel_size) {
 
 void Text::unload_font(FontHandle font) {
     if (loaded_fonts.erase(font.id) != 1)
-        Log::fatal("Invalid text font handle {}", font.id);
+        Log::logger(Log::Warning, "Invalid text font handle {}", font.id);
 }
 
 Text::Bitmap Text::draw(string_view text, FontHandle handle) {
-    LoadedFont& font = require_font(handle);
+    LoadedFont* font = require_font(handle);
     Bitmap bitmap;
-    if (text.empty()) return bitmap;
+    if (!font || text.empty()) return bitmap;
 
     auto cps = decode_utf8(text);
-    if (cps.size() > static_cast<size_t>(numeric_limits<int>::max()))
-        Log::fatal("Text is too long to shape");
-    resolve_missing_faces(font, cps);
-    auto runs = make_runs(font, cps);
+    if (cps.size() > static_cast<size_t>(numeric_limits<int>::max())) {
+        Log::logger(Log::Error, "Text is too long to shape");
+        return {};
+    }
+    resolve_missing_faces(*font, cps);
+    auto runs = make_runs(*font, cps);
     vector<uint32_t> values;
     values.reserve(cps.size());
     for (const auto& cp : cps) values.push_back(cp.value);
@@ -434,14 +522,17 @@ Text::Bitmap Text::draw(string_view text, FontHandle handle) {
     int64_t pen_y = 0;
     for (const auto& run : runs) {
         hb_buffer_t* buffer = hb_buffer_create();
-        if (!buffer) Log::fatal("Failed to create HarfBuzz buffer");
+        if (!buffer) {
+            Log::logger(Log::Error, "Failed to create HarfBuzz buffer");
+            return {};
+        }
         hb_buffer_add_codepoints(buffer, values.data(), static_cast<int>(values.size()),
                                  run.begin, run.end - run.begin);
         hb_buffer_set_direction(buffer, HB_DIRECTION_LTR);
         if (run.script != HB_SCRIPT_UNKNOWN && run.script != HB_SCRIPT_COMMON)
             hb_buffer_set_script(buffer, run.script);
         hb_buffer_guess_segment_properties(buffer);
-        hb_shape(get_face(font, run.face_index).hb_font, buffer, nullptr, 0);
+        hb_shape(font->faces[run.face_index].hb_font, buffer, nullptr, 0);
 
         unsigned count{};
         const auto* infos = hb_buffer_get_glyph_infos(buffer, &count);
@@ -478,7 +569,7 @@ Text::Bitmap Text::draw(string_view text, FontHandle handle) {
     bool has_pixels = false;
 
     for (const auto& placement : placements) {
-        const auto& glyph = get_glyph(font, placement, scratch);
+        const auto& glyph = get_glyph(*font, placement, scratch);
         if (glyph.pixels.empty()) continue;
         const auto x = static_cast<int64_t>(lround(
             static_cast<double>(placement.x_26_6) / 64.0)) + glyph.left;
@@ -499,20 +590,24 @@ Text::Bitmap Text::draw(string_view text, FontHandle handle) {
     if (max_x - min_x > numeric_limits<uint32_t>::max() ||
         max_y - min_y > numeric_limits<uint32_t>::max() ||
         min_x < numeric_limits<int32_t>::min() ||
-        min_y < numeric_limits<int32_t>::min())
-        Log::fatal("Text bitmap dimensions are too large");
+        min_y < numeric_limits<int32_t>::min()) {
+        Log::logger(Log::Error, "Text bitmap dimensions are too large");
+        return {};
+    }
 
     bitmap.width = static_cast<uint32_t>(max_x - min_x);
     bitmap.height = static_cast<uint32_t>(max_y - min_y);
     bitmap.stride = bitmap.width;
     bitmap.offset_x = static_cast<int32_t>(min_x);
     bitmap.offset_y = static_cast<int32_t>(min_y);
-    if (bitmap.height && bitmap.width > numeric_limits<size_t>::max() / bitmap.height)
-        Log::fatal("Text bitmap dimensions are too large");
+    if (bitmap.height && bitmap.width > numeric_limits<size_t>::max() / bitmap.height) {
+        Log::logger(Log::Error, "Text bitmap dimensions are too large");
+        return {};
+    }
     bitmap.pixels.resize(static_cast<size_t>(bitmap.width) * bitmap.height);
 
     for (const auto& placement : placements) {
-        const auto& glyph = get_glyph(font, placement, scratch);
+        const auto& glyph = get_glyph(*font, placement, scratch);
         if (glyph.pixels.empty()) continue;
         const auto x = static_cast<int64_t>(lround(
             static_cast<double>(placement.x_26_6) / 64.0)) + glyph.left - min_x;

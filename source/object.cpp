@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <memory>
 
 using namespace std;
@@ -106,18 +107,19 @@ public:
         animations.end(),
         [this, now](Animation& animation) -> bool {
             float* target{};
+            int* frame_target{};
             switch (animation.target) {
                 case AnimationTarget::Width:
-                    target = &frame.width;
+                    frame_target = &frame.width;
                     break;
                 case AnimationTarget::Height:
-                    target = &frame.height;
+                    frame_target = &frame.height;
                     break;
                 case AnimationTarget::X:
-                    target = &frame.x;
+                    frame_target = &frame.x;
                     break;
                 case AnimationTarget::Y:
-                    target = &frame.y;
+                    frame_target = &frame.y;
                     break;
                 case AnimationTarget::Radius:
                     target = &radius;
@@ -139,9 +141,17 @@ public:
                     return false;
             }
 
+            auto set_value = [target, frame_target](float value) {
+                if (frame_target) {
+                    *frame_target = static_cast<int>(lround(value));
+                } else {
+                    *target = value;
+                }
+            };
+
             if (animation.duration.count() <= 0 ||
                 now >= animation.start_time + animation.duration) {
-                *target = animation.to;
+                set_value(animation.to);
                 return true;
             }
 
@@ -151,7 +161,7 @@ public:
 
             float progress = static_cast<float>((now - animation.start_time).count())
                             / static_cast<float>(animation.duration.count());
-            *target = animation.from + (animation.to - animation.from) * progress;
+            set_value(animation.from + (animation.to - animation.from) * progress);
             return false;
         });
 
@@ -189,18 +199,19 @@ public:
         animations.end(),
         [this, now](Animation& animation) -> bool {
             float* target{};
+            int* frame_target{};
             switch (animation.target) {
                 case AnimationTarget::Width:
-                    target = &frame.width;
+                    frame_target = &frame.width;
                     break;
                 case AnimationTarget::Height:
-                    target = &frame.height;
+                    frame_target = &frame.height;
                     break;
                 case AnimationTarget::X:
-                    target = &frame.x;
+                    frame_target = &frame.x;
                     break;
                 case AnimationTarget::Y:
-                    target = &frame.y;
+                    frame_target = &frame.y;
                     break;
                 case AnimationTarget::Radius:
                     target = &radius;
@@ -210,9 +221,17 @@ public:
                     return false;
             }
 
+            auto set_value = [target, frame_target](float value) {
+                if (frame_target) {
+                    *frame_target = static_cast<int>(lround(value));
+                } else {
+                    *target = value;
+                }
+            };
+
             if (animation.duration.count() <= 0 ||
                 now >= animation.start_time + animation.duration) {
-                *target = animation.to;
+                set_value(animation.to);
                 return true;
             }
 
@@ -222,7 +241,7 @@ public:
 
             float progress = static_cast<float>((now - animation.start_time).count())
                             / static_cast<float>(animation.duration.count());
-            *target = animation.from + (animation.to - animation.from) * progress;
+            set_value(animation.from + (animation.to - animation.from) * progress);
             return false;
         });
 
@@ -265,4 +284,3 @@ void Object::draw() {
 void Object::clear() {
     objects.clear();
 }
-

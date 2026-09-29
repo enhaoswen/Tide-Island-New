@@ -8,9 +8,12 @@
 #include "basic.glsl.h"
 #include "sokol_log.h"
 #include "log.hpp"
+#include "text.hpp"
 
 #include <GLES3/gl3.h>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 #if defined(__GLIBC__)
 #include <malloc.h>
@@ -20,6 +23,36 @@ using namespace std;
 
 namespace {
 
+struct RectVert {
+    int p1_x, p1_y;
+    float p1_r, p1_g, p1_b, p1_a;
+
+    int p2_x, p2_y;
+    float p2_r, p2_g, p2_b, p2_a;
+
+    int p3_x, p3_y;
+    float p3_r, p3_g, p3_b, p3_a;
+
+    int p4_x, p4_y;
+    float p4_r, p4_g, p4_b, p4_a;
+};
+
+struct ImgVert {
+    int p1_x, p1_y;
+    float p1_u, p1_v;
+
+    int p2_x, p2_y;
+    float p2_u, p2_v;
+
+    int p3_x, p3_y;
+    float p3_u, p3_v;
+
+    int p4_x, p4_y;
+    float p4_u, p4_v;
+};
+
+Text::FontHandle font_1{};
+
 sg_shader rectangle_shader{};
 sg_pipeline rectangle_pipeline{};
 sg_buffer rect_vertex_buffer{};
@@ -28,26 +61,40 @@ sg_shader image_shader{};
 sg_pipeline image_pipeline{};
 sg_buffer image_vertex_buffer{};
 
-array<float, 24> rectangle_vertices(
+sg_shader text_shader{};
+sg_pipeline text_pipeline{};
+
+RectVert rectangle_vertices(
     Frame frame,
     array<float, 4> color
 ) {
+    int left   = frame.x;
+    int top    = frame.y;
+    int right  = left + frame.width;
+    int bottom = top + frame.height;
+
+    // x, y, r, g, b, a
+
     return {
-        // x, y, r, g, b, a
-        frame.x,                  frame.y,                 color[0], color[1], color[2], color[3],
-        frame.x + frame.width,    frame.y,                 color[0], color[1], color[2], color[3],
-        frame.x,                frame.y + frame.height,  color[0], color[1], color[2], color[3],
-        frame.x + frame.width,  frame.y + frame.height,  color[0], color[1], color[2], color[3],
+        left,  top,    color[0], color[1], color[2], color[3],
+        right, top,    color[0], color[1], color[2], color[3],
+        left,  bottom, color[0], color[1], color[2], color[3],
+        right, bottom, color[0], color[1], color[2], color[3],
     };
 }
 
-array<float, 16> image_vertices(Frame frame) {
+ImgVert image_vertices(Frame frame) {
+    int left   = frame.x;
+    int top    = frame.y;
+    int right  = left + frame.width;
+    int bottom = top + frame.height;
+
     return {
         // x, y, u, v
-        frame.x,                frame.y,                 0.0f, 0.0f,
-        frame.x + frame.width,  frame.y,                 1.0f, 0.0f,
-        frame.x,                frame.y + frame.height,  0.0f, 1.0f,
-        frame.x + frame.width,  frame.y + frame.height,  1.0f, 1.0f,
+        left,  top,    0.0f, 0.0f,
+        right, top,    1.0f, 0.0f,
+        left,  bottom, 0.0f, 1.0f,
+        right, bottom, 1.0f, 1.0f,
     };
 }
 
@@ -55,8 +102,8 @@ rect_proj_uniform_t projection() {
     auto surface_size = Wayland::get_surface_size();
 
     rect_proj_uniform_t result{};
-    result.proj[0] = 2.0F / static_cast<float>(surface_size[0]);
-    result.proj[5] = -2.0F / static_cast<float>(surface_size[1]);
+    result.proj[0] = 2.0F / surface_size[0];
+    result.proj[5] = -2.0F / surface_size[1];
     result.proj[10] = 1.0F;
     result.proj[12] = -1.0F;
     result.proj[13] = 1.0F;
@@ -97,40 +144,45 @@ sg_swapchain swapchain() {
     return result;
 }
 
-Frame calcuate_image_frame(
+Frame calculate_frame(
     Frame frame,
     Align horizontal_align,
     Align vertical_align,
     int image_width,
-    int image_height) {
+    int image_height,
+    bool resize
+) {
 
     Frame result{};
 
-    float scale_x = frame.width / static_cast<float>(image_width);
-    float scale_y = frame.height / static_cast<float>(image_height);
-    float scale = min(scale_x, scale_y);
+    result.width = image_width;
+    result.height = image_height;
 
-    float scaled_width = image_width * scale;
-    float scaled_height = image_height * scale;
+    if (resize) {
+
+        float scale_x = frame.width / static_cast<float>(image_width);
+        float scale_y = frame.height / static_cast<float>(image_height);
+        float scale = min(scale_x, scale_y);
+
+        result.width = static_cast<int>(lround(image_width * scale));
+        result.height = static_cast<int>(lround(image_height * scale));
+    }
 
     if (horizontal_align == Align::Left) {
         result.x = frame.x;
     } else if (horizontal_align == Align::Center) {
-        result.x = frame.x + (frame.width - scaled_width) / 2.0f;
+        result.x = frame.x + (frame.width - result.width) / 2;
     } else if (horizontal_align == Align::Right) {
-        result.x = frame.x + frame.width - scaled_width;
+        result.x = frame.x + frame.width - result.width;
     }
 
     if (vertical_align == Align::Left) {
         result.y = frame.y;
     } else if (vertical_align == Align::Center) {
-        result.y = frame.y + (frame.height - scaled_height) / 2.0f;
+        result.y = frame.y + (frame.height - result.height) / 2;
     } else if (vertical_align == Align::Right) {
-        result.y = frame.y + frame.height - scaled_height;
+        result.y = frame.y + frame.height - result.height;
     }
-
-    result.width = scaled_width;
-    result.height = scaled_height;
 
     return result;
 }
@@ -157,7 +209,7 @@ void Renderer::init() {
     sg_pipeline_desc rectangle_pipe_desc{};
 
     rectangle_pipe_desc.shader = rectangle_shader;
-    rectangle_pipe_desc.layout.attrs[ATTR_rectangle_position].format = SG_VERTEXFORMAT_FLOAT2;
+    rectangle_pipe_desc.layout.attrs[ATTR_rectangle_position].format = SG_VERTEXFORMAT_INT2;
     rectangle_pipe_desc.layout.attrs[ATTR_rectangle_color].format = SG_VERTEXFORMAT_FLOAT4;
     rectangle_pipe_desc.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
     enable_blending(rectangle_pipe_desc);
@@ -176,7 +228,7 @@ void Renderer::init() {
     sg_pipeline_desc image_pipe_desc{};
 
     image_pipe_desc.shader = image_shader;
-    image_pipe_desc.layout.attrs[ATTR_image_position].format = SG_VERTEXFORMAT_FLOAT2;
+    image_pipe_desc.layout.attrs[ATTR_image_position].format = SG_VERTEXFORMAT_INT2;
     image_pipe_desc.layout.attrs[ATTR_image_coord].format = SG_VERTEXFORMAT_FLOAT2;
     image_pipe_desc.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
     enable_blending(image_pipe_desc);
@@ -187,6 +239,24 @@ void Renderer::init() {
     image_buffer_desc.usage.dynamic_update = true;
     image_buffer_desc.label = "image_vertex_buffer";
     image_vertex_buffer = sg_make_buffer(&image_buffer_desc);
+
+    // text environment init
+
+    text_shader = sg_make_shader(text_shader_desc(sg_query_backend()));
+
+    sg_pipeline_desc text_pipe_desc{};
+    text_pipe_desc.shader = text_shader;
+    text_pipe_desc.layout.attrs[ATTR_text_position].format = SG_VERTEXFORMAT_INT2;
+    text_pipe_desc.layout.attrs[ATTR_text_coord].format = SG_VERTEXFORMAT_FLOAT2;
+    text_pipe_desc.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+    enable_blending(text_pipe_desc);
+    text_pipeline = sg_make_pipeline(text_pipe_desc);
+
+    if (sg_query_pipeline_state(text_pipeline) != SG_RESOURCESTATE_VALID) {
+        Log::fatal("Text pipeline is invalid (shader compile error?)");
+    }
+
+    font_1 = Text::load_font("Inter Display", 24);
 
     // release mem
 
@@ -220,7 +290,7 @@ void Renderer::draw_rectangle(
     float max_r = min(frame.width, frame.height) * 0.5f;
     radius = clamp(radius, 0.0f, max_r);
 
-    array<float,24> vertices = rectangle_vertices(frame, color);
+    RectVert vertices = rectangle_vertices(frame, color);
     int offset = sg_append_buffer(rect_vertex_buffer, SG_RANGE(vertices));
     if (sg_query_buffer_overflow(rect_vertex_buffer)) {
         Log::fatal("Vertex bufer overflow");
@@ -250,7 +320,7 @@ void Renderer::draw_image(
     unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
 
     if (!pixels) {
-        Log::fatal("Failed to load picture {}",path);
+        Log::fatal(R"@(Failed to load picture, path="{}")@", path);
     }
 
     sg_image_desc image_desc {
@@ -291,15 +361,20 @@ void Renderer::draw_image(
         Log::fatal("Failed to create sampler");
     }
 
-    array<float,16> vertices = image_vertices(
-        calcuate_image_frame(
+    ImgVert vertices = image_vertices(
+        calculate_frame(
             frame, 
             horizontal_align, 
             vertical_align, 
             width, 
-            height));
+            height,
+            true
+        ));
 
     int offset = sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices));
+    if (sg_query_buffer_overflow(image_vertex_buffer)) {
+        Log::fatal("Image vertex buffer overflow");
+    }
 
     sg_view_desc tex_view_desc {
         .texture = {
@@ -315,6 +390,7 @@ void Renderer::draw_image(
 
     sg_bindings bindings{};
     bindings.vertex_buffers[0] = image_vertex_buffer;
+    bindings.vertex_buffer_offsets[0] = offset;
     bindings.samplers[SMP_smp] = image_sampler;
     bindings.views[VIEW_tex] = tex_view;
 
@@ -329,7 +405,7 @@ void Renderer::draw_image(
     auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
 
-    img_radius_uniform_t radius_data = radius_uniform<img_radius_uniform_t>(frame, radius);
+    auto radius_data = radius_uniform<img_radius_uniform_t>(frame, radius);
     sg_apply_uniforms(UB_img_radius_uniform, SG_RANGE(radius_data));
 
     sg_draw(0, 4, 1);
@@ -338,4 +414,99 @@ void Renderer::draw_image(
     sg_destroy_image(image);
     sg_destroy_sampler(image_sampler);
     sg_destroy_view(tex_view);
+}
+
+void Renderer::draw_text(
+    Frame frame, 
+    Align horizontal_align, 
+    Align vertical_align, 
+    string_view text
+) {
+    Text::Bitmap bitmap = Text::draw(text, font_1);
+    if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
+        return;
+    }
+    if (bitmap.width > static_cast<unsigned>(numeric_limits<int>::max()) ||
+        bitmap.height > static_cast<unsigned>(numeric_limits<int>::max())) {
+        Log::fatal("Text bitmap dimensions are too large");
+    }
+
+    Frame new_frame = calculate_frame(
+        frame, 
+        horizontal_align, 
+        vertical_align,
+        static_cast<int>(bitmap.width),
+        static_cast<int>(bitmap.height),
+        false
+    );
+
+    sg_image_desc image_desc {
+        .type = SG_IMAGETYPE_2D,
+        .usage = {
+            .immutable = true
+        },
+        .width = static_cast<int>(bitmap.width),
+        .height = static_cast<int>(bitmap.height),
+        .num_slices = 1,
+        .num_mipmaps = 1,
+        .pixel_format = SG_PIXELFORMAT_R8,
+        .sample_count = 1,
+        .data = {
+            .mip_levels = {
+                {
+                    .ptr = bitmap.pixels.data(),
+                    .size = bitmap.pixels.size()
+                }
+            }
+        }
+    };
+
+    sg_image image = sg_make_image(image_desc);
+    if (sg_query_image_state(image) != SG_RESOURCESTATE_VALID) {
+        Log::fatal("Failed to create text image");
+    }
+
+    sg_sampler_desc sampler_desc {
+        .min_filter = SG_FILTER_LINEAR,
+        .mag_filter = SG_FILTER_LINEAR,
+        .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+    };
+    sg_sampler sampler = sg_make_sampler(sampler_desc);
+    if (sg_query_sampler_state(sampler) != SG_RESOURCESTATE_VALID) {
+        Log::fatal("Failed to create text sampler");
+    }
+
+    ImgVert vertices = image_vertices(new_frame);
+    int offset = sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices));
+    if (sg_query_buffer_overflow(image_vertex_buffer)) {
+        Log::fatal("Text vertex buffer overflow");
+    }
+
+    sg_view_desc view_desc {
+        .texture = {
+            .image = image
+        }
+    };
+    sg_view view = sg_make_view(view_desc);
+    if (sg_query_view_state(view) != SG_RESOURCESTATE_VALID) {
+        Log::fatal("Failed to create text texture view");
+    }
+
+    sg_bindings bindings{};
+    bindings.vertex_buffers[0] = image_vertex_buffer;
+    bindings.vertex_buffer_offsets[0] = offset;
+    bindings.samplers[SMP_smp] = sampler;
+    bindings.views[VIEW_tex] = view;
+
+    sg_apply_pipeline(text_pipeline);
+    sg_apply_bindings(&bindings);
+
+    auto project = projection();
+    sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
+    sg_draw(0, 4, 1);
+
+    sg_destroy_view(view);
+    sg_destroy_sampler(sampler);
+    sg_destroy_image(image);
 }

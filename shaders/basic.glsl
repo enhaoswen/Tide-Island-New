@@ -1,5 +1,5 @@
 @vs rect_vs
-in vec2 position;
+in ivec2 position;
 in vec4 color;
 out vec4 frag_color;
 out vec2 Position;
@@ -9,9 +9,9 @@ layout(binding = 0) uniform rect_proj_uniform {
 };
 
 void main() {
-    gl_Position = proj * vec4(position, 0.0, 1.0);
+    gl_Position = proj * vec4(vec2(position), 0.0, 1.0);
     frag_color = color;
-    Position = position;
+    Position = vec2(position);
 }
 @end
 
@@ -39,7 +39,7 @@ void main() {
 @program rectangle rect_vs rect_fs
 
 @vs img_vs
-in vec2 position;
+in ivec2 position;
 in vec2 coord;
 
 out vec2 Position;
@@ -51,8 +51,8 @@ layout(binding = 2) uniform img_proj {
 
 void main() {
     uv = coord;
-    gl_Position = proj * vec4(position,0.0,1.0);
-    Position = position;
+    gl_Position = proj * vec4(vec2(position),0.0,1.0);
+    Position = vec2(position);
 }
 @end
 
@@ -85,3 +85,22 @@ void main() {
 @end
 
 @program image img_vs img_fs
+
+@fs text_fs
+precision mediump float;
+
+in vec2 Position;
+in vec2 uv;
+
+layout(binding = 0) uniform texture2D tex;
+layout(binding = 0) uniform sampler smp;
+
+out vec4 frag_color;
+
+void main() {
+    float coverage = texture(sampler2D(tex, smp), uv).r;
+    frag_color = vec4(1.0, 1.0, 1.0, coverage);
+}
+@end
+
+@program text img_vs text_fs

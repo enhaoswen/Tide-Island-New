@@ -9,13 +9,24 @@
 #include <string_view>
 #include <utility>
 
-// ============================================================================
-// Tide Island logging helpers
-// ============================================================================
-//
-// This header keeps logging lightweight: regular messages are one-line logs,
-// while frame_logger prints a bordered block for user-facing diagnostics.
-//
+
+// output format
+// if your log contains source_location, please only use filename and column.
+// template:
+// {filename}:{column}: "..."
+
+// if your log contains special symbol that need espace
+// Ex. (" \"key\",\"value\" ")
+// please use R"@(...)@"
+// (R"@("key", "value")@")
+
+// if there's a key & value, write them like this:
+// key="...", value="..."
+// instead of {key, value}
+
+// if there's a path, write them like this:
+// path="..."
+// instead of just writing it.
 
 namespace Log {
 

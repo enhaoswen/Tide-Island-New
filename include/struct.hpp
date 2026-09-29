@@ -2,15 +2,19 @@
 
 #include <array>
 #include <chrono>
-#include <vector>
 #include <string>
-#include <variant>
-#include <unordered_map>
 
-// Remember to change `types` in `create_str_config` if you add new types to the config variant. (config.cpp)
+// This file used to put the structure that developer might need in API.cpp / main.cpp.
+// because some struct / enum might not get displaied by clangd if their header is not
+// included directly.
+//
+// Ex. we need RectDesc in main.cpp
+// but we did not include renderer.hpp because it's included by API.cpp already, and we
+// don't want to include it again in main.cpp because it might looks messy.
+// so we just put all of them in struct.hpp
 
 struct Frame {
-    float x, y, width, height;
+    int x, y, width, height;
 };
 
 enum struct Align : char{
@@ -19,7 +23,6 @@ enum struct Align : char{
     Right
 };
 
-
 struct RectDesc {
     Frame frame{};
     float radius{};
@@ -27,7 +30,6 @@ struct RectDesc {
     void (*click_callback_left) () = nullptr;
     void (*click_callback_right) () = nullptr;
 };
-
 
 struct ImageDesc {
     Frame frame{};
@@ -48,13 +50,12 @@ struct Event {
 
 struct IslandConf {
     std::array<float, 4> color{0,0,0,1};
-    float island_width{};
-    float island_height{};
+    int island_width{};
+    int island_height{};
     int zone{-1};
     float anchor_top{};
     float radius{};
 
-    // DO NOT init need_redraw, it should always be true in the beginning.
     bool need_redraw{true};
     bool is_running{true};
 };
@@ -69,12 +70,6 @@ enum struct AnimationTarget : char {
     ColorG,
     ColorB,
     ColorA
-};
-
-enum struct ConfigType : char {
-    IslandConfig,
-
-    Count // DO NOT use, just to get the count of config types for loop.
 };
 
 struct Animation {

@@ -21,10 +21,9 @@ using namespace std::filesystem;
 
 namespace {
 
-// Remember to change funtion `get_default_config` if you add new config files.
 config default_config{
-    {"island_width", 140.0f},
-    {"island_height", 38.0f},
+    {"island_width", 140},
+    {"island_height", 38},
     {"zone", 40},
     {"anchor_top", 2.0f},
     {"radius", 19.0f},
@@ -51,7 +50,7 @@ bool convert(const string& key, const config_turn& val, T& target) {
         constexpr auto N = std::tuple_size_v<target_t>;
         if (const auto* p = get_if<vector<elem_t>>(&val)) {
             if (p->size() != N) {
-                Log::logger(Log::Error, R"(key "{}" expected {} elements, got {}.)", key, N, p->size());
+                Log::logger(Log::Error, R"@(Expected {} elements, got {}, key="{}")@", N, p->size(), key);
                 return false;
             }
             ranges::copy(*p, target.begin());
@@ -68,7 +67,7 @@ void set_config(const string& key, const config& conf, T& target) {
     auto it = conf.find(key);
 
     if (it == conf.end()) {
-        Log::logger(Log::Error, R"(key "{}" is not found in your config.)", key);
+        Log::logger(Log::Error, R"@(Key not found in config, key="{}")@", key);
         if (auto dit = default_config.find(key); dit != default_config.end()){
             convert(key, dit->second, target);
         }
@@ -76,7 +75,7 @@ void set_config(const string& key, const config& conf, T& target) {
     }
 
     if (!convert(key, it->second, target)) {
-        Log::logger(Log::Error, R"(key "{}" has the wrong type.)", key);
+        Log::logger(Log::Error, R"@(Wrong config type, key="{}")@", key);
         if (auto dit = default_config.find(key); dit != default_config.end()) {
             convert(key, dit->second, target);
         }
@@ -94,35 +93,18 @@ void set_config(
         target = val;
     }
     else {
-        Log::logger(Log::Error, R"(key "{}" has the wrong type.)", key);
+        Log::logger(Log::Error, R"@(Wrong config type, key="{}")@", key);
     }
 }
 
-path get_config_path(ConfigType type, source_location location = source_location::current()) {
+path get_config_path() {
     const char* home = getenv("HOME");
 
     if (home == nullptr) {
         Log::fatal("HOME is not set");
     }
 
-    switch (type) {
-    case ConfigType::IslandConfig:
-        return path(home) / ".config" / "Tide Island" / "config.tide";
-
-    case ConfigType::Count:
-        Log::logger(Log::Error, R"("ConfigType::Count" should not be used. "{}": {})", location.file_name(), location.line());
-    }
-}
-
-config& get_default_config(ConfigType type, source_location location = source_location::current()) {
-    switch (type) {
-    case ConfigType::IslandConfig:
-        return default_config;
-
-    case ConfigType::Count:
-        Log::fatal(R"(ConfigType::Count is used to get the count of config types. It should not be used. "{}": {})", location.file_name(), location.line());
-
-    }
+    return path(home) / ".config" / "Tide Island" / "config.tide";
 }
 
 array<string, 3> split(string& line) {
@@ -172,11 +154,11 @@ void assign_config(array<string,3> token, config_turn& target) {
             val = stoi(token[2]);
         } 
         catch (invalid_argument&) {
-            Log::logger(Log::Error, "Invalid integer: {}:{}", token[1], token[2]);
+            Log::logger(Log::Error, R"@(Invalid integer, key="{}", value="{}")@", token[1], token[2]);
             return;
         }
         catch (const out_of_range&) {
-            Log::logger(Log::Error, "Integer out of range: {}:{}", token[1], token[2]);
+            Log::logger(Log::Error, R"@(Integer out of range, key="{}", value="{}")@", token[1], token[2]);
             return;
         }
         set_config(token[1], val, target);
@@ -191,7 +173,7 @@ void assign_config(array<string,3> token, config_turn& target) {
         catch (const invalid_argument&) {
             Log::logger(
                 Log::Error,
-                "Invalid float: {}:{}",
+                R"@(Invalid float, key="{}", value="{}")@",
                 token[1],
                 token[2]
             );
@@ -200,7 +182,7 @@ void assign_config(array<string,3> token, config_turn& target) {
         catch (const out_of_range&) {
             Log::logger(
                 Log::Error,
-                "Float out of range: {}:{}",
+                R"@(Float out of range, key="{}", value="{}")@",
                 token[1],
                 token[2]
             );
@@ -227,7 +209,7 @@ void assign_config(array<string,3> token, config_turn& target) {
         else {
             Log::logger(
                 Log::Error,
-                "Invalid boolean: {}:{}",
+                R"@(Invalid boolean, key="{}", value="{}")@",
                 token[1],
                 token[2]
             );
@@ -244,7 +226,7 @@ void assign_config(array<string,3> token, config_turn& target) {
         size_t info_begin = token[0].find('<');
         size_t info_end   = token[0].find('>');
         if (info_begin == string::npos || info_end == string::npos || info_end < info_begin) {
-            Log::logger(Log::Error, "Malformed list type: {}:{}", token[1], token[0]);
+            Log::logger(Log::Error, R"@(Malformed list type, key="{}", type="{}")@", token[1], token[0]);
             return;
         }
         string elem_type = token[0].substr(info_begin + 1, info_end - info_begin - 1);
@@ -253,7 +235,7 @@ void assign_config(array<string,3> token, config_turn& target) {
         size_t lb = values_str.find('[');
         size_t rb = values_str.rfind(']');
         if (lb == string::npos || rb == string::npos || rb < lb) {
-            Log::logger(Log::Error, "Malformed list value (missing brackets): {}:{}", token[1], token[2]);
+            Log::logger(Log::Error, R"@(Malformed list value (missing brackets), key="{}", value="{}")@", token[1], token[2]);
             return;
         }
         values_str = values_str.substr(lb + 1, rb - lb - 1);
@@ -273,11 +255,11 @@ void assign_config(array<string,3> token, config_turn& target) {
                     v = stoi(rv);
                 }
                 catch (const invalid_argument&) {
-                    Log::logger(Log::Error, "Invalid integer element: {}:{}", token[1], rv);
+                    Log::logger(Log::Error, R"@(Invalid integer element, key="{}", value="{}")@", token[1], rv);
                     return;
                 }
                 catch (const out_of_range&) {
-                    Log::logger(Log::Error, "Integer element out of range: {}:{}", token[1], rv);
+                    Log::logger(Log::Error, R"@(Integer element out of range, key="{}", value="{}")@", token[1], rv);
                     return;
                 }
                 values.push_back(v);
@@ -294,11 +276,11 @@ void assign_config(array<string,3> token, config_turn& target) {
                     v = stof(rv);
                 }
                 catch (const invalid_argument&) {
-                    Log::logger(Log::Error, "Invalid float element: {}:{}", token[1], rv);
+                    Log::logger(Log::Error, R"@(Invalid float element, key="{}", value="{}")@", token[1], rv);
                     return;
                 }
                 catch (const out_of_range&) {
-                    Log::logger(Log::Error, "Float element out of range: {}:{}", token[1], rv);
+                    Log::logger(Log::Error, R"@(Float element out of range, key="{}", value="{}")@", token[1], rv);
                     return;
                 }
                 values.push_back(v);
@@ -312,7 +294,7 @@ void assign_config(array<string,3> token, config_turn& target) {
                 if (rv == "true")       values.push_back(true);
                 else if (rv == "false") values.push_back(false);
                 else {
-                    Log::logger(Log::Error, "Invalid boolean element: {}:{}", token[1], rv);
+                    Log::logger(Log::Error, R"@(Invalid boolean element, key="{}", value="{}")@", token[1], rv);
                     return;
                 }
             }
@@ -324,7 +306,7 @@ void assign_config(array<string,3> token, config_turn& target) {
         }
 
         else {
-            Log::logger(Log::Error, "Unsupported element type in {}: {}", token[0], elem_type);
+            Log::logger(Log::Error, R"@(Unsupported element type, type="{}", element_type="{}")@", token[0], elem_type);
             return;
         }
     }
@@ -332,7 +314,7 @@ void assign_config(array<string,3> token, config_turn& target) {
     else {
         Log::logger(
             Log::Error,
-            "Invalid type {}: {} = {}",
+            R"@(Invalid type, type="{}", key="{}", value="{}")@",
             token[0],
             token[1],
             token[2]
@@ -368,26 +350,20 @@ string format_list(const vector<T>& values) {
 
 } // namespace
 
-Config::Config(ConfigType arg_type, source_location location) {
+Config::Config(source_location location) {
     error_code ec;
     path parent_path = path(getenv("HOME")) / ".config" / "Tide Island";
-
-    if (arg_type == ConfigType::Count) {
-        Log::fatal(R"(Config type should not be Count. "{}": {})", location.file_name(),location.line());
-    }
-
-    type = arg_type;
 
     bool is_exist = exists(parent_path,ec);
 
     if (ec) {
         Log::logger(
             Log::Error,
-            "Failed to access config directory {}: {} ({})",
+            R"@(Failed to access config directory, path="{}": {} ({}))@",
             parent_path.string(), ec.message(), ec.value());
         Log::logger(Log::Error, "So use the default config file instead.");
 
-        conf = get_default_config(arg_type);
+        conf = default_config;
 
         return;
     }
@@ -398,56 +374,55 @@ Config::Config(ConfigType arg_type, source_location location) {
         if (ec) {
             Log::logger(
                 Log::Error,
-                "Failed to access config directory {}: {} ({})",
+                R"@(Failed to access config directory, path="{}": {} ({}))@",
                 parent_path.string(), ec.message(), ec.value());
             Log::logger(Log::Error, "So use the default config file instead.");
 
-            conf = get_default_config(arg_type);
+            conf = default_config;
             
             return;
         }
 
-        Log::logger(Log::Debug,"Create directory {} successfully", parent_path.string());
+        Log::logger(Log::Debug,R"@(Create directory successfully, path="{}")@", parent_path.string());
     }
 
-    path file_path = get_config_path(arg_type);
-    is_exist = exists(file_path, ec);
+    is_exist = exists(conf_path, ec);
 
     if (ec) {
         Log::logger(
             Log::Error,
-            "Failed to access config file {}: {} ({})",
-            file_path.string(), ec.message(), ec.value());
+            R"@(Failed to access config file, path="{}": {} ({}))@",
+            conf_path.string(), ec.message(), ec.value());
 
         Log::logger(Log::Error, "So use the default config file instead.");
 
-        conf = get_default_config(arg_type);
+        conf = default_config;
         return;
     }
 
     if (!is_exist) {
 
-        ofstream file(file_path);
+        ofstream file(conf_path);
 
         if (!file) {
             Log::logger(
-                Log::Debug,
-                "Failed to create file {}: {}", 
-                file_path.string(),
+                Log::Error,
+                R"@(Failed to create file, path="{}": {})@",
+                conf_path.string(),
                 strerror(errno)
             );
-            conf = get_default_config(type);
+            conf = default_config;
             return;
         }
     } 
 
-    if (file_size(get_config_path(arg_type)) == 0) {
-        conf = get_default_config(type);
+    if (file_size(conf_path) == 0) {
+        conf = default_config;
         write(conf);
     }
     
     else {
-        conf = get_default_config(arg_type);
+        conf = default_config;
         read();
     }
 
@@ -455,18 +430,17 @@ Config::Config(ConfigType arg_type, source_location location) {
 
 void Config::read() {
     error_code ec;
-    path file_path = get_config_path(type);
 
-    ifstream file(file_path);
+    ifstream file(conf_path);
 
     if (!file) {
         Log::logger(
-            Log::Debug,
-            "Failed to open file {}: {}", 
-            file_path.string(),
+            Log::Error,
+            R"@(Failed to open file, path="{}": {})@",
+            conf_path.string(),
             strerror(errno)
         );
-        conf = get_default_config(type);
+        conf = default_config;
         return;
     }
 
@@ -488,8 +462,8 @@ void Config::read() {
         if (tokens[0].empty()) {
             Log::logger(
                 Log::Error, 
-                R"(Invalid config on "{}":{} )",
-                get_config_path(type).string(),
+                "{}:{}: Invalid config",
+                get_config_path().string(),
                 count
             );
             continue;
@@ -498,10 +472,10 @@ void Config::read() {
         if (!conf.contains(tokens[1])) {
             Log::logger(
                 Log::Error,
-                R"(Invalid config "{}" on "{}": {})",
-                tokens[1],
-                get_config_path(type).string(),
-                count
+                R"@({}:{}: Invalid config key, key="{}")@",
+                get_config_path().string(),
+                count,
+                tokens[1]
             );
             continue;
         }
@@ -511,15 +485,14 @@ void Config::read() {
 
 void Config::write() {
     error_code ec;
-    path file_path = get_config_path(type);
 
-    ofstream file(file_path);
+    ofstream file(conf_path);
 
     if (!file) {
         Log::logger(
-            Log::Debug,
-            "Failed to open file {}: {}", 
-            file_path.string(),
+            Log::Error,
+            R"@(Failed to open file, path="{}": {})@",
+            conf_path.string(),
             strerror(errno)
         );
         Log::logger(Log::Error, "So stop trying");
@@ -560,15 +533,14 @@ void Config::write() {
 
 void Config::write(config& arg_config) {
     error_code ec;
-    path file_path = get_config_path(type);
 
-    ofstream file(file_path);
+    ofstream file(conf_path);
 
     if (!file) {
         Log::logger(
-            Log::Debug,
-            "Failed to open file {}: {}", 
-            file_path.string(),
+            Log::Error,
+            R"@(Failed to open file, path="{}": {})@",
+            conf_path.string(),
             strerror(errno)
         );
         Log::logger(Log::Error, "So stop trying");
@@ -608,20 +580,17 @@ void Config::write(config& arg_config) {
 }
 
 IslandConf Config::to_struct(){
-    if (type == ConfigType::IslandConfig) {
 
-        IslandConf island_conf{};
+    IslandConf island_conf{};
 
-        set_config("color", conf, island_conf.color);
-        set_config("island_width", conf, island_conf.island_width);
-        set_config("island_height", conf, island_conf.island_height);
-        set_config("zone", conf, island_conf.zone);
-        set_config("anchor_top", conf, island_conf.anchor_top);
-        set_config("radius", conf, island_conf.radius);
+    set_config("color", conf, island_conf.color);
+    set_config("island_width", conf, island_conf.island_width);
+    set_config("island_height", conf, island_conf.island_height);
+    set_config("zone", conf, island_conf.zone);
+    set_config("anchor_top", conf, island_conf.anchor_top);
+    set_config("radius", conf, island_conf.radius);
 
-        return island_conf;
-    }
+    return island_conf;
 
-    return {};
 
 }

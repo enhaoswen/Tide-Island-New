@@ -31,6 +31,7 @@ set(SRC
     source/object.cpp
     source/text.cpp
     source/config.cpp
+    source/color.cpp
 )
 
 add_executable(Tide-island ${SRC})

@@ -7,6 +7,7 @@
 #include "island.hpp"
 #include "log.hpp"
 #include "struct.hpp"
+#include "text.hpp"
 
 namespace {
 
@@ -16,7 +17,7 @@ const IslandConf* state{};
 
 void API::init() {
 
-    Config island_conf(ConfigType::IslandConfig);
+    Config island_conf;
     Log::logger(Log::Debug, "Config initialized successfully");
 
     Island::init(island_conf);
@@ -25,6 +26,9 @@ void API::init() {
 
     Wayland::init();
     Log::logger(Log::Debug, "Wayland initialized successfully");
+
+    Text::init();
+    Log::logger(Log::Debug, "Text initialized successfully");
 
     Renderer::init();
     Log::logger(Log::Debug, "Renderer initialized successfully");
@@ -71,5 +75,9 @@ void API::run(){
         
        Island::request_redraw(Timer::wait());
     }
+
+}
+
+void API::shutdown() {
 
 }
