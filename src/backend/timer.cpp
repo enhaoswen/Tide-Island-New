@@ -1,7 +1,7 @@
-#include "timer.hpp"
-#include "wayland.hpp"
-#include "log.hpp"
-#include "struct.hpp"
+#include "backend/timer.hpp"
+#include "backend/wayland.hpp"
+#include "utils/log.hpp"
+#include "utils/struct.hpp"
 
 #include <chrono>
 #include <cstring>

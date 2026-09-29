@@ -19,18 +19,18 @@ find_package(OpenGL REQUIRED)
 find_package(Freetype REQUIRED)
 
 set(SRC 
-    main.cpp 
-    source/wlr-layer-shell-unstable-v1-protocol.c 
-    source/xdg-shell-client-protocol.c
-    source/island.cpp
-    source/wayland.cpp
-    source/renderer.cpp
-    source/API.cpp
-    source/config.cpp
-    source/timer.cpp
-    source/object.cpp
-    source/text.cpp
-    source/color.cpp
+    src/app/main.cpp
+    src/app/API.cpp
+    src/app/island.cpp
+    src/utils/config.cpp
+    src/utils/color.cpp
+    src/backend/wayland.cpp
+    src/backend/timer.cpp
+    src/graphics/renderer.cpp
+    src/graphics/text.cpp
+    src/scene/object.cpp
+    generated/wayland/wlr-layer-shell-unstable-v1-protocol.c
+    generated/wayland/xdg-shell-client-protocol.c
 )
 
 add_executable(Tide-island ${SRC})
@@ -38,8 +38,9 @@ add_executable(Tide-island ${SRC})
 target_compile_definitions(Tide-island PRIVATE SOKOL_GLES3)
 
 target_include_directories(Tide-island PRIVATE 
-    include/
-    shaders/
+    src/
+    third_party/
+    generated/wayland/
     ${WAYLAND_CLIENT_INCLUDE_DIRS}
     ${WAYLAND_EGL_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}

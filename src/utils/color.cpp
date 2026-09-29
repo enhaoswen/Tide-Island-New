@@ -1,9 +1,8 @@
-#include "color.hpp"
-#include "log.hpp"
+#include "utils/color.hpp"
+#include "utils/log.hpp"
 
 #include <string_view>
 #include <source_location>
-#include <type_traits>
 
 using namespace std;
 using RGBA = array<float, 4>;

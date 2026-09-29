@@ -1,13 +1,13 @@
-#include "API.hpp"
-#include "wayland.hpp"
-#include "renderer.hpp"
-#include "object.hpp"
-#include "timer.hpp"
-#include "config.hpp"
-#include "island.hpp"
-#include "log.hpp"
-#include "struct.hpp"
-#include "text.hpp"
+#include "app/API.hpp"
+#include "backend/wayland.hpp"
+#include "graphics/renderer.hpp"
+#include "scene/object.hpp"
+#include "backend/timer.hpp"
+#include "utils/config.hpp"
+#include "app/island.hpp"
+#include "utils/log.hpp"
+#include "utils/struct.hpp"
+#include "graphics/text.hpp"
 
 namespace {
 

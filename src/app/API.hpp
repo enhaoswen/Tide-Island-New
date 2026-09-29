@@ -2,7 +2,7 @@
 
 #include "cstdint"
 
-#include "struct.hpp"
+#include "utils/struct.hpp"
 
 namespace API {
 

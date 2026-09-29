@@ -1,7 +1,7 @@
 #pragma once
 
-#include "struct.hpp"
-#include "config.hpp"
+#include "utils/struct.hpp"
+#include "utils/config.hpp"
 
 #include <source_location>
 

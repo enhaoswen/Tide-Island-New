@@ -5,8 +5,8 @@
 // This translation unit owns the native Wayland, layer-shell, EGL window, and
 // swapchain-facing platform state used by the renderer.
 
-#include "wayland.hpp"
-#include "log.hpp"
+#include "backend/wayland.hpp"
+#include "utils/log.hpp"
 
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include <GLES3/gl3.h>

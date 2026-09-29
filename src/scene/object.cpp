@@ -1,7 +1,7 @@
-#include "object.hpp"
-#include "log.hpp"
-#include "renderer.hpp"
-#include "struct.hpp"
+#include "scene/object.hpp"
+#include "utils/log.hpp"
+#include "graphics/renderer.hpp"
+#include "utils/struct.hpp"
 
 #include <vector>
 #include <algorithm>

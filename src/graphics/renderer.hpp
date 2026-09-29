@@ -3,7 +3,7 @@
 #include <array>
 #include <string_view>
 
-#include "struct.hpp"
+#include "utils/struct.hpp"
 
 namespace Renderer {
 

@@ -2,13 +2,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 
 #include "stb_image.h"
-#include "renderer.hpp"
-#include "wayland.hpp"
+#include "graphics/renderer.hpp"
+#include "backend/wayland.hpp"
 #include "sokol_gfx.h"
-#include "basic.glsl.h"
+#include "graphics/shaders/basic.glsl.h"
 #include "sokol_log.h"
-#include "log.hpp"
-#include "text.hpp"
+#include "utils/log.hpp"
+#include "graphics/text.hpp"
 
 #include <GLES3/gl3.h>
 #include <algorithm>

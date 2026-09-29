@@ -1,6 +1,6 @@
-#include "API.hpp"
-#include "log.hpp"
-#include "struct.hpp"
+#include "app/API.hpp"
+#include "utils/log.hpp"
+#include "utils/struct.hpp"
 
 using namespace std;
 

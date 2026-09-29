@@ -1,6 +1,6 @@
 #pragma once
 
-#include "struct.hpp"
+#include "utils/struct.hpp"
 
 
 namespace Object {

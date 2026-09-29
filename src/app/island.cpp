@@ -5,10 +5,10 @@
 // This translation unit owns the process-wide island configuration used by the
 // Wayland backend and renderer.
 //
-#include "island.hpp"
-#include "struct.hpp"
-#include "log.hpp"
-#include "config.hpp"
+#include "app/island.hpp"
+#include "utils/struct.hpp"
+#include "utils/log.hpp"
+#include "utils/config.hpp"
 #include <source_location>
 
 using namespace std;

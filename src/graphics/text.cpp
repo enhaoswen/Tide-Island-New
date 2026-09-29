@@ -1,5 +1,5 @@
-#include "text.hpp"
-#include "log.hpp"
+#include "graphics/text.hpp"
+#include "utils/log.hpp"
 
 #include <fontconfig/fontconfig.h>
 #include <ft2build.h>
