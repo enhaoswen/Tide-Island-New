@@ -8,8 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
-#include <cmath>
-#include <memory>
+#include <variant>
 
 using namespace std;
 using namespace std::chrono;
@@ -23,93 +22,93 @@ private:
     vector<Animation> animations;
 
     float* get_target_ptr(AnimationTarget target, source_location l = source_location::current()) {
-    switch (target) {
-        case AnimationTarget::Width:
-            if constexpr (requires { desc.frame; }) {
-                return &desc.frame.width;
-            }
-            break;
+        switch (target) {
+            case AnimationTarget::Width:
+                if constexpr (requires { desc.frame; }) {
+                    return &desc.frame.width;
+                }
+                break;
 
-        case AnimationTarget::Height:
-            if constexpr (requires { desc.frame; }) {
-                return &desc.frame.height;
-            }
-            break;
+            case AnimationTarget::Height:
+                if constexpr (requires { desc.frame; }) {
+                    return &desc.frame.height;
+                }
+                break;
 
-        case AnimationTarget::X:
-            if constexpr (requires { desc.frame; }) {
-                return &desc.frame.x;
-            }
-            break;
+            case AnimationTarget::X:
+                if constexpr (requires { desc.frame; }) {
+                    return &desc.frame.x;
+                }
+                break;
 
-        case AnimationTarget::Y:
-            if constexpr (requires { desc.frame; }) {
-                return &desc.frame.y;
-            }
-            break;
+            case AnimationTarget::Y:
+                if constexpr (requires { desc.frame; }) {
+                    return &desc.frame.y;
+                }
+                break;
 
-        case AnimationTarget::Radius:
-            if constexpr (requires { desc.radius; }) {
-                return &desc.radius;
-            }
-            break;
+            case AnimationTarget::Radius:
+                if constexpr (requires { desc.radius; }) {
+                    return &desc.radius;
+                }
+                break;
 
-        case AnimationTarget::ColorR:
-            if constexpr (requires { desc.color; }) {
-                return &desc.color.to_rgba()[0];
-            }
-            break;
+            case AnimationTarget::ColorR:
+                if constexpr (requires { desc.color; }) {
+                    return &desc.color.to_rgba()[0];
+                }
+                break;
 
-        case AnimationTarget::ColorG:
-            if constexpr (requires { desc.color; }) {
-                return &desc.color.to_rgba()[1];
-            }
-            break;
+            case AnimationTarget::ColorG:
+                if constexpr (requires { desc.color; }) {
+                    return &desc.color.to_rgba()[1];
+                }
+                break;
 
-        case AnimationTarget::ColorB:
-            if constexpr (requires { desc.color; }) {
-                return &desc.color.to_rgba()[2];
-            }
-            break;
+            case AnimationTarget::ColorB:
+                if constexpr (requires { desc.color; }) {
+                    return &desc.color.to_rgba()[2];
+                }
+                break;
 
-        case AnimationTarget::ColorA:
-            if constexpr (requires { desc.color; }) {
-                return &desc.color.to_rgba()[3];
-            }
-            break;
+            case AnimationTarget::ColorA:
+                if constexpr (requires { desc.color; }) {
+                    return &desc.color.to_rgba()[3];
+                }
+                break;
 
-        default:
-            Log::logger(
-                Log::Error,
-                "{}:{}: Unknown animation target {}",
-                l.file_name(),
-                l.column(),
-                static_cast<int>(target)
-            );
-            return nullptr;
-    }
+            default:
+                Log::logger(
+                    Log::Error,
+                    "{}:{}: Unknown animation target {}",
+                    l.file_name(),
+                    l.column(),
+                    static_cast<int>(target)
+                );
+                return nullptr;
+        }
 
-    Log::logger(
-        Log::Error,
-        "{}:{}: Animation target {} is not supported for type {}",
-        l.file_name(),
-        l.column(),
-        static_cast<int>(target),
-        Log::get_type_name<T>()
-    );
+        Log::logger(
+            Log::Error,
+            "{}:{}: Animation target {} is not supported for type {}",
+            l.file_name(),
+            l.column(),
+            static_cast<int>(target),
+            Log::get_type_name<T>()
+        );
 
-    return nullptr;
+        return nullptr;
 }
 
 public:
 
-    Item(T arg_desc) : desc(arg_desc) {}
+    Item(const T& arg_desc) : desc(arg_desc) {}
 
-    void set_desc(T arg_desc) {
+    void set_desc(const T& arg_desc) {
         desc = arg_desc;
     }
 
-    void set_frame(Frame arg_frame) {
+    void set_frame(const Frame& arg_frame) {
         desc.frame = arg_frame;
     }
 
@@ -118,7 +117,7 @@ public:
         desc.radius = arg_radius;
     }
 
-    void set_color(Color arg_color)
+    void set_color(const Color& arg_color)
     requires requires { desc.color = arg_color;} {
         desc.color = arg_color;
     }
@@ -128,7 +127,7 @@ public:
         desc.text = arg_text;
     }
 
-    void set_path(string arg_path)
+    void set_path(const string& arg_path)
     requires requires { desc.path = arg_path;} {
         desc.path = arg_path;
     }
@@ -177,7 +176,8 @@ public:
         }
     }
 
-    bool click(int x, int y, bool left) {
+    bool click(int x, int y, bool left)
+    requires requires {desc.radius = 1;} {
         if (
             x < desc.frame.x ||
             x > desc.frame.x + desc.frame.width ||
@@ -215,6 +215,24 @@ public:
         return false;
     }
 
+    bool click(int x, int y, bool left) {
+        if (
+            x < desc.frame.x ||
+            x > desc.frame.x + desc.frame.width ||
+            y < desc.frame.y ||
+            y > desc.frame.y + desc.frame.height
+        ) {
+            return false;
+        }
+
+        if (left && desc.click_callback_left) {
+            desc.click_callback_left();
+        } else if (!left && desc.click_callback_right) {
+            desc.click_callback_right();
+        }
+        return true;
+    }
+
     void add_animation(Animation animation, source_location l = source_location::current()) {
         animation.target_ptr = get_target_ptr(animation.target, l);
         if (animation.target_ptr) {
@@ -224,35 +242,47 @@ public:
 
 };
 
-
-vector<unique_ptr<Item>> objects;
+vector<variant<
+    Item<RectDesc>, Item<ImageDesc>, Item<TextDesc>>> objects;
 
 } // namespace
 
 void Object::add_rectangle(RectDesc& desc) {
-    objects.emplace_back(make_unique<Rectangle>(desc));
+    objects.emplace_back(Item<RectDesc>(desc));
 }
 
 void Object::add_image(ImageDesc &desc) {
-    objects.emplace_back(make_unique<Image>(desc));
+    objects.emplace_back(Item<ImageDesc>(desc));
 }
 
 void Object::add_text(TextDesc &desc) {
-    objects.emplace_back(make_unique<Text>(desc));
+    objects.emplace_back(Item<TextDesc>(desc));
 }
 
 void Object::click(float x, float y, bool left) {
     for (auto& object : objects) {
-        if (object->click(x, y, left)) {
+        bool handled = std::visit(
+            [&](auto& obj) {
+                return obj.click(x, y, left);
+            },
+            object
+        );
+
+        if (handled) {
             return;
         }
     }
 }
 
 void Object::draw() {
-    for (auto& obj : objects) {
-        obj->update();
-        obj->draw();
+    for (auto& object : objects) {
+        std::visit(
+            [](auto& obj) {
+                obj.update();
+                obj.draw();
+            },
+            object
+        );
     }
 }
 
