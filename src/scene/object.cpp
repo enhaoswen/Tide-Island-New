@@ -3,6 +3,8 @@
 #include "graphics/renderer.hpp"
 #include "utils/struct.hpp"
 
+#include <source_location>
+#include <type_traits>
 #include <vector>
 #include <algorithm>
 #include <chrono>
@@ -14,51 +16,198 @@ using namespace std::chrono;
 
 namespace {
 
-class Item {
-protected:
-    Frame frame{};
-    float radius = 0;
-
-    void (*click_callback_left) () = nullptr;
-    void (*click_callback_right) () = nullptr;
-
+template <typename T>
+class Item{
+private:
+    T desc;
     vector<Animation> animations;
 
-public:
-    virtual void draw() = 0;
-    virtual void update() = 0;
+    float* get_target_ptr(AnimationTarget target, source_location l = source_location::current()) {
+    switch (target) {
+        case AnimationTarget::Width:
+            if constexpr (requires { desc.frame; }) {
+                return &desc.frame.width;
+            }
+            break;
 
-    bool click(float x, float y, bool left)  {
+        case AnimationTarget::Height:
+            if constexpr (requires { desc.frame; }) {
+                return &desc.frame.height;
+            }
+            break;
+
+        case AnimationTarget::X:
+            if constexpr (requires { desc.frame; }) {
+                return &desc.frame.x;
+            }
+            break;
+
+        case AnimationTarget::Y:
+            if constexpr (requires { desc.frame; }) {
+                return &desc.frame.y;
+            }
+            break;
+
+        case AnimationTarget::Radius:
+            if constexpr (requires { desc.radius; }) {
+                return &desc.radius;
+            }
+            break;
+
+        case AnimationTarget::ColorR:
+            if constexpr (requires { desc.color; }) {
+                return &desc.color.to_rgba()[0];
+            }
+            break;
+
+        case AnimationTarget::ColorG:
+            if constexpr (requires { desc.color; }) {
+                return &desc.color.to_rgba()[1];
+            }
+            break;
+
+        case AnimationTarget::ColorB:
+            if constexpr (requires { desc.color; }) {
+                return &desc.color.to_rgba()[2];
+            }
+            break;
+
+        case AnimationTarget::ColorA:
+            if constexpr (requires { desc.color; }) {
+                return &desc.color.to_rgba()[3];
+            }
+            break;
+
+        default:
+            Log::logger(
+                Log::Error,
+                "{}:{}: Unknown animation target {}",
+                l.file_name(),
+                l.column(),
+                static_cast<int>(target)
+            );
+            return nullptr;
+    }
+
+    Log::logger(
+        Log::Error,
+        "{}:{}: Animation target {} is not supported for type {}",
+        l.file_name(),
+        l.column(),
+        static_cast<int>(target),
+        Log::get_type_name<T>()
+    );
+
+    return nullptr;
+}
+
+public:
+
+    Item(T arg_desc) : desc(arg_desc) {}
+
+    void set_desc(T arg_desc) {
+        desc = arg_desc;
+    }
+
+    void set_frame(Frame arg_frame) {
+        desc.frame = arg_frame;
+    }
+
+    void set_radius(float arg_radius) 
+    requires requires { desc.radius = arg_radius;} {
+        desc.radius = arg_radius;
+    }
+
+    void set_color(Color arg_color)
+    requires requires { desc.color = arg_color;} {
+        desc.color = arg_color;
+    }
+
+    void set_text(string_view arg_text)
+    requires requires { desc.text = arg_text;} {
+        desc.text = arg_text;
+    }
+
+    void set_path(string arg_path)
+    requires requires { desc.path = arg_path;} {
+        desc.path = arg_path;
+    }
+
+
+    void draw(source_location l = source_location::current()) {
+        if constexpr (is_same_v<T, RectDesc>) {
+            Renderer::draw_rectangle(desc.frame, desc.radius, desc.color);
+        }
+        else if constexpr (is_same_v<T, ImageDesc>) {
+            Renderer::draw_image(desc.frame, desc.horizontal_align, desc.vertical_align, desc.radius, desc.path);
+        }
+        else if constexpr (is_same_v<T, TextDesc>) {
+            Renderer::draw_text(desc.frame, desc.horizontal_align, desc.vertical_align, desc.text);
+        }
+
+        else {
+            Log::logger(
+                Log::Error, 
+                "{}:{}: Unsupported type. type={}",
+                l.file_name(),
+                l.column(),
+                Log::get_type_name<T>()
+            );
+        }
+    }
+
+    void update() {
+        auto now = steady_clock::now();
+
+        for (auto it = animations.begin(); it != animations.end();) {
+
+            auto& animation = *it;
+
+            if (now >= animation.start_time + animation.duration) {
+                *animation.target_ptr = animation.to;
+                it = animations.erase(it);
+                continue;
+            }
+
+            float progress = duration<float>(now - animation.start_time).count()
+                / duration<float>(animation.duration).count();
+
+            *animation.target_ptr = animation.from + (animation.to - animation.from) * progress;
+            ++it;
+        }
+    }
+
+    bool click(int x, int y, bool left) {
         if (
-            x < frame.x ||
-            x > frame.x + frame.width ||
-            y < frame.y ||
-            y > frame.y + frame.height
+            x < desc.frame.x ||
+            x > desc.frame.x + desc.frame.width ||
+            y < desc.frame.y ||
+            y > desc.frame.y + desc.frame.height
         ) {
             return false;
         }
 
         float nearest_x = clamp(
-            x,
-            frame.x + radius,
-            frame.x + frame.width - radius
+            static_cast<float>(x),
+            desc.frame.x + desc.radius,
+            desc.frame.x + desc.frame.width - desc.radius
         );
 
         float nearest_y = clamp(
-            y,
-            frame.y + radius,
-            frame.y + frame.height - radius
+            static_cast<float>(y),
+            desc.frame.y + desc.radius,
+            desc.frame.y + desc.frame.height - desc.radius
         );
 
         float dx = x - nearest_x;
         float dy = y - nearest_y;
 
-        if (dx * dx + dy * dy <= radius * radius) {
+        if (dx * dx + dy * dy <= desc.radius * desc.radius) {
 
-            if (left && click_callback_left) {
-                click_callback_left();
-            } else if (!left && click_callback_right) {
-                click_callback_right();
+            if (left && desc.click_callback_left) {
+                desc.click_callback_left();
+            } else if (!left && desc.click_callback_right) {
+                desc.click_callback_right();
             }
             return true;
         }
@@ -66,193 +215,15 @@ public:
         return false;
     }
 
-    virtual ~Item() = default;
-
-}; // Item
-
-class Rectangle : public Item {
-private:
-    array<float, 4> color{};
-
-public:
-    Rectangle(RectDesc desc) {
-        frame = desc.frame;
-        radius = desc.radius;
-        color = desc.color.to_rgba();
-        click_callback_left = desc.click_callback_left;
-        click_callback_right = desc.click_callback_right;
+    void add_animation(Animation animation, source_location l = source_location::current()) {
+        animation.target_ptr = get_target_ptr(animation.target, l);
+        if (animation.target_ptr) {
+            animations.push_back(animation);
+        }
     }
 
-    void set_frame(Frame arg_frame) {
-        frame = arg_frame;
-    }
+};
 
-    void set_radius(float arg_radius) {
-        radius = arg_radius;
-    }
-
-    void set_color(std::array<float, 4> arg_color) {
-        color = arg_color;
-    }
-
-    void add_animation(Animation animation) {
-        animations.push_back(animation);
-    }
-
-    void update() override {
-        auto now = steady_clock::now();
-
-        auto end_pos = remove_if(
-        animations.begin(),
-        animations.end(),
-        [this, now](Animation& animation) -> bool {
-            float* target{};
-            int* frame_target{};
-            switch (animation.target) {
-                case AnimationTarget::Width:
-                    frame_target = &frame.width;
-                    break;
-                case AnimationTarget::Height:
-                    frame_target = &frame.height;
-                    break;
-                case AnimationTarget::X:
-                    frame_target = &frame.x;
-                    break;
-                case AnimationTarget::Y:
-                    frame_target = &frame.y;
-                    break;
-                case AnimationTarget::Radius:
-                    target = &radius;
-                    break;
-                case AnimationTarget::ColorR:
-                    target = &color[0];
-                    break;
-                case AnimationTarget::ColorG:
-                    target = &color[1];
-                    break;
-                case AnimationTarget::ColorB:
-                    target = &color[2];
-                    break;
-                case AnimationTarget::ColorA:
-                    target = &color[3];
-                    break;
-                default:
-                    Log::fatal("Unknown animation target");
-                    return false;
-            }
-
-            auto set_value = [target, frame_target](float value) {
-                if (frame_target) {
-                    *frame_target = static_cast<int>(lround(value));
-                } else {
-                    *target = value;
-                }
-            };
-
-            if (animation.duration.count() <= 0 ||
-                now >= animation.start_time + animation.duration) {
-                set_value(animation.to);
-                return true;
-            }
-
-            if (now < animation.start_time) {
-                return false;
-            }
-
-            float progress = static_cast<float>((now - animation.start_time).count())
-                            / static_cast<float>(animation.duration.count());
-            set_value(animation.from + (animation.to - animation.from) * progress);
-            return false;
-        });
-
-        animations.erase(end_pos, animations.end());
-    }
-
-    void draw() override {
-        Renderer::draw_rectangle(frame, radius, color);
-    }
-
-}; // Rectangle
-
-class Image : public Item {
-private:
-    string path;
-    Align horizontal_align;
-    Align vertical_align;
-
-public:
-    Image(ImageDesc &desc) {
-        frame = desc.frame;
-        radius = desc.radius;
-        path = desc.path;
-        click_callback_left = desc.click_callback_left;
-        click_callback_right = desc.click_callback_right;
-        horizontal_align = desc.horizontal_align;
-        vertical_align = desc.vertical_align;
-    }
-
-    void update() override {
-        auto now = steady_clock::now();
-
-        auto end_pos = remove_if(
-        animations.begin(),
-        animations.end(),
-        [this, now](Animation& animation) -> bool {
-            float* target{};
-            int* frame_target{};
-            switch (animation.target) {
-                case AnimationTarget::Width:
-                    frame_target = &frame.width;
-                    break;
-                case AnimationTarget::Height:
-                    frame_target = &frame.height;
-                    break;
-                case AnimationTarget::X:
-                    frame_target = &frame.x;
-                    break;
-                case AnimationTarget::Y:
-                    frame_target = &frame.y;
-                    break;
-                case AnimationTarget::Radius:
-                    target = &radius;
-                    break;
-                default:
-                    Log::fatal("Unknown animation target");
-                    return false;
-            }
-
-            auto set_value = [target, frame_target](float value) {
-                if (frame_target) {
-                    *frame_target = static_cast<int>(lround(value));
-                } else {
-                    *target = value;
-                }
-            };
-
-            if (animation.duration.count() <= 0 ||
-                now >= animation.start_time + animation.duration) {
-                set_value(animation.to);
-                return true;
-            }
-
-            if (now < animation.start_time) {
-                return false;
-            }
-
-            float progress = static_cast<float>((now - animation.start_time).count())
-                            / static_cast<float>(animation.duration.count());
-            set_value(animation.from + (animation.to - animation.from) * progress);
-            return false;
-        });
-
-        animations.erase(end_pos, animations.end());
-    }
-
-    void draw() override {
-        Renderer::draw_image(frame, horizontal_align, vertical_align, radius, path);
-    }
-
-}; // Image
 
 vector<unique_ptr<Item>> objects;
 
@@ -264,6 +235,10 @@ void Object::add_rectangle(RectDesc& desc) {
 
 void Object::add_image(ImageDesc &desc) {
     objects.emplace_back(make_unique<Image>(desc));
+}
+
+void Object::add_text(TextDesc &desc) {
+    objects.emplace_back(make_unique<Text>(desc));
 }
 
 void Object::click(float x, float y, bool left) {

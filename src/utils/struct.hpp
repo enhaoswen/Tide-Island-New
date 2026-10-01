@@ -2,7 +2,6 @@
 
 #include "color.hpp"
 
-#include <array>
 #include <chrono>
 #include <string>
 #include <string_view>
@@ -10,14 +9,17 @@
 // This file used to put the structure that developer might need in API.cpp / main.cpp.
 // because some struct / enum might not get displaied by clangd if their header is not
 // included directly.
-//
+
 // Ex. we need RectDesc in main.cpp
 // but we did not include renderer.hpp because it's included by API.cpp already, and we
 // don't want to include it again in main.cpp because it might looks messy.
 // so we just put all of them in struct.hpp
 
+
+// width and height must be float, because we need to support animation, 
+// and the value might be float during animation
 struct Frame {
-    int x, y, width, height;
+    float x, y, width, height;
 };
 
 enum struct Align : char{
@@ -62,11 +64,13 @@ struct Event {
 
 // Remember to change `conf_to_island_conf` in config.cpp if you changed `Island Conf`
 
+
+// But make sure the value that you set is always int.
 struct IslandConf {
     int island_width{};
     int island_height{};
     int zone{-1};
-    float anchor_top{};
+    int anchor_top{};
     float radius{};
     Color color{};
 
@@ -92,6 +96,7 @@ struct Animation {
     float from;
     float to;
     AnimationTarget target;
+    float* target_ptr{};
 };
 
 struct Font {

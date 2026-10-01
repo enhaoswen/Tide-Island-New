@@ -82,7 +82,6 @@ inline void fatal(std::string_view msg) {
 }
 
 template<typename... Args>
-
 void fatal(std::format_string<Args...> fmt, Args&&... args) {
     fatal(std::format(fmt, std::forward<Args>(args)...));
 }
@@ -135,6 +134,25 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     out_msg += "┘\n";
 
     print("{}", out_msg);
+}
+
+template<typename T>
+constexpr std::string_view get_type_name() {
+#ifdef __clang__
+    constexpr std::string_view name = __PRETTY_FUNCTION__;
+    constexpr std::string_view prefix = "T = ";
+    auto start = name.find(prefix) + prefix.size();
+    auto end = name.find(']', start);
+    return name.substr(start, end - start);
+
+#elif defined(__GNUC__)
+    constexpr std::string_view name = __PRETTY_FUNCTION__;
+    constexpr std::string_view prefix = "T = ";
+    auto start = name.find(prefix) + prefix.size();
+    auto end = name.find(';', start);
+    return name.substr(start, end - start);
+
+#endif
 }
 
 } // namespace Log

@@ -24,30 +24,30 @@ using namespace std;
 namespace {
 
 struct RectVert {
-    int p1_x, p1_y;
+    float p1_x, p1_y;
     float p1_r, p1_g, p1_b, p1_a;
 
-    int p2_x, p2_y;
+    float p2_x, p2_y;
     float p2_r, p2_g, p2_b, p2_a;
 
-    int p3_x, p3_y;
+    float p3_x, p3_y;
     float p3_r, p3_g, p3_b, p3_a;
 
-    int p4_x, p4_y;
+    float p4_x, p4_y;
     float p4_r, p4_g, p4_b, p4_a;
 };
 
 struct ImgVert {
-    int p1_x, p1_y;
+    float p1_x, p1_y;
     float p1_u, p1_v;
 
-    int p2_x, p2_y;
+    float p2_x, p2_y;
     float p2_u, p2_v;
 
-    int p3_x, p3_y;
+    float p3_x, p3_y;
     float p3_u, p3_v;
 
-    int p4_x, p4_y;
+    float p4_x, p4_y;
     float p4_u, p4_v;
 };
 
@@ -68,10 +68,10 @@ RectVert rectangle_vertices(
     Frame frame,
     array<float, 4> color
 ) {
-    int left   = frame.x;
-    int top    = frame.y;
-    int right  = left + frame.width;
-    int bottom = top + frame.height;
+    float left   = frame.x;
+    float top    = frame.y;
+    float right  = left + frame.width;
+    float bottom = top + frame.height;
 
     // x, y, r, g, b, a
 
@@ -84,10 +84,10 @@ RectVert rectangle_vertices(
 }
 
 ImgVert image_vertices(Frame frame) {
-    int left   = frame.x;
-    int top    = frame.y;
-    int right  = left + frame.width;
-    int bottom = top + frame.height;
+    float left   = frame.x;
+    float top    = frame.y;
+    float right  = left + frame.width;
+    float bottom = top + frame.height;
 
     return {
         // x, y, u, v
@@ -164,8 +164,8 @@ Frame calculate_frame(
         float scale_y = frame.height / static_cast<float>(image_height);
         float scale = min(scale_x, scale_y);
 
-        result.width = static_cast<int>(lround(image_width * scale));
-        result.height = static_cast<int>(lround(image_height * scale));
+        result.width = image_width * scale;
+        result.height = image_height * scale;
     }
 
     if (horizontal_align == Align::Left) {

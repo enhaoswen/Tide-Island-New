@@ -35,7 +35,7 @@ void Island::init(Config& config){
     island = config.to_struct();
 }
 
-void Island::set_anchor_top(float distance) {
+void Island::set_anchor_top(int distance) {
     island.anchor_top = distance;
 }
 
@@ -56,11 +56,11 @@ void Island::set_zone(int zone) {
     island.zone = zone;
 }
 
-void Island::set_island_width(float width){
+void Island::set_island_width(int width){
     island.island_width = width;
 }
 
-void Island::set_island_height(float height){
+void Island::set_island_height(int height){
     island.island_height = height;
 }
 
