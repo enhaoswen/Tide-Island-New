@@ -16,11 +16,8 @@ int main() {
 
     RectDesc main_land_desc{
         .frame = { 0, 0, 140, 38},
-
         .radius = 19,
-
         .color = { 0.0F, 0.0F, 0.0F, 1.0F },
-
         .click_callback_left = []() {
             Log::logger(Log::Debug, "Left click callback triggered");
         },
@@ -28,7 +25,6 @@ int main() {
             Log::logger(Log::Debug, "Right click callback triggered");
         },
     };
-
 
     ImageDesc img_desc {
         .frame = {0, 0, 140, 38},

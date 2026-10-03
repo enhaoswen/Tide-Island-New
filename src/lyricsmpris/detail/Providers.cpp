@@ -1,39 +1,52 @@
 #include "Providers.hpp"
 #include "Normalize.hpp"
 #include "Utility.hpp"
+#include "ProviderResponses.hpp"
 
 #include <algorithm>
 #include <cmath>
-#include <json-c/json.h>
-#include <limits>
 
 namespace lyricsmpris::detail {
 namespace {
 
-using Json = std::unique_ptr<json_object, decltype(&json_object_put)>;
+struct JsonOptions : glz::opts {
+    bool validate_trailing_whitespace = true;
+    bool validate_skipped = true;
+};
 
-json_object* get(json_object* object, const char* key) {
-    json_object* result = nullptr;
-    if (object && json_object_is_type(object, json_type_object)) json_object_object_get_ex(object, key, &result);
-    return result;
+constexpr auto json_options = [] {
+    JsonOptions options;
+    options.null_terminated = false;
+    options.error_on_unknown_keys = false;
+    return options;
+}();
+
+template<class T, class... Alternatives>
+const T& value(const std::variant<Alternatives...>& field) {
+    if (const auto* result = std::get_if<T>(&field)) return *result;
+    static const T empty{};
+    return empty;
 }
 
-std::string string(json_object* object, const char* key) {
-    auto* value = get(object, key);
-    if (!value) return {};
-    if (json_object_is_type(value, json_type_string))
-        return {json_object_get_string(value), static_cast<std::size_t>(json_object_get_string_len(value))};
-    if (json_object_is_type(value, json_type_int)) return std::to_string(json_object_get_int64(value));
+std::string string(const responses::Scalar& field) {
+    if (const auto* text = std::get_if<std::string>(&field)) return *text;
+    if (const auto* integer = std::get_if<std::uint64_t>(&field)) return std::to_string(*integer);
+    if (const auto* integer = std::get_if<std::int64_t>(&field)) return std::to_string(*integer);
     return {};
 }
 
-double numeric(json_object* object, const char* key) {
-    const auto* value = get(object, key);
-    if (!value) return 0;
-    if (json_object_is_type(value, json_type_string)) return number<double>(string(object, key)).value_or(0);
-    if (json_object_is_type(value, json_type_int) || json_object_is_type(value, json_type_double))
-        return json_object_get_double(value);
+double numeric(const responses::Scalar& field) {
+    if (const auto* text = std::get_if<std::string>(&field)) return number<double>(*text).value_or(0);
+    if (const auto* integer = std::get_if<std::uint64_t>(&field)) return static_cast<double>(*integer);
+    if (const auto* integer = std::get_if<std::int64_t>(&field)) return static_cast<double>(*integer);
+    if (const auto* real = std::get_if<double>(&field)) return *real;
     return 0;
+}
+
+bool boolean(const responses::Scalar& field) {
+    if (const auto* flag = std::get_if<bool>(&field)) return *flag;
+    if (const auto* text = std::get_if<std::string>(&field)) return !text->empty();
+    return numeric(field) != 0;
 }
 
 std::optional<Milliseconds> duration(double value, double multiplier = 1) {
@@ -42,26 +55,63 @@ std::optional<Milliseconds> duration(double value, double multiplier = 1) {
     return Milliseconds{static_cast<std::int64_t>(std::llround(value))};
 }
 
-std::string first(json_object* object, std::initializer_list<const char*> keys) {
-    for (const auto* key : keys) {
-        auto value = string(object, key);
-        if (!trim(value).empty()) return value;
+std::string first(std::initializer_list<const responses::Scalar*> fields) {
+    for (const auto* field : fields) {
+        auto text = string(*field);
+        if (!trim(text).empty()) return text;
     }
     return {};
 }
 
-std::string artists(json_object* array) {
+std::string artists(const responses::Array<responses::Artist>& field) {
     std::string result;
-    if (!array || !json_object_is_type(array, json_type_array)) return result;
-    for (std::size_t i = 0; i < json_object_array_length(array); ++i) {
-        auto* element = json_object_array_get_idx(array, i);
-        auto name = json_object_is_type(element, json_type_string)
-            ? std::string(json_object_get_string(element)) : string(element, "name");
+    for (const auto& element : value<std::vector<responses::Object<responses::Artist>>>(field)) {
+        auto name = std::holds_alternative<std::string>(element)
+            ? std::get<std::string>(element) : string(value<responses::Artist>(element).name);
         if (name.empty()) continue;
         if (!result.empty()) result += ", ";
         result += name;
     }
     return result;
+}
+
+template<class Response, class Extract>
+std::expected<std::vector<Candidate>, std::string> response(
+    std::string_view payload, Provider provider, Extract extract) {
+    Response document{};
+    if (const auto error = glz::read<json_options>(document, payload))
+        return std::unexpected(glz::format_error(error, payload));
+    std::vector<Candidate> result;
+    auto append = [&](Candidate candidate) {
+        if (candidate.synced.empty() && candidate.plain.empty()
+            && candidate.resource_id.empty() && !candidate.instrumental) return;
+        candidate.provider = provider;
+        result.push_back(std::move(candidate));
+    };
+    extract(document, append);
+    return result;
+}
+
+template<class Row, class Convert, class Append>
+void rows(const std::vector<responses::Object<Row>>& documents, Convert convert, Append append) {
+    // Retain at most 64 search results regardless of payload size.
+    for (std::size_t i = 0; i < std::min(documents.size(), std::size_t{64}); ++i)
+        if (const auto* row = std::get_if<Row>(&documents[i])) append(convert(*row));
+}
+
+template<class Row, class Convert>
+std::expected<std::vector<Candidate>, std::string> direct_response(
+    std::string_view payload, Provider provider, Convert convert) {
+    return response<responses::Rows<Row>>(payload, provider, [&](const auto& document, auto append) {
+        if (const auto* row = std::get_if<Row>(&document)) append(convert(*row));
+        else rows(value<std::vector<responses::Object<Row>>>(document), convert, append);
+    });
+}
+
+template<class Row, class Convert, class Append>
+void rows(const responses::Array<Row>& documents, Convert convert, Append append) {
+    if (const auto* row = std::get_if<Row>(&documents)) append(convert(*row));
+    else rows(value<std::vector<responses::Object<Row>>>(documents), convert, append);
 }
 
 std::string encode(std::string_view value) {
@@ -259,115 +309,121 @@ std::expected<std::vector<Candidate>, std::string> parse_candidates(std::string_
         result.push_back(std::move(candidate));
         return result;
     }
-    if (payload.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) return std::unexpected("JSON response too large");
-    auto parser = std::unique_ptr<json_tokener, decltype(&json_tokener_free)>(json_tokener_new_ex(32), &json_tokener_free);
-    if (!parser) return std::unexpected("JSON parser allocation failed");
-    json_tokener_set_flags(parser.get(), JSON_TOKENER_STRICT | JSON_TOKENER_VALIDATE_UTF8);
-    Json document(json_tokener_parse_ex(parser.get(), payload.data(), static_cast<int>(payload.size())), &json_object_put);
-    auto consumed = json_tokener_get_parse_end(parser.get());
-    if (json_tokener_get_error(parser.get()) == json_tokener_continue) {
-        // Primitive values need a delimiter when the input isn't NUL-terminated.
-        document.reset(json_tokener_parse_ex(parser.get(), " ", 1));
-    }
-    if (json_tokener_get_error(parser.get()) != json_tokener_success)
-        return std::unexpected(std::string(json_tokener_error_desc(json_tokener_get_error(parser.get()))));
-    if (!trim(payload.substr(consumed)).empty()) return std::unexpected("Trailing JSON data");
-    if (!document) return result;
-    auto* root = document.get();
-    auto* array = root;
+    if (trim(payload).empty()) return std::unexpected("Empty JSON response");
+    using namespace responses;
     switch (stage) {
-    case Stage::NeteaseSearch: array = get(get(root, "result"), "songs"); break;
-    case Stage::QqSearch: array = get(get(get(root, "data"), "song"), "list"); break;
-    case Stage::KugouSearch: array = get(get(root, "data"), "lists"); break;
-    case Stage::KugouLyricSearch: array = get(root, "candidates"); break;
-    default: break;
-    }
-    const bool is_array = array && json_object_is_type(array, json_type_array);
-    const auto count = is_array ? json_object_array_length(array) : std::size_t{1};
-    // Source search APIs are capped; LRCLIB may return many results, but retain
-    // at most 64 documents regardless of payload size.
-    for (std::size_t i = 0; i < std::min(count, std::size_t{64}); ++i) {
-        auto* object = is_array ? json_object_array_get_idx(array, i) : array;
-        if (!object || !json_object_is_type(object, json_type_object)) continue;
-        Candidate candidate;
-        candidate.provider = provider;
-        switch (stage) {
-        case Stage::LrclibGet:
-        case Stage::LrclibSearch:
-            candidate.title = first(object, {"trackName", "name"});
-            candidate.artist = first(object, {"artistName", "artist"});
-            candidate.album = first(object, {"albumName", "album"});
-            candidate.duration = duration(numeric(object, "duration"), 1000);
-            candidate.synced = string(object, "syncedLyrics");
-            candidate.plain = string(object, "plainLyrics");
-            candidate.instrumental = json_object_get_boolean(get(object, "instrumental"));
-            break;
-        case Stage::LrcxJson: {
-            candidate.title = first(object, {"title", "trackName", "name"});
-            candidate.artist = first(object, {"artist", "artistName"});
-            candidate.album = first(object, {"album", "albumName"});
-            const auto seconds = numeric(object, "duration");
+    case Stage::LrclibGet:
+    case Stage::LrclibSearch:
+        return direct_response<Lrclib>(payload, provider, [](const auto& row) {
+            Candidate candidate;
+            candidate.title = first({&row.trackName, &row.name});
+            candidate.artist = first({&row.artistName, &row.artist});
+            candidate.album = first({&row.albumName, &row.album});
+            candidate.duration = duration(numeric(row.duration), 1000);
+            candidate.synced = string(row.syncedLyrics);
+            candidate.plain = string(row.plainLyrics);
+            candidate.instrumental = boolean(row.instrumental);
+            return candidate;
+        });
+    case Stage::LrcxJson:
+        return direct_response<Lrcx>(payload, provider, [](const auto& row) {
+            Candidate candidate;
+            candidate.title = first({&row.title, &row.trackName, &row.name});
+            candidate.artist = first({&row.artist, &row.artistName});
+            candidate.album = first({&row.album, &row.albumName});
+            const auto seconds = numeric(row.duration);
             candidate.duration = duration(seconds, seconds < 10000 ? 1000 : 1);
-            candidate.synced = first(object, {"lyrics", "lyric", "lrc", "syncedLyrics"});
-            if (candidate.synced.empty()) candidate.synced = ttml_to_lrc(string(object, "lrc_ttml"));
-            candidate.plain = string(object, "plainLyrics");
-            break;
-        }
-        case Stage::NeteaseSearch:
-            candidate.title = string(object, "name");
-            candidate.artist = artists(get(object, "artists"));
-            if (candidate.artist.empty()) candidate.artist = artists(get(object, "ar"));
-            candidate.album = string(get(object, "album"), "name");
-            if (candidate.album.empty()) candidate.album = string(get(object, "al"), "name");
-            candidate.duration = duration(numeric(object, "duration"));
-            if (!candidate.duration) candidate.duration = duration(numeric(object, "dt"));
-            candidate.resource_id = string(object, "id");
-            break;
-        case Stage::NeteaseLyric:
-            candidate.synced = string(get(object, "lrc"), "lyric");
-            candidate.plain = string(get(object, "tlyric"), "lyric");
-            break;
-        case Stage::QqSearch:
-            candidate.title = first(object, {"songname", "title"});
-            candidate.artist = artists(get(object, "singer"));
-            candidate.album = string(object, "albumname");
-            candidate.duration = duration(numeric(object, "interval"), 1000);
-            candidate.resource_id = first(object, {"songmid", "mid"});
-            break;
-        case Stage::QqLyric:
-            candidate.synced = string(object, "lyric");
+            candidate.synced = first({&row.lyrics, &row.lyric, &row.lrc, &row.syncedLyrics});
+            if (candidate.synced.empty()) candidate.synced = ttml_to_lrc(string(row.lrc_ttml));
+            candidate.plain = string(row.plainLyrics);
+            return candidate;
+        });
+    case Stage::NeteaseSearch:
+        return response<Object<NeteaseSearch>>(payload, provider, [](const auto& document, auto append) {
+            const auto& songs = value<NeteaseResult>(value<NeteaseSearch>(document).result).songs;
+            rows(songs, [](const auto& row) {
+                Candidate candidate;
+                candidate.title = string(row.name);
+                candidate.artist = artists(row.artists);
+                if (candidate.artist.empty()) candidate.artist = artists(row.ar);
+                candidate.album = string(value<Album>(row.album).name);
+                if (candidate.album.empty()) candidate.album = string(value<Album>(row.al).name);
+                candidate.duration = duration(numeric(row.duration));
+                if (!candidate.duration) candidate.duration = duration(numeric(row.dt));
+                candidate.resource_id = string(row.id);
+                return candidate;
+            }, append);
+        });
+    case Stage::NeteaseLyric:
+        return direct_response<NeteaseLyric>(payload, provider, [](const auto& row) {
+            Candidate candidate;
+            candidate.synced = string(value<Lyric>(row.lrc).lyric);
+            candidate.plain = string(value<Lyric>(row.tlyric).lyric);
+            return candidate;
+        });
+    case Stage::QqSearch:
+        return response<Object<QqSearch>>(payload, provider, [](const auto& document, auto append) {
+            const auto& songs = value<QqSongs>(value<QqData>(value<QqSearch>(document).data).song).list;
+            rows(songs, [](const auto& row) {
+                Candidate candidate;
+                candidate.title = first({&row.songname, &row.title});
+                candidate.artist = artists(row.singer);
+                candidate.album = string(row.albumname);
+                candidate.duration = duration(numeric(row.interval), 1000);
+                candidate.resource_id = first({&row.songmid, &row.mid});
+                return candidate;
+            }, append);
+        });
+    case Stage::QqLyric:
+        return direct_response<QqLyric>(payload, provider, [](const auto& row) {
+            Candidate candidate;
+            candidate.synced = string(row.lyric);
             if (candidate.synced.find('[') == candidate.synced.npos) {
                 if (auto decoded = decode_base64(candidate.synced); !decoded.empty() && valid_utf8(decoded))
                     candidate.synced = std::move(decoded);
             }
-            break;
-        case Stage::KugouSearch:
-            candidate.title = clean_text(first(object, {"SongName", "FileName"}));
-            candidate.artist = clean_text(string(object, "SingerName"));
-            candidate.album = clean_text(string(object, "AlbumName"));
-            candidate.duration = duration(numeric(object, "Duration"), 1000);
-            candidate.resource_id = first(object, {"FileHash", "Hash"});
-            break;
-        case Stage::KugouLyricSearch:
-            candidate.resource_id = string(object, "id");
-            candidate.access_key = string(object, "accesskey");
-            break;
-        case Stage::KugouDownload: {
-            candidate.synced = string(object, "content");
+            return candidate;
+        });
+    case Stage::KugouSearch:
+        return response<Object<KugouSearch>>(payload, provider, [](const auto& document, auto append) {
+            const auto& songs = value<KugouData>(value<KugouSearch>(document).data).lists;
+            rows(songs, [](const auto& row) {
+                Candidate candidate;
+                candidate.title = clean_text(first({&row.SongName, &row.FileName}));
+                candidate.artist = clean_text(string(row.SingerName));
+                candidate.album = clean_text(string(row.AlbumName));
+                candidate.duration = duration(numeric(row.Duration), 1000);
+                candidate.resource_id = first({&row.FileHash, &row.Hash});
+                return candidate;
+            }, append);
+        });
+    case Stage::KugouLyricSearch:
+        return response<Object<KugouLyricSearch>>(payload, provider, [](const auto& document, auto append) {
+            rows(value<KugouLyricSearch>(document).candidates,
+                [](const auto& row) {
+                    Candidate candidate;
+                    candidate.resource_id = string(row.id);
+                    candidate.access_key = string(row.accesskey);
+                    return candidate;
+                }, append);
+        });
+    case Stage::KugouDownload:
+        return direct_response<KugouDownload>(payload, provider, [](const auto& row) {
+            Candidate candidate;
+            candidate.synced = string(row.content);
             if (auto decoded = decode_base64(candidate.synced); !decoded.empty()) candidate.synced = std::move(decoded);
-            break;
-        }
-        case Stage::MusixmatchSubtitle:
-        case Stage::MusixmatchPlain: {
-            auto* body = get(get(object, "message"), "body");
-            candidate.synced = string(get(body, "subtitle"), "subtitle_body");
-            candidate.plain = string(get(body, "lyrics"), "lyrics_body");
-            break;
-        }
-        case Stage::LrcxText: break;
-        }
-        if (!candidate.synced.empty() || !candidate.plain.empty() || !candidate.resource_id.empty() || candidate.instrumental)
-            result.push_back(std::move(candidate));
+            return candidate;
+        });
+    case Stage::MusixmatchSubtitle:
+    case Stage::MusixmatchPlain:
+        return direct_response<Musixmatch>(payload, provider, [](const auto& row) {
+            const auto& body = value<MusixmatchBody>(value<MusixmatchMessage>(row.message).body);
+            Candidate candidate;
+            candidate.synced = string(value<Subtitle>(body.subtitle).subtitle_body);
+            candidate.plain = string(value<PlainLyrics>(body.lyrics).lyrics_body);
+            return candidate;
+        });
+    case Stage::LrcxText: break;
     }
     return result;
 }

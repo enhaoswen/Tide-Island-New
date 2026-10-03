@@ -126,6 +126,88 @@ void providers() {
     CHECK(provider_request(2, Stage::NeteaseLyric, query, candidate).referer == "https://music.163.com/");
 }
 
+void provider_json() {
+    using namespace lyricsmpris::detail;
+    const auto parse = [](std::string_view payload) {
+        return parse_candidates(payload, Provider::Lrclib, Stage::LrclibGet);
+    };
+    for (const auto payload : {"", " ", "{", "[", "{\"plainLyrics\":\"unterminated}",
+                               "{}{}", "null true", "{\"duration\":01}", "{\"duration\":1.}",
+                               "{\"plainLyrics\":\"bad\ntext\"}", "{/*comment*/}", "{\"duration\":1,}"}) {
+        const auto result = parse(payload);
+        if (result) throw std::runtime_error(std::string("Accepted invalid JSON: ") + payload);
+        CHECK(!result && !result.error().empty());
+    }
+    CHECK(!parse("{\"plainLyrics\":\"\xff\"}"));
+    CHECK(!parse(std::string("{}\0{}", 5)));
+    CHECK(!parse(std::string(512, '[') + "null" + std::string(512, ']')));
+    for (const auto payload : {"null", "true", "false", "42", "-42", "1.25", "\"text\"", "[]", "{}"}) {
+        const auto result = parse(payload);
+        CHECK(result && result->empty());
+    }
+
+    // The view ends before trailing bytes and has no NUL terminator there.
+    const std::string response = "{\"plainLyrics\":\"line\"}extra";
+    const auto bounded = parse(std::string_view(response).substr(0, response.size() - 5));
+    CHECK(bounded && bounded->size() == 1 && bounded->front().plain == "line");
+    const auto escaped = parse(R"({"plainLyrics":"\u4e16\u754c \ud83c\udfb5\nline","duration":"180.25"})");
+    CHECK(escaped && escaped->size() == 1);
+    CHECK(escaped->front().plain == "世界 🎵\nline");
+    CHECK(escaped->front().duration == 180250ms);
+    const auto whitespace = parse(" \t{\"plainLyrics\":\"line\"}\r\n");
+    CHECK(whitespace && whitespace->size() == 1);
+
+    const auto ids = parse_candidates(
+        R"({"candidates":[{"id":9007199254740993},{"id":9223372036854775807},{"id":18446744073709551615},{"id":-9223372036854775808},{"id":"0042"}]})",
+        Provider::Kugou, Stage::KugouLyricSearch);
+    CHECK(ids && ids->size() == 5);
+    CHECK((*ids)[0].resource_id == "9007199254740993");
+    CHECK((*ids)[1].resource_id == "9223372036854775807");
+    CHECK((*ids)[2].resource_id == "18446744073709551615");
+    CHECK((*ids)[3].resource_id == "-9223372036854775808");
+    CHECK((*ids)[4].resource_id == "0042");
+
+    const auto instrumental = parse(R"([{"instrumental":true},{"instrumental":1},{"instrumental":"yes"},{"instrumental":false},{"instrumental":0},{"instrumental":null},{"instrumental":{}},{"instrumental":[]}])");
+    CHECK(instrumental && instrumental->size() == 3);
+    for (const auto& candidate : *instrumental) CHECK(candidate.instrumental);
+    const auto mixed = parse(R"([null,42,[],"text",{"plainLyrics":false},{"plainLyrics":"line","trackName":null,"duration":{},"artistName":[]}])");
+    CHECK(mixed && mixed->size() == 1 && mixed->front().plain == "line");
+    const auto missing = parse_candidates(R"({"result":null})", Provider::Netease, Stage::NeteaseSearch);
+    CHECK(missing && missing->empty());
+    const auto singers = parse_candidates(
+        R"({"result":{"songs":[{"id":42,"artists":["歌手",null,{}, {"name":"Guest"}]}]}})",
+        Provider::Netease, Stage::NeteaseSearch);
+    CHECK(singers && singers->size() == 1 && singers->front().artist == "歌手, Guest");
+
+    std::string many = "[";
+    for (unsigned i = 0; i < 70; ++i) {
+        if (i) many += ',';
+        many += R"({"plainLyrics":"line"})";
+    }
+    many += ']';
+    const auto capped = parse(many);
+    CHECK(capped && capped->size() == 64);
+
+    // Unknown provider fields are skipped, but still need valid JSON and UTF-8.
+    const auto extra = parse(R"({"extra":{"list":[null,true,42,{"text":"ignored"}]},"plainLyrics":"line"})");
+    CHECK(extra && extra->size() == 1 && extra->front().plain == "line");
+    CHECK(!parse(R"({"extra":{"list":[01]},"plainLyrics":"line"})"));
+    CHECK(!parse("{\"extra\":\"\xff\",\"plainLyrics\":\"line\"}"));
+    CHECK(!parse(R"({"plainLyrics":{"ignored":[01]}})"));
+    CHECK(!parse(R"({"extra":"\ud800","plainLyrics":"line"})"));
+    CHECK(!parse(std::string("{\"extra\":") + std::string(512, '[') + "null"
+        + std::string(512, ']') + ",\"plainLyrics\":\"line\"}"));
+
+    const auto single = parse_candidates(R"({"result":{"songs":{"name":"Song","id":42}}})",
+        Provider::Netease, Stage::NeteaseSearch);
+    CHECK(single && single->size() == 1 && single->front().resource_id == "42");
+    const auto aliases = parse(R"({"trackName":null,"name":"Song","artistName":" ","artist":"Artist","album":"Album","duration":180,"syncedLyrics":null,"plainLyrics":"line"})");
+    CHECK(aliases && aliases->size() == 1);
+    CHECK(aliases->front().title == "Song" && aliases->front().artist == "Artist");
+    CHECK(aliases->front().album == "Album" && aliases->front().duration == 180s);
+    CHECK(aliases->front().provider == Provider::Lrclib);
+}
+
 void progress_and_memory() {
     using lyricsmpris::detail::estimated_position;
     State state;
@@ -146,7 +228,7 @@ void progress_and_memory() {
 }
 
 int main() {
-    try { parsing(); matching(); providers(); progress_and_memory(); }
+    try { parsing(); matching(); providers(); provider_json(); progress_and_memory(); }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
     std::cout << "Core checks passed\n";
 }

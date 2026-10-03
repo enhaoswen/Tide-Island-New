@@ -85,6 +85,9 @@ if (!changed) {
   LRCX 的简单 `<p begin="…">` TTML 会转为行级歌词。不保留逐字时间。
 - 同一时间戳的行保留稳定顺序，`line_at()` 选最后一行。需要原文/翻译同时显示时，
   显示层可取相同时间戳的所有行。
+- 在线 JSON 响应通过 Glaze 直接解析到各源的结构体，不构建动态 JSON 树。
+  字段变体兼容字符串/数字和 `null`，保留 64 位歌曲 ID 精度；未使用字段跳过存储，
+  仍校验 JSON 语法与 UTF-8。
 - 标题、作者、时长和版本信息用于匹配；简繁与 Unicode 归一化只用于比较，
   显示文本保留原文。不会把没有 `[ti:]` 等匹配证据的 LRCX 裸文本当作可靠结果。
 - 默认最多 2 个并发请求，最多 16 个在途/排队请求；每响应和本地歌词最多 1 MiB，
@@ -98,7 +101,10 @@ if (!changed) {
 
 ## 构建与验证
 
-依赖 `libsystemd`、`libcurl`、`json-c`、`utf8proc`。公开头文件不包含这些依赖的类型。
+需要 CMake 3.31 或更新版本，依赖 `libsystemd`、`libcurl`、Glaze 9.0.0、`utf8proc`。
+Glaze 是仅头文件依赖；CMake 优先使用已安装的对应版本，否则自动下载固定提交。
+离线构建可通过 `-DFETCHCONTENT_SOURCE_DIR_GLAZE=/path/to/glaze` 指定本地源码。
+公开头文件不包含这些依赖的类型。
 libcurl 必须支持异步 DNS；系统 libcurl 的 DNS 后端可能临时使用解析线程。
 
 模块可以单独构建，不依赖项目的 Wayland/OpenGL 部分：
