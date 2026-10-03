@@ -18,6 +18,8 @@ find_package(OpenGL REQUIRED)
 
 find_package(Freetype REQUIRED)
 
+add_subdirectory(src/lyricsmpris)
+
 set(SRC 
     src/app/main.cpp
     src/app/API.cpp

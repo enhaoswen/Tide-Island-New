@@ -1,3 +1,4 @@
+#include "utils/color.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 #include "utils/config.hpp"
@@ -13,13 +14,20 @@
 #include <cstring>
 #include <string_view>
 #include <variant>
-#include <ranges>
 #include <tuple>
 
 using namespace std;
 using namespace std::filesystem;
 
 namespace {
+
+template <typename T>
+concept is_list = requires {
+    requires is_same_v<T, vector<float>>;
+    requires is_same_v<T, vector<int>>;
+    requires is_same_v<T, vector<string>>;
+    requires is_same_v<T, vector<bool>>;
+};
 
 config default_config{
     {"island_width", 140},
@@ -30,34 +38,48 @@ config default_config{
     {"color", vector<float>{0.0f, 0.0f, 0.0f, 1.0f}}
 };
 
-template <typename>
-struct is_std_array : false_type {};
-template <typename T, size_t N>
-struct is_std_array<array<T, N>> : std::true_type {};
+
+
 template <typename T>
-inline constexpr bool is_std_array_v = is_std_array<decay_t<T>>::value;
+bool convert(const string& key, const config_turn& val, T& target)
+    requires is_list<T> {   
+
+    using target_t = decay_t<T>;
+    using elem_t = typename target_t::value_type;
+    constexpr auto N = tuple_size_v<target_t>;
+    if (const auto* p = get_if<vector<elem_t>>(&val)) {
+        if (p->size() != N) {
+            Log::logger(Log::Error, R"@(Expected {} elements, got {}, key="{}")@", N, p->size(), key);
+            return false;
+        }
+        ranges::copy(*p, target.begin());
+        return true;
+    }
+
+    Log::logger(
+        Log::Error, 
+        R"@(Config's value has unsupported type,  key="{}", type = "{}")@", 
+        key, 
+        Log::get_type_name<target_t>()
+    );
+    return false;
+}
 
 template <typename T>
 bool convert(const string& key, const config_turn& val, T& target) {
-    if (const auto* p = get_if<T>(&val)) {
+    using target_t = decay_t<T>;
+
+    if (const auto* p = get_if<target_t>(&val)) {
         target = *p;
         return true;
     }
 
-    using target_t = decay_t<T>;
-    if constexpr (is_std_array_v<target_t>) {
-        using elem_t = typename target_t::value_type;
-        constexpr auto N = std::tuple_size_v<target_t>;
-        if (const auto* p = get_if<vector<elem_t>>(&val)) {
-            if (p->size() != N) {
-                Log::logger(Log::Error, R"@(Expected {} elements, got {}, key="{}")@", N, p->size(), key);
-                return false;
-            }
-            ranges::copy(*p, target.begin());
-            return true;
-        }
-    }
-
+    Log::logger(
+        Log::Error, 
+        R"@(Config's value has unsupported type,  key="{}", type = "{}")@", 
+        key, 
+        Log::get_type_name<target_t>()
+    );
     return false;
 }
 
@@ -350,7 +372,7 @@ string format_list(const vector<T>& values) {
 
 } // namespace
 
-Config::Config(source_location location) {
+Config::Config() {
     error_code ec;
     path parent_path = path(getenv("HOME")) / ".config" / "Tide Island";
 

@@ -135,7 +135,7 @@ public:
 
     void draw(source_location l = source_location::current()) {
         if constexpr (is_same_v<T, RectDesc>) {
-            Renderer::draw_rectangle(desc.frame, desc.radius, desc.color);
+            Renderer::draw_rectangle(desc.frame, desc.radius, desc.color.to_rgba());
         }
         else if constexpr (is_same_v<T, ImageDesc>) {
             Renderer::draw_image(desc.frame, desc.horizontal_align, desc.vertical_align, desc.radius, desc.path);
@@ -242,8 +242,7 @@ public:
 
 };
 
-vector<variant<
-    Item<RectDesc>, Item<ImageDesc>, Item<TextDesc>>> objects;
+vector<variant<Item<RectDesc>, Item<ImageDesc>, Item<TextDesc>>> objects;
 
 } // namespace
 

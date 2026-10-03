@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/struct.hpp"
+#include "utils/color.hpp"
 
 #include <filesystem>
 #include <variant>
@@ -39,7 +40,7 @@ using config_turn = std::variant<
         std::vector<int>, 
         std::vector<std::string>,
         std::vector<bool>,
-        std::array<float, 4>
+        Color
 >;
 
 using config = std::unordered_map<std::string, config_turn>;
@@ -52,7 +53,7 @@ std::filesystem::path conf_path{};
 
 public:
 
-Config(std::source_location location = std::source_location::current());
+Config();
 
 IslandConf to_struct();
 
