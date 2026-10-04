@@ -4,16 +4,17 @@
 #include <string>
 #include <string_view>
 #include <array>
+#include <expected>
 
-// input can be #RGB or #RGBA
+// input can be #RRGGBB or #RRGGBBAA
 // But not rgb(a,b,c) or rgba(a,b,c,d)
 
 // Ex. #AABBCC or #AABBCCDD
 // but not rgb(1,2,3) or rgba(1,2,3,4)
 
 // output is array<float,4> (RGBA), from 0 - 1. but not 0 - 255
-// Ex. black = {0.0, 0.0, 0.0, 0.0}
-// red = {1.0, 0.0, 0.0, 0.0}
+// Ex. opaque black = {0.0, 0.0, 0.0, 1.0}
+// opaque red = {1.0, 0.0, 0.0, 1.0}
 
 class Color {
 private:
@@ -26,6 +27,7 @@ public:
     Color(std::array<float,4> arg_color, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, float a, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, std::source_location l = std::source_location::current());
-    std::string to_string();
-    std::array<float, 4> to_rgba();
+    static std::expected<Color, std::string_view> parse(std::string_view input);
+    std::string to_string() const;
+    std::array<float, 4> to_rgba() const;
 };

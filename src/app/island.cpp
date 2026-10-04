@@ -8,10 +8,16 @@
 #include "app/island.hpp"
 #include "utils/struct.hpp"
 #include "utils/log.hpp"
-#include "utils/config.hpp"
+#include "utils/color_json.hpp"
+
+#include <glaze/json/read.hpp>
+#include <glaze/json/write.hpp>
 #include <source_location>
+#include <fstream>
+#include <filesystem>
 
 using namespace std;
+using namespace std::filesystem;
 
 // ============================================================================
 // [Internal Details]
@@ -19,7 +25,21 @@ using namespace std;
 
 namespace {
 
-IslandConf island{};
+
+IslandConf island{
+    .island_width = 140,
+    .island_height = 38,
+    .zone = 40,
+    .anchor_top = 2,
+    .radius = 0,
+    .color = Color{0, 0, 0, 0},
+};
+
+path get_conf_path() {
+    const char* home = getenv("HOME");
+    if (home == nullptr) Log::fatal("HOME is not set");
+    return path(home) / ".config" / "Tide Island" / "config.json";
+}
 
 } // namespace
 
@@ -31,8 +51,83 @@ const IslandConf& Island::state() {
     return island;
 }
 
-void Island::init(Config& config){
-    island = config.to_struct();
+void Island::init() {
+    const path& conf_path = get_conf_path();
+
+    if (conf_path.has_parent_path()) {
+        create_directories(conf_path.parent_path());
+    }
+
+    auto write_default = [&]() {
+        string json;
+
+        auto error = glz::write<glz::opts{.prettify = true}>(
+            island,
+            json
+        );
+
+        if (error) {
+            Log::logger(
+                Log::Error,
+                "Failed to serialize island configuration: {}",
+                glz::format_error(error, json)
+            );
+            return false;
+        }
+
+        ofstream out(conf_path, ios::trunc);
+
+        if (!out) {
+            Log::logger(
+                Log::Error,
+                "Failed to open configuration file for writing: {}",
+                conf_path.string()
+            );
+            return false;
+        }
+
+        out << json;
+        return true;
+    };
+
+    if (!exists(conf_path)) {
+        write_default();
+        return;
+    }
+
+    ifstream in(conf_path, ios::binary);
+
+    if (!in) {
+        Log::logger(
+            Log::Error,
+            "Failed to open configuration file: {}",
+            conf_path.string()
+        );
+        return;
+    }
+
+    string json{
+        istreambuf_iterator<char>{in},
+        istreambuf_iterator<char>{}
+    };
+
+    if (json.empty()) {
+        write_default();
+        return;
+    }
+
+    auto loaded = island;
+    auto error = glz::read_json(loaded, json);
+
+    if (error) {
+        Log::logger(
+            Log::Error,
+            "Failed to parse island configuration: {}",
+            glz::format_error(error, json)
+        );
+        return;
+    }
+    island = loaded;
 }
 
 void Island::set_anchor_top(int distance) {

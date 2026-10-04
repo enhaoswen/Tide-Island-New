@@ -24,7 +24,6 @@ set(SRC
     src/app/main.cpp
     src/app/API.cpp
     src/app/island.cpp
-    src/utils/config.cpp
     src/utils/color.cpp
     src/backend/wayland.cpp
     src/backend/timer.cpp
@@ -57,6 +56,7 @@ target_link_libraries(Tide-island PRIVATE
     OpenGL::GLES3
     OpenGL::EGL
     Freetype::Freetype
+    lyricsmpris_glaze
 )
 
 target_compile_options(Tide-island PRIVATE -Wall -Wextra)

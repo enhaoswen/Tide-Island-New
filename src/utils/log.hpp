@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+class Color;
+
 // output format
 // if your log contains source_location, please only use filename and column.
 // template:
@@ -142,6 +144,8 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     print("{}", out_msg);
 }
 
+// make sure your type doesn't contain any special characters, 
+// or you have to escape them yourself.
 template <typename T>
 std::string get_type_name() {
     if constexpr (std::is_same_v<T, int>) {

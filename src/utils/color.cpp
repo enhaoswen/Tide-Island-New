@@ -26,24 +26,12 @@ string array_to_string(const array<T, N>& arr) {
     return result;
 }
 
-RGBA hex_to_rgba(string_view str, source_location l = source_location::current()) {
-    auto error = [&](string_view msg) {
-        Log::logger(
-            Log::Error,
-            R"@({}:{}: {}, value="{}")@",
-            l.file_name(),
-            l.line(),
-            msg,
-            str
-        );
-        return default_color;
-    };
-
+expected<RGBA, string_view> hex_to_rgba(string_view str) {
     if (str.size() != 7 && str.size() != 9)
-        return error("Color must be #RRGGBB or #RRGGBBAA");
+        return unexpected("Color must be #RRGGBB or #RRGGBBAA");
 
     if (str[0] != '#')
-        return error("Color must start with '#'");
+        return unexpected("Color must start with '#'");
 
     auto hex = [](char c) -> int {
         if (c >= '0' && c <= '9') return c - '0';
@@ -68,9 +56,9 @@ RGBA hex_to_rgba(string_view str, source_location l = source_location::current()
     int a = str.size() == 9 ? byte(7) : 255;
 
     if (r < 0 || g < 0 || b < 0 || a < 0)
-        return error("Color contains invalid hexadecimal digits");
+        return unexpected("Color contains invalid hexadecimal digits");
 
-    return {
+    return RGBA{
         r / 255.0f,
         g / 255.0f,
         b / 255.0f,
@@ -85,7 +73,24 @@ Color::Color() {
 }
 
 Color::Color(string_view arg_color, source_location l) {
-    color = hex_to_rgba(arg_color, l);
+    auto parsed = hex_to_rgba(arg_color);
+    if (parsed) {
+        color = *parsed;
+    }
+    else {
+        Log::logger(Log::Error, R"@({}:{}: {}, value="{}")@",
+                    l.file_name(), l.line(), parsed.error(), arg_color);
+        color = default_color;
+    }
+}
+
+expected<Color, string_view> Color::parse(string_view input) {
+    auto parsed = hex_to_rgba(input);
+    if (!parsed)
+        return unexpected(parsed.error());
+    Color result;
+    result.color = *parsed;
+    return result;
 }
 
 Color::Color(array<float, 3> arg_color, source_location l) {
@@ -141,7 +146,7 @@ Color::Color(
     source_location l
 ) : Color(array<float, 4>{r, g, b, a}, l) {}
 
-string Color::to_string() {
+string Color::to_string() const {
     auto byte = [](float value) {
         return static_cast<int>(
             round(std::clamp(value, 0.0f, 1.0f) * 255.0f)
@@ -157,6 +162,6 @@ string Color::to_string() {
     );
 }
 
-array<float,4> Color::to_rgba() {
+array<float,4> Color::to_rgba() const {
     return color;
 }

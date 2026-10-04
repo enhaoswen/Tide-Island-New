@@ -1,7 +1,6 @@
 #pragma once
 
 #include "utils/struct.hpp"
-#include "utils/config.hpp"
 
 #include <source_location>
 
@@ -15,7 +14,7 @@
 namespace Island {
 
 const IslandConf& state();
-void init(Config& conf);
+void init();
 void set_anchor_top(int distance);
 void set_is_running(bool state);
 void set_radius(float radius, std::source_location location = std::source_location::current());

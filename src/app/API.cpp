@@ -3,7 +3,6 @@
 #include "graphics/renderer.hpp"
 #include "scene/object.hpp"
 #include "backend/timer.hpp"
-#include "utils/config.hpp"
 #include "app/island.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
@@ -17,10 +16,7 @@ const IslandConf* state{};
 
 void API::init() {
 
-    Config island_conf;
-    Log::logger(Log::Debug, "Config initialized successfully");
-
-    Island::init(island_conf);
+    Island::init();
     state = &Island::state();
     Log::logger(Log::Debug, "Island initialized successfully");
 

@@ -31,9 +31,14 @@ int main() {
         .radius = 0,
         .path = "/home/swen/Downloads/images.jpeg",
         .horizontal_align = Align::Center,
-        .vertical_align = Align::Center
+        .vertical_align = Align::Center,
+        .click_callback_left = []() {
+            Log::logger(Log::Debug, "Left click callback triggered");
+        },
+        .click_callback_right = []() {
+            Log::logger(Log::Debug, "Right click callback triggered");
+        },
     };
-
 
     API::draw_rectangle(main_land_desc);
     API::draw_image(img_desc);
