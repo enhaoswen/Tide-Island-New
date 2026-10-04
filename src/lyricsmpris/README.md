@@ -101,9 +101,9 @@ if (!changed) {
 
 ## 构建与验证
 
-需要 CMake 3.31 或更新版本，依赖 `libsystemd`、`libcurl`、Glaze 9.0.0、`utf8proc`。
-Glaze 是仅头文件依赖；CMake 优先使用已安装的对应版本，否则自动下载固定提交。
-离线构建可通过 `-DFETCHCONTENT_SOURCE_DIR_GLAZE=/path/to/glaze` 指定本地源码。
+需要 CMake 3.25 或更新版本，系统依赖 `libsystemd`、`libcurl`、`utf8proc`。
+Glaze 9.0.0 的 JSON 读写头文件、必要依赖与许可证保存在 `third_party/glaze`，CMake 直接引用
+本地头文件，不查找系统 Glaze，也不在构建时下载。版本与来源见该目录的 `README.md`。
 公开头文件不包含这些依赖的类型。
 libcurl 必须支持异步 DNS；系统 libcurl 的 DNS 后端可能临时使用解析线程。
 

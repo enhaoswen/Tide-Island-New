@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glaze/json.hpp>
+#include <glaze/json/read.hpp>
 
 #include <cstdint>
 #include <string>
