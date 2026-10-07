@@ -1,14 +1,12 @@
 #pragma once
 
+#include "utils/struct.hpp"
+
 #include <cstdint>
 #include <string_view>
 #include <vector>
 
 namespace Text {
-
-struct FontHandle {
-    std::uint64_t id{};
-};
 
 // Pixels are top-down, tightly packed, 8-bit coverage values.
 // (offset_x, offset_y) locates the bitmap's top-left corner relative to

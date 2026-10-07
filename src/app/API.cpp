@@ -8,11 +8,14 @@
 #include "utils/struct.hpp"
 #include "graphics/text.hpp"
 
+using namespace std;
+
 namespace {
 
 const IslandConf* state{};
 
 }
+
 
 void API::init() {
 
@@ -36,13 +39,21 @@ void API::init() {
     Wayland::set_need_draw(Island::request_redraw);
 
     Wayland::apply_config(
-       state->island_width,
-       state->island_height,
+       static_cast<uint32_t>(state->island_width),
+       static_cast<uint32_t>(state->island_height),
        state->zone,
        state->anchor_top
     );
 
     Log::logger(Log::Debug, "Initialization completed successfully");
+}
+
+FontHandle API::load_font(string_view family, unsigned pixel_size) {
+    return Text::load_font(family, pixel_size);
+}
+
+const IslandConf& API::island_state() {
+    return *state;
 }
 
 void API::resize(uint32_t width, uint32_t height) {
@@ -55,6 +66,10 @@ void API::draw_rectangle(RectDesc& rect_desc){
 
 void API::draw_image(ImageDesc& desc) {
     Object::add_image(desc);
+}
+
+void API::draw_text(TextDesc &desc){
+    Object::add_text(desc);
 }
 
 void API::run(){

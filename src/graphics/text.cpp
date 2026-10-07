@@ -437,7 +437,7 @@ const GlyphBitmap& get_glyph(LoadedFont& font, const PositionedGlyph& placement,
     return it->second;
 }
 
-LoadedFont* require_font(Text::FontHandle handle) {
+LoadedFont* require_font(FontHandle handle) {
     auto it = loaded_fonts.find(handle.id);
     if (it == loaded_fonts.end()) {
         Log::logger(Log::Error, "Invalid text font handle {}", handle.id);
@@ -458,7 +458,7 @@ void Text::init() {
     ft_library = library;
 }
 
-Text::FontHandle Text::load_font(string_view family, unsigned pixel_size) {
+FontHandle Text::load_font(string_view family, unsigned pixel_size) {
     if (!ft_library) {
         Log::logger(Log::Error, "Text is not initialized");
         return {};

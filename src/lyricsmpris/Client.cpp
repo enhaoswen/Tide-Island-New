@@ -8,6 +8,8 @@
 #include <limits>
 #include <tuple>
 
+using namespace std;
+
 namespace lyricsmpris {
 namespace {
 
@@ -24,19 +26,19 @@ bool valid_options(const Options& options) {
         && options.position_resync_interval <= Milliseconds{86400000}
         && options.lyric_offset >= Milliseconds{-3600000} && options.lyric_offset <= Milliseconds{3600000}
         && options.providers.size() <= 6
-        && std::all_of(options.providers.begin(), options.providers.end(), [](auto provider) {
+        && all_of(options.providers.begin(), options.providers.end(), [](auto provider) {
             return provider >= Provider::Lrclib && provider <= Provider::Musixmatch;
         });
 }
 
 bool metadata_equal(const State& a, const State& b) {
-    return std::tie(a.has_player, a.service, a.track_id, a.title, a.artists, a.album, a.artwork_url, a.media_url, a.duration)
-        == std::tie(b.has_player, b.service, b.track_id, b.title, b.artists, b.album, b.artwork_url, b.media_url, b.duration);
+    return tie(a.has_player, a.service, a.track_id, a.title, a.artists, a.album, a.artwork_url, a.media_url, a.duration)
+        == tie(b.has_player, b.service, b.track_id, b.title, b.artists, b.album, b.artwork_url, b.media_url, b.duration);
 }
 
 bool capabilities_equal(const Capabilities& a, const Capabilities& b) {
-    return std::tie(a.control, a.play, a.pause, a.next, a.previous)
-        == std::tie(b.control, b.play, b.pause, b.next, b.previous);
+    return tie(a.control, a.play, a.pause, a.next, a.previous)
+        == tie(b.control, b.play, b.pause, b.next, b.previous);
 }
 
 detail::TrackQuery query_for(const State& state) {
@@ -53,21 +55,21 @@ detail::TrackQuery query_for(const State& state) {
 
 struct Client::Impl {
     Options options;
-    std::unique_ptr<detail::Mpris> mpris;
-    std::unique_ptr<detail::Resolver> resolver;
+    unique_ptr<detail::Mpris> mpris;
+    unique_ptr<detail::Resolver> resolver;
     State state;
-    std::vector<pollfd> fds;
-    std::uint64_t bus_revision = std::numeric_limits<std::uint64_t>::max();
-    std::uint64_t document_revision = 0;
-    std::uint64_t player_instance = 0;
-    std::size_t inline_hash = 0;
+    vector<pollfd> fds;
+    uint64_t bus_revision = numeric_limits<uint64_t>::max();
+    uint64_t document_revision = 0;
+    uint64_t player_instance = 0;
+    size_t inline_hash = 0;
     bool selection_dirty = true;
     bool retry_requested = false;
     bool offset_dirty = false;
-    std::optional<Clock::time_point> resync_at;
-    std::optional<Error> poll_error;
+    optional<Clock::time_point> resync_at;
+    optional<Error> poll_error;
 
-    explicit Impl(Options value) : options(std::move(value)) {}
+    explicit Impl(Options value) : options(move(value)) {}
 
     const detail::Player* choose() const {
         const auto players = mpris->players();
@@ -126,12 +128,12 @@ struct Client::Impl {
         const auto revision = state.track_revision + (new_track ? 1 : 0);
         const auto search = state.lyrics_search;
         const auto line = state.current_line;
-        auto error = std::move(state.last_error);
+        auto error = move(state.last_error);
         state = incoming;
         state.track_revision = revision;
         state.lyrics_search = search;
         state.current_line = line;
-        state.last_error = std::move(error);
+        state.last_error = move(error);
         player_instance = player->instance;
         inline_hash = hash;
         const bool restart_query = changed_query && !resolver->document().synced();
@@ -144,43 +146,43 @@ struct Client::Impl {
         } else resync_at.reset();
     }
 
-    std::expected<void, Error> command(const char* method) {
+    expected<void, Error> command(const char* method) {
         const auto* player = choose();
-        if (!player) return std::unexpected(Error{ErrorCode::NoPlayer, 0, "No active MPRIS player"});
+        if (!player) return unexpected(Error{ErrorCode::NoPlayer, 0, "No active MPRIS player"});
         const auto& capabilities = player->state.capabilities;
         bool supported = capabilities.control;
-        const std::string_view operation = method;
+        const string_view operation = method;
         if (operation == "Play") supported &= capabilities.play;
         else if (operation == "Pause") supported &= capabilities.pause;
         else if (operation == "Next") supported &= capabilities.next;
         else if (operation == "Previous") supported &= capabilities.previous;
         else if (operation == "PlayPause") supported &= player->state.playback == Playback::Playing ? capabilities.pause : capabilities.play;
-        if (!supported) return std::unexpected(Error{ErrorCode::Unsupported, 0, "Player does not support " + std::string(operation)});
+        if (!supported) return unexpected(Error{ErrorCode::Unsupported, 0, "Player does not support " + string(operation)});
         return mpris->control(player->state.service, method);
     }
 };
 
-Client::Client(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
+Client::Client(unique_ptr<Impl> impl) noexcept : impl_(move(impl)) {}
 Client::~Client() = default;
 Client::Client(Client&&) noexcept = default;
 Client& Client::operator=(Client&&) noexcept = default;
 
-std::expected<Client, Error> Client::create(Options options) {
-    if (!valid_options(options)) return std::unexpected(Error{ErrorCode::InvalidOptions, 0, "Invalid lyricsmpris options or resource limits"});
+expected<Client, Error> Client::create(Options options) {
+    if (!valid_options(options)) return unexpected(Error{ErrorCode::InvalidOptions, 0, "Invalid lyricsmpris options or resource limits"});
     // Duplicate providers do not trigger repeated requests.
-    std::vector<Provider> providers;
+    vector<Provider> providers;
     for (auto provider : options.providers)
-        if (std::find(providers.begin(), providers.end(), provider) == providers.end()) providers.push_back(provider);
-    options.providers = std::move(providers);
-    auto impl = std::make_unique<Impl>(std::move(options));
+        if (find(providers.begin(), providers.end(), provider) == providers.end()) providers.push_back(provider);
+    options.providers = move(providers);
+    auto impl = make_unique<Impl>(move(options));
     auto mpris = detail::Mpris::create(impl->options);
-    if (!mpris) return std::unexpected(std::move(mpris.error()));
-    impl->mpris = std::move(*mpris);
+    if (!mpris) return unexpected(move(mpris.error()));
+    impl->mpris = move(*mpris);
     auto resolver = detail::Resolver::create(impl->options);
-    if (!resolver) return std::unexpected(std::move(resolver.error()));
-    impl->resolver = std::move(*resolver);
+    if (!resolver) return unexpected(move(resolver.error()));
+    impl->resolver = move(*resolver);
     impl->fds.reserve(1 + impl->options.max_connections * 2);
-    return Client(std::move(impl));
+    return Client(move(impl));
 }
 
 const State& Client::state() const noexcept { return impl_->state; }
@@ -190,25 +192,25 @@ Milliseconds Client::position(Clock::time_point now) const noexcept {
     return detail::estimated_position(impl_->state, now);
 }
 
-std::string_view Client::current_lyric() const noexcept {
+string_view Client::current_lyric() const noexcept {
     const auto index = impl_->state.current_line;
-    return index ? lyrics().line(*index).text : std::string_view{};
+    return index ? lyrics().line(*index).text : string_view{};
 }
 
-std::span<const pollfd> Client::poll_fds() {
+span<const pollfd> Client::poll_fds() {
     impl_->fds.clear();
     if (auto fd = impl_->mpris->poll_fd()) impl_->fds.push_back(*fd);
-    else impl_->poll_error = std::move(fd.error());
+    else impl_->poll_error = move(fd.error());
     const auto http_fds = impl_->resolver->poll_fds();
     impl_->fds.insert(impl_->fds.end(), http_fds.begin(), http_fds.end());
     return impl_->fds;
 }
 
-std::optional<Clock::time_point> Client::next_deadline() const noexcept {
+optional<Clock::time_point> Client::next_deadline() const noexcept {
     const auto now = Clock::now();
     if (impl_->selection_dirty || impl_->retry_requested || impl_->offset_dirty || impl_->poll_error) return now;
     auto deadline = impl_->mpris->deadline();
-    auto include = [&](std::optional<Clock::time_point> value) {
+    auto include = [&](optional<Clock::time_point> value) {
         if (value && (!deadline || *value < *deadline)) deadline = value;
     };
     include(impl_->resolver->deadline());
@@ -221,7 +223,7 @@ std::optional<Clock::time_point> Client::next_deadline() const noexcept {
         && !(state.playback_rate < 0 && progress <= Milliseconds{})) {
         const auto lyric_position = progress - impl_->options.lyric_offset;
         const auto current = document.line_at(lyric_position);
-        std::optional<Milliseconds> boundary;
+        optional<Milliseconds> boundary;
         if (state.playback_rate > 0) {
             const auto next = current ? *current + 1 : 0;
             if (next < document.size()) boundary = document.line(next).start_time;
@@ -230,7 +232,7 @@ std::optional<Clock::time_point> Client::next_deadline() const noexcept {
             const auto delay = (static_cast<long double>(boundary->count()) - lyric_position.count()) / state.playback_rate;
             // Ceiling prevents a busy loop caused by sub-millisecond rounding.
             if (delay >= 0 && delay <= 86400000) {
-                const auto due = now + Milliseconds{std::max<std::int64_t>(1, static_cast<std::int64_t>(std::ceil(delay)))};
+                const auto due = now + Milliseconds{max<int64_t>(1, static_cast<int64_t>(ceil(delay)))};
                 if (!state.duration || state.playback_rate < 0
                     || static_cast<long double>(boundary->count()) + impl_->options.lyric_offset.count() <= state.duration->count())
                     include(due);
@@ -240,11 +242,11 @@ std::optional<Clock::time_point> Client::next_deadline() const noexcept {
     return deadline;
 }
 
-std::expected<Changes, Error> Client::process(std::span<const pollfd> ready, Clock::time_point now) {
+expected<Changes, Error> Client::process(span<const pollfd> ready, Clock::time_point now) {
     auto& self = *impl_;
-    if (self.poll_error) return std::unexpected(*self.poll_error);
+    if (self.poll_error) return unexpected(*self.poll_error);
     Changes changes = Changes::None;
-    if (auto result = self.mpris->process(); !result) return std::unexpected(std::move(result.error()));
+    if (auto result = self.mpris->process(); !result) return unexpected(move(result.error()));
     const bool retry = self.retry_requested || self.resolver->retry_due(now);
     if (self.retry_requested) self.resolver->reset_attempts();
     if (self.selection_dirty || retry || self.bus_revision != self.mpris->revision()) {
@@ -257,7 +259,7 @@ std::expected<Changes, Error> Client::process(std::span<const pollfd> ready, Clo
         self.mpris->request_position(self.state.service);
         self.resync_at = now + self.options.position_resync_interval;
     }
-    if (auto result = self.resolver->process(ready, now); !result) return std::unexpected(std::move(result.error()));
+    if (auto result = self.resolver->process(ready, now); !result) return unexpected(move(result.error()));
     if (self.document_revision != self.resolver->document_revision()) {
         self.document_revision = self.resolver->document_revision();
         mark(changes, Changes::Lyrics | Changes::Line);
@@ -273,17 +275,17 @@ std::expected<Changes, Error> Client::process(std::span<const pollfd> ready, Clo
         mark(changes, Changes::Line);
     }
     for (auto error : {self.mpris->take_error(), self.resolver->take_error()}) {
-        if (error) { self.state.last_error = std::move(error); mark(changes, Changes::Error); }
+        if (error) { self.state.last_error = move(error); mark(changes, Changes::Error); }
     }
     return changes;
 }
 
-std::expected<void, Error> Client::select_player(std::string_view service) {
+expected<void, Error> Client::select_player(string_view service) {
     if (!service.empty()) {
-        if (!detail::is_service(service)) return std::unexpected(Error{ErrorCode::InvalidOptions, 0, "Expected a full MPRIS service name"});
+        if (!detail::is_service(service)) return unexpected(Error{ErrorCode::InvalidOptions, 0, "Expected a full MPRIS service name"});
         const auto players = impl_->mpris->players();
-        if (std::none_of(players.begin(), players.end(), [&](const auto& player) { return player.valid && player.state.service == service; }))
-            return std::unexpected(Error{ErrorCode::NoPlayer, 0, "Requested player is unavailable"});
+        if (none_of(players.begin(), players.end(), [&](const auto& player) { return player.valid && player.state.service == service; }))
+            return unexpected(Error{ErrorCode::NoPlayer, 0, "Requested player is unavailable"});
     }
     impl_->options.preferred_service = service;
     impl_->selection_dirty = true;
@@ -293,14 +295,14 @@ std::expected<void, Error> Client::select_player(std::string_view service) {
 void Client::retry_lyrics() { impl_->retry_requested = true; }
 
 void Client::set_lyric_offset(Milliseconds offset) noexcept {
-    impl_->options.lyric_offset = std::clamp(offset, Milliseconds{-3600000}, Milliseconds{3600000});
+    impl_->options.lyric_offset = clamp(offset, Milliseconds{-3600000}, Milliseconds{3600000});
     impl_->offset_dirty = true;
 }
 
-std::expected<void, Error> Client::play() { return impl_->command("Play"); }
-std::expected<void, Error> Client::pause() { return impl_->command("Pause"); }
-std::expected<void, Error> Client::play_pause() { return impl_->command("PlayPause"); }
-std::expected<void, Error> Client::next() { return impl_->command("Next"); }
-std::expected<void, Error> Client::previous() { return impl_->command("Previous"); }
+expected<void, Error> Client::play() { return impl_->command("Play"); }
+expected<void, Error> Client::pause() { return impl_->command("Pause"); }
+expected<void, Error> Client::play_pause() { return impl_->command("PlayPause"); }
+expected<void, Error> Client::next() { return impl_->command("Next"); }
+expected<void, Error> Client::previous() { return impl_->command("Previous"); }
 
 } // namespace lyricsmpris

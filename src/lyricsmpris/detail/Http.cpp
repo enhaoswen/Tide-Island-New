@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <limits>
 
+using namespace std;
+
 namespace lyricsmpris::detail {
 namespace {
 
@@ -19,10 +21,10 @@ Error multi_error(CURLMcode code) {
 
 struct Http::Transfer {
     HttpRequest request;
-    std::string body;
+    string body;
     CURL* easy = curl_easy_init();
-    std::size_t max_bytes;
-    explicit Transfer(HttpRequest job, std::size_t limit) : request(std::move(job)), max_bytes(limit) {}
+    size_t max_bytes;
+    explicit Transfer(HttpRequest job, size_t limit) : request(move(job)), max_bytes(limit) {}
     ~Transfer() { if (easy) curl_easy_cleanup(easy); }
 };
 
@@ -30,16 +32,16 @@ Http::Http(const Options& options)
     : max_bytes_(options.max_response_bytes), max_connections_(options.max_connections),
       timeout_ms_(static_cast<long>(options.request_timeout.count())) {}
 
-std::expected<std::unique_ptr<Http>, Error> Http::create(const Options& options) {
+expected<unique_ptr<Http>, Error> Http::create(const Options& options) {
     static CurlRuntime runtime;
     if (runtime.result != CURLE_OK)
-        return std::unexpected(Error{ErrorCode::Network, static_cast<int>(runtime.result), curl_easy_strerror(runtime.result)});
+        return unexpected(Error{ErrorCode::Network, static_cast<int>(runtime.result), curl_easy_strerror(runtime.result)});
     const auto* version = curl_version_info(CURLVERSION_NOW);
     if (!(version->features & CURL_VERSION_ASYNCHDNS))
-        return std::unexpected(Error{ErrorCode::Network, 0, "libcurl needs asynchronous DNS for nonblocking lookups"});
-    auto http = std::unique_ptr<Http>(new Http(options));
+        return unexpected(Error{ErrorCode::Network, 0, "libcurl needs asynchronous DNS for nonblocking lookups"});
+    auto http = unique_ptr<Http>(new Http(options));
     http->multi_ = curl_multi_init();
-    if (!http->multi_) return std::unexpected(Error{ErrorCode::Network, 0, "curl_multi_init failed"});
+    if (!http->multi_) return unexpected(Error{ErrorCode::Network, 0, "curl_multi_init failed"});
     auto configure = [&](CURLMoption option, auto value) {
         return curl_multi_setopt(http->multi_, option, value);
     };
@@ -50,7 +52,7 @@ std::expected<std::unique_ptr<Http>, Error> Http::create(const Options& options)
         configure(CURLMOPT_TIMERDATA, http.get()),
         configure(CURLMOPT_MAX_TOTAL_CONNECTIONS, static_cast<long>(options.max_connections)),
         configure(CURLMOPT_MAXCONNECTS, static_cast<long>(options.max_connections))
-    }) if (code != CURLM_OK) return std::unexpected(multi_error(code));
+    }) if (code != CURLM_OK) return unexpected(multi_error(code));
     http->active_.reserve(options.max_connections);
     http->sockets_.reserve(options.max_connections * 2);
     return http;
@@ -63,7 +65,7 @@ Http::~Http() {
 
 int Http::socket_callback(CURL*, curl_socket_t socket, int action, void* user, void*) noexcept {
     auto& self = *static_cast<Http*>(user);
-    const auto at = std::find_if(self.sockets_.begin(), self.sockets_.end(),
+    const auto at = find_if(self.sockets_.begin(), self.sockets_.end(),
         [&](const auto& fd) { return fd.fd == socket; });
     if (action == CURL_POLL_REMOVE) {
         if (at != self.sockets_.end()) self.sockets_.erase(at);
@@ -87,9 +89,9 @@ int Http::timer_callback(CURLM*, long timeout_ms, void* user) noexcept {
     return 0;
 }
 
-std::size_t Http::write_callback(char* data, std::size_t size, std::size_t count, void* user) noexcept {
+size_t Http::write_callback(char* data, size_t size, size_t count, void* user) noexcept {
     auto& transfer = *static_cast<Transfer*>(user);
-    if (size && count > std::numeric_limits<std::size_t>::max() / size) return 0;
+    if (size && count > numeric_limits<size_t>::max() / size) return 0;
     const auto bytes = size * count;
     if (bytes > transfer.max_bytes - transfer.body.size()) return 0;
     try { transfer.body.append(data, bytes); }
@@ -100,14 +102,14 @@ std::size_t Http::write_callback(char* data, std::size_t size, std::size_t count
 bool Http::enqueue(HttpRequest request) {
     // A provider's candidate fanout is bounded independently of body limits.
     if (queue_.size() + active_.size() >= 16) return false;
-    queue_.push_back(std::move(request));
+    queue_.push_back(move(request));
     pump();
     return true;
 }
 
 void Http::pump() {
     while (active_.size() < max_connections_ && !queue_.empty()) {
-        auto transfer = std::make_unique<Transfer>(std::move(queue_.front()), max_bytes_);
+        auto transfer = make_unique<Transfer>(move(queue_.front()), max_bytes_);
         queue_.pop_front();
         if (!transfer->easy) {
             failures_.push_back({transfer->request.id, {}, CURLE_OUT_OF_MEMORY, 0});
@@ -124,7 +126,7 @@ void Http::pump() {
         set(CURLOPT_WRITEDATA, transfer.get());
         set(CURLOPT_PRIVATE, transfer.get());
         set(CURLOPT_TIMEOUT_MS, timeout_ms_);
-        set(CURLOPT_CONNECTTIMEOUT_MS, std::min(timeout_ms_, 3000L));
+        set(CURLOPT_CONNECTTIMEOUT_MS, min(timeout_ms_, 3000L));
         set(CURLOPT_NOSIGNAL, 1L);
         set(CURLOPT_FOLLOWLOCATION, 1L);
         set(CURLOPT_MAXREDIRS, 3L);
@@ -142,40 +144,40 @@ void Http::pump() {
             failures_.push_back({transfer->request.id, {}, CURLE_FAILED_INIT, 0});
             continue;
         }
-        active_.push_back(std::move(transfer));
+        active_.push_back(move(transfer));
     }
     if (!failures_.empty()) deadline_ = Clock::now();
 }
 
-std::expected<std::vector<HttpResponse>, Error> Http::process(std::span<const pollfd> ready, Clock::time_point now) {
+expected<vector<HttpResponse>, Error> Http::process(span<const pollfd> ready, Clock::time_point now) {
     int running = 0;
     if (deadline_ && now >= *deadline_) {
         deadline_.reset();
         const auto code = curl_multi_socket_action(multi_, CURL_SOCKET_TIMEOUT, 0, &running);
-        if (code != CURLM_OK) return std::unexpected(multi_error(code));
+        if (code != CURLM_OK) return unexpected(multi_error(code));
     }
     for (const auto& fd : ready) {
-        if (!fd.revents || std::none_of(sockets_.begin(), sockets_.end(),
+        if (!fd.revents || none_of(sockets_.begin(), sockets_.end(),
             [&](const auto& interest) { return interest.fd == fd.fd; })) continue;
         int events = 0;
         if (fd.revents & POLLIN) events |= CURL_CSELECT_IN;
         if (fd.revents & POLLOUT) events |= CURL_CSELECT_OUT;
         if (fd.revents & (POLLERR | POLLHUP | POLLNVAL)) events |= CURL_CSELECT_ERR;
         const auto code = curl_multi_socket_action(multi_, fd.fd, events, &running);
-        if (code != CURLM_OK) return std::unexpected(multi_error(code));
+        if (code != CURLM_OK) return unexpected(multi_error(code));
     }
-    if (callback_failed_) return std::unexpected(Error{ErrorCode::Network, 0, "HTTP socket registration failed"});
-    std::vector<HttpResponse> responses = std::move(failures_);
+    if (callback_failed_) return unexpected(Error{ErrorCode::Network, 0, "HTTP socket registration failed"});
+    vector<HttpResponse> responses = move(failures_);
     failures_.clear();
     int remaining = 0;
     while (auto* message = curl_multi_info_read(multi_, &remaining)) {
         if (message->msg != CURLMSG_DONE) continue;
-        const auto at = std::find_if(active_.begin(), active_.end(),
+        const auto at = find_if(active_.begin(), active_.end(),
             [&](const auto& transfer) { return transfer->easy == message->easy_handle; });
         if (at == active_.end()) continue;
         long status = 0;
         curl_easy_getinfo(message->easy_handle, CURLINFO_RESPONSE_CODE, &status);
-        responses.push_back({(*at)->request.id, std::move((*at)->body), message->data.result, status});
+        responses.push_back({(*at)->request.id, move((*at)->body), message->data.result, status});
         curl_multi_remove_handle(multi_, message->easy_handle);
         active_.erase(at);
     }

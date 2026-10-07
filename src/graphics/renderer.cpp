@@ -12,7 +12,6 @@
 
 #include <GLES3/gl3.h>
 #include <algorithm>
-#include <cmath>
 #include <limits>
 
 #if defined(__GLIBC__)
@@ -51,8 +50,7 @@ struct ImgVert {
     float p4_u, p4_v;
 };
 
-Text::FontHandle font_1{};
-
+// tmp
 sg_shader rectangle_shader{};
 sg_pipeline rectangle_pipeline{};
 sg_buffer rect_vertex_buffer{};
@@ -155,8 +153,8 @@ Frame calculate_frame(
 
     Frame result{};
 
-    result.width = image_width;
-    result.height = image_height;
+    result.width = static_cast<float>(image_width);
+    result.height = static_cast<float>(image_height);
 
     if (resize) {
 
@@ -209,7 +207,7 @@ void Renderer::init() {
     sg_pipeline_desc rectangle_pipe_desc{};
 
     rectangle_pipe_desc.shader = rectangle_shader;
-    rectangle_pipe_desc.layout.attrs[ATTR_rectangle_position].format = SG_VERTEXFORMAT_INT2;
+    rectangle_pipe_desc.layout.attrs[ATTR_rectangle_position].format = SG_VERTEXFORMAT_FLOAT2;
     rectangle_pipe_desc.layout.attrs[ATTR_rectangle_color].format = SG_VERTEXFORMAT_FLOAT4;
     rectangle_pipe_desc.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
     enable_blending(rectangle_pipe_desc);
@@ -223,12 +221,12 @@ void Renderer::init() {
 
     // image environment init
 
-    image_shader = sg_make_shader(image_shader_desc((sg_query_backend())));
+    image_shader = sg_make_shader(image_shader_desc(sg_query_backend()));
 
     sg_pipeline_desc image_pipe_desc{};
 
     image_pipe_desc.shader = image_shader;
-    image_pipe_desc.layout.attrs[ATTR_image_position].format = SG_VERTEXFORMAT_INT2;
+    image_pipe_desc.layout.attrs[ATTR_image_position].format = SG_VERTEXFORMAT_FLOAT2;
     image_pipe_desc.layout.attrs[ATTR_image_coord].format = SG_VERTEXFORMAT_FLOAT2;
     image_pipe_desc.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
     enable_blending(image_pipe_desc);
@@ -246,7 +244,7 @@ void Renderer::init() {
 
     sg_pipeline_desc text_pipe_desc{};
     text_pipe_desc.shader = text_shader;
-    text_pipe_desc.layout.attrs[ATTR_text_position].format = SG_VERTEXFORMAT_INT2;
+    text_pipe_desc.layout.attrs[ATTR_text_position].format = SG_VERTEXFORMAT_FLOAT2;
     text_pipe_desc.layout.attrs[ATTR_text_coord].format = SG_VERTEXFORMAT_FLOAT2;
     text_pipe_desc.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
     enable_blending(text_pipe_desc);
@@ -255,8 +253,6 @@ void Renderer::init() {
     if (sg_query_pipeline_state(text_pipeline) != SG_RESOURCESTATE_VALID) {
         Log::fatal("Text pipeline is invalid (shader compile error?)");
     }
-
-    font_1 = Text::load_font("Inter Display", 24);
 
     // release mem
 
@@ -420,9 +416,10 @@ void Renderer::draw_text(
     Frame frame, 
     Align horizontal_align, 
     Align vertical_align, 
-    string_view text
+    string_view text,
+    FontHandle font
 ) {
-    Text::Bitmap bitmap = Text::draw(text, font_1);
+    Text::Bitmap bitmap = Text::draw(text, font);
     if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
         return;
     }

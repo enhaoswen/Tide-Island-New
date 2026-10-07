@@ -1,5 +1,5 @@
 @vs rect_vs
-in ivec2 position;
+in vec2 position;
 in vec4 color;
 out vec4 frag_color;
 out vec2 Position;
@@ -39,7 +39,7 @@ void main() {
 @program rectangle rect_vs rect_fs
 
 @vs img_vs
-in ivec2 position;
+in vec2 position;
 in vec2 coord;
 
 out vec2 Position;

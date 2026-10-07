@@ -102,7 +102,20 @@ private:
 
 public:
 
-    Item(const T& arg_desc) : desc(arg_desc) {}
+    Item(const T& arg_desc, source_location l = source_location::current())
+        requires requires { T(arg_desc);}
+        : desc(arg_desc) {}
+
+    Item(const T& arg_desc, source_location l = source_location::current()) {
+        Log::logger(
+            Log::Error,
+            "{}:{}: descriptor does not match the class type, desc type = {}, class type = {}",
+            l.file_name(),
+            l.column(),
+            Log::get_type_name<decltype(arg_desc)>(),
+            Log::get_type_name<T>()
+        );
+    }
 
     void set_desc(const T& arg_desc) {
         desc = arg_desc;
@@ -132,7 +145,6 @@ public:
         desc.path = arg_path;
     }
 
-
     void draw(source_location l = source_location::current()) {
         if constexpr (is_same_v<T, RectDesc>) {
             Renderer::draw_rectangle(desc.frame, desc.radius, desc.color.to_rgba());
@@ -141,7 +153,7 @@ public:
             Renderer::draw_image(desc.frame, desc.horizontal_align, desc.vertical_align, desc.radius, desc.path);
         }
         else if constexpr (is_same_v<T, TextDesc>) {
-            Renderer::draw_text(desc.frame, desc.horizontal_align, desc.vertical_align, desc.text);
+            Renderer::draw_text(desc.frame, desc.horizontal_align, desc.vertical_align, desc.text, desc.font);
         }
 
         else {
@@ -247,7 +259,7 @@ vector<variant<Item<RectDesc>, Item<ImageDesc>, Item<TextDesc>>> objects;
 } // namespace
 
 void Object::add_rectangle(RectDesc& desc) {
-    objects.emplace_back(Item<RectDesc>(desc));
+objects.emplace_back(Item<RectDesc>{desc});
 }
 
 void Object::add_image(ImageDesc &desc) {

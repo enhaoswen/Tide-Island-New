@@ -28,6 +28,10 @@ enum struct Align : char{
     Right
 };
 
+struct FontHandle {
+    std::uint64_t id{};
+};
+
 struct RectDesc {
     Frame frame{};
     float radius{};
@@ -50,6 +54,7 @@ struct ImageDesc {
 struct TextDesc {
     Frame frame{};
     std::string_view text;
+    FontHandle font;
     Color color;
     Align horizontal_align;
     Align vertical_align;
@@ -67,8 +72,8 @@ struct Event {
 
 // But make sure the value that you set is always int.
 struct IslandConf {
-    int island_width{};
-    int island_height{};
+    float island_width{};
+    float island_height{};
     int zone{-1};
     int anchor_top{};
     float radius{};

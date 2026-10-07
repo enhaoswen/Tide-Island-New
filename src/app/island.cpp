@@ -31,8 +31,8 @@ IslandConf island{
     .island_height = 38,
     .zone = 40,
     .anchor_top = 2,
-    .radius = 0,
-    .color = Color{0, 0, 0, 0},
+    .radius = 19,
+    .color = Color{0, 0, 0, 1},
 };
 
 path get_conf_path() {
@@ -152,11 +152,11 @@ void Island::set_zone(int zone) {
 }
 
 void Island::set_island_width(int width){
-    island.island_width = width;
+    island.island_width = static_cast<float>(width);
 }
 
 void Island::set_island_height(int height){
-    island.island_height = height;
+    island.island_height = static_cast<float>(height);
 }
 
 void Island::request_redraw(bool redraw) {
