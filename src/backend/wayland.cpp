@@ -9,6 +9,8 @@
 #include "utils/log.hpp"
 
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
+#include "fractional-scale-v1-client-protocol.h"
+#include "viewporter-client-protocol.h"
 #include <GLES3/gl3.h>
 #include <EGL/egl.h>
 #include <wayland-client-core.h>
@@ -19,6 +21,8 @@
 #include <wayland-egl.h>
 #include <sys/timerfd.h>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <cstring>
 #include <array>
 #include <poll.h>
@@ -46,7 +50,11 @@ unique_ptr<wl_display, DeleteWayland<wl_display_disconnect>> display{nullptr};
 unique_ptr<wl_registry, DeleteWayland<wl_registry_destroy>> registry{nullptr};
 unique_ptr<wl_compositor, DeleteWayland<wl_compositor_destroy>> compositor{nullptr};
 unique_ptr<zwlr_layer_shell_v1, DeleteWayland<zwlr_layer_shell_v1_destroy>> layer_shell{nullptr};
+unique_ptr<wp_fractional_scale_manager_v1, DeleteWayland<wp_fractional_scale_manager_v1_destroy>> fractional_scale_manager{nullptr};
+unique_ptr<wp_viewporter, DeleteWayland<wp_viewporter_destroy>> viewporter{nullptr};
 unique_ptr<wl_surface, DeleteWayland<wl_surface_destroy>> surface{nullptr};
+unique_ptr<wp_fractional_scale_v1, DeleteWayland<wp_fractional_scale_v1_destroy>> fractional_scale{nullptr};
+unique_ptr<wp_viewport, DeleteWayland<wp_viewport_destroy>> viewport{nullptr};
 unique_ptr<zwlr_layer_surface_v1, DeleteWayland<zwlr_layer_surface_v1_destroy>> layer_surface{nullptr};
 unique_ptr<wl_egl_window, DeleteWayland<wl_egl_window_destroy>> egl_window{nullptr};
 unique_ptr<wl_seat, DeleteWayland<wl_seat_release>> seat{nullptr};
@@ -59,6 +67,12 @@ EGLSurface egl_surface{EGL_NO_SURFACE};
 
 uint32_t current_width{};
 uint32_t current_height{};
+uint32_t requested_width{};
+uint32_t requested_height{};
+int buffer_width{};
+int buffer_height{};
+bool surface_configured{false};
+double surface_scale{1.0};
 
 float pointer_x{};
 float pointer_y{};
@@ -68,7 +82,6 @@ bool wayland_needs_redraw{false};
 int wayland_fd{-1};
 
 void (*report_click)(float x, float y, bool left){};
-void (*need_draw)(bool redraw){};
 
 // --- Wayland Registry Listeners ---
 
@@ -236,6 +249,36 @@ void registry_global(
         ));
     }
 
+    else if (interface_name == wp_fractional_scale_manager_v1_interface.name) {
+        fractional_scale_manager.reset(static_cast<wp_fractional_scale_manager_v1*>(
+            wl_registry_bind(
+                registry,
+                name,
+                &wp_fractional_scale_manager_v1_interface,
+                min(version, 1u)
+            )
+        ));
+
+        if (!fractional_scale_manager) {
+            Log::fatal("Failed to bind fractional scale manager");
+        }
+        Log::logger(Log::Debug, "Fractional scale manager bound successfully");
+    }
+    else if (interface_name == wp_viewporter_interface.name) {
+        viewporter.reset(static_cast<wp_viewporter*>(
+            wl_registry_bind(
+                registry,
+                name,
+                &wp_viewporter_interface,
+                min(version, 1u)
+            )
+        ));
+
+        if (!viewporter) {
+            Log::fatal("Failed to bind viewporter");
+        }
+        Log::logger(Log::Debug, "Viewporter bound successfully");
+    }
     else if (interface_name == wl_seat_interface.name) {
         seat.reset(static_cast<wl_seat*>(
             wl_registry_bind(
@@ -268,6 +311,45 @@ wl_registry_listener registry_listener = {
     .global_remove = registry_remove,
 };
 
+// --- Fractional Scale Listener ---
+
+void update_buffer_size() {
+    // A viewport maps the pixel buffer back to the logical surface size.
+    const double scale = viewport && fractional_scale ? surface_scale : 1.0;
+    const double width = round(current_width * scale);
+    const double height = round(current_height * scale);
+    if (width < 1 || height < 1 ||
+        width > numeric_limits<int>::max() || height > numeric_limits<int>::max()) {
+        Log::fatal("Invalid EGL buffer size: {}*{}", width, height);
+    }
+    buffer_width = static_cast<int>(width);
+    buffer_height = static_cast<int>(height);
+
+    if (viewport) {
+        wl_surface_set_buffer_scale(surface.get(), 1);
+        wp_viewport_set_destination(viewport.get(), current_width, current_height);
+    }
+    if (egl_window) {
+        wl_egl_window_resize(egl_window.get(), buffer_width, buffer_height, 0, 0);
+    }
+    wayland_needs_redraw = true;
+    Log::logger(Log::Debug, "Surface scale: {:.3f}", surface_scale);
+    Log::logger(Log::Debug, "EGL buffer: {}", buffer_width, buffer_height);
+}
+
+void preferred_scale(void*, wp_fractional_scale_v1*, uint32_t scale) {
+    surface_scale = static_cast<double>(scale) / 120.0;
+    Log::logger(Log::Debug, "Wayland scale: {} / 120 = {:.3f}", scale, surface_scale);
+    wayland_needs_redraw = true;
+    if (surface_configured) {
+        update_buffer_size();
+    }
+}
+
+const wp_fractional_scale_v1_listener fractional_scale_listener{
+    .preferred_scale = preferred_scale,
+};
+
 // --- Layer Surface Listeners ---
 
 void layer_surface_configure(
@@ -279,25 +361,10 @@ void layer_surface_configure(
 ) {
     zwlr_layer_surface_v1_ack_configure(surface, serial);
 
-    if (width != 0){
-        current_width = width;
-    }
-
-    if (height != 0){
-        current_height = height;
-    }
-
-    if (egl_window) {
-        wl_egl_window_resize(
-            egl_window.get(),
-            current_width,
-            current_height,
-            0,
-            0
-        );
-
-        wayland_needs_redraw = true;
-    }
+    current_width = width != 0 ? width : requested_width;
+    current_height = height != 0 ? height : requested_height;
+    surface_configured = true;
+    update_buffer_size();
 }
 
 void layer_surface_closed(void*, zwlr_layer_surface_v1*) {
@@ -315,7 +382,22 @@ zwlr_layer_surface_v1_listener layer_surface_listener = {
 // [Public API Implementation]
 // ============================================================================
 
-void Wayland::init() {
+void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int32_t margin_top) {
+    if (width == 0 || height == 0 ||
+        width > static_cast<uint32_t>(numeric_limits<int>::max()) ||
+        height > static_cast<uint32_t>(numeric_limits<int>::max())) {
+        Log::fatal("Invalid island size: {}*{}", width, height);
+    }
+
+    // Hyprland Error
+    // see more info in Hyprland Discussion #12878
+    // we add 1 pixel to avoid the issue
+    ++width;
+    ++height;
+
+    requested_width = width;
+    requested_height = height;
+    surface_configured = false;
 
     // 1. Establish Wayland Connection & Registry
     display.reset(wl_display_connect(nullptr));
@@ -358,6 +440,26 @@ void Wayland::init() {
         Log::fatal("Failed to create surface");
     }
 
+    if (fractional_scale_manager) {
+        fractional_scale.reset(wp_fractional_scale_manager_v1_get_fractional_scale(
+            fractional_scale_manager.get(), surface.get()
+        ));
+        if (!fractional_scale) {
+            Log::fatal("Failed to create fractional scale object");
+        }
+        if (wp_fractional_scale_v1_add_listener(
+                fractional_scale.get(), &fractional_scale_listener, nullptr) == -1) {
+            Log::fatal("Failed to add fractional scale listener");
+        }
+    }
+
+    if (viewporter) {
+        viewport.reset(wp_viewporter_get_viewport(viewporter.get(), surface.get()));
+        if (!viewport) {
+            Log::fatal("Failed to create viewport");
+        }
+    }
+
     layer_surface.reset(zwlr_layer_shell_v1_get_layer_surface(
         layer_shell.get(),
         surface.get(),
@@ -376,12 +478,11 @@ void Wayland::init() {
     );
     zwlr_layer_surface_v1_set_size(
         layer_surface.get(),
-        // default size, always set size before start doing anything else
-        10,
-        10
-        
+        width,
+        height
     );
-    zwlr_layer_surface_v1_set_exclusive_zone(layer_surface.get(), 10); // default size again
+    zwlr_layer_surface_v1_set_exclusive_zone(layer_surface.get(), exclusive_zone);
+    zwlr_layer_surface_v1_set_margin(layer_surface.get(), margin_top, 0, 0, 0);
 
     if (zwlr_layer_surface_v1_add_listener(
             layer_surface.get(),
@@ -395,13 +496,17 @@ void Wayland::init() {
         Log::fatal("Wayland roundtrip failed");
     }
 
+    while (!surface_configured) {
+        if (wl_display_dispatch(display.get()) == -1) {
+            Log::fatal("Failed to wait for initial layer surface configure");
+        }
+    }
+
     // 3. Setup EGL Window & Display
     egl_window.reset(wl_egl_window_create(
         surface.get(),
-        // default size
-        10,
-        10
-        
+        buffer_width,
+        buffer_height
     ));
     if (!egl_window) {
         Log::fatal("Failed to create wl_egl_window");
@@ -501,6 +606,8 @@ void Wayland::request_resize(
     }
 
     zwlr_layer_surface_v1_set_size(layer_surface.get(), width, height);
+    requested_width = width;
+    requested_height = height;
     wl_surface_commit(surface.get());
 
 }
@@ -509,12 +616,22 @@ array<int,2> Wayland::get_surface_size() {
     return {static_cast<int>(current_width), static_cast<int>(current_height)};
 }
 
+array<int,2> Wayland::get_buffer_size() {
+    return {buffer_width, buffer_height};
+}
+
+double Wayland::get_scale() {
+    return surface_scale;
+}
+
 void Wayland::apply_config(
     uint32_t width, 
     uint32_t height, 
     int32_t exclusive_zone, 
     int32_t margin_top
 ) {
+    requested_width = width;
+    requested_height = height;
     zwlr_layer_surface_v1_set_size(
         layer_surface.get(),
         width,
@@ -539,10 +656,6 @@ void Wayland::apply_config(
 
 void Wayland::set_report_click(void (*callback)(float x, float y, bool left)) {
     report_click = callback;
-}
-
-void Wayland::set_need_draw(void (*callback)(bool redraw)) {
-    need_draw = callback;
 }
 
 void Wayland::handle_events(short revents) {

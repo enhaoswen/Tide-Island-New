@@ -130,7 +130,7 @@ void enable_blending(sg_pipeline_desc& descriptor) {
 }
 
 sg_swapchain swapchain() {
-    auto surface_size= Wayland::get_surface_size();
+    auto surface_size= Wayland::get_buffer_size();
 
     sg_swapchain result{};
     result.width = surface_size[0];

@@ -23,7 +23,12 @@ void API::init() {
     state = &Island::state();
     Log::logger(Log::Debug, "Island initialized successfully");
 
-    Wayland::init();
+    Wayland::init(
+        static_cast<uint32_t>(state->island_width),
+        static_cast<uint32_t>(state->island_height),
+        state->zone,
+        state->anchor_top
+    );
     Log::logger(Log::Debug, "Wayland initialized successfully");
 
     Text::init();
@@ -36,14 +41,6 @@ void API::init() {
     Log::logger(Log::Debug, "Timer initialized successfully");
 
     Wayland::set_report_click(Object::click);
-    Wayland::set_need_draw(Island::request_redraw);
-
-    Wayland::apply_config(
-       static_cast<uint32_t>(state->island_width),
-       static_cast<uint32_t>(state->island_height),
-       state->zone,
-       state->anchor_top
-    );
 
     Log::logger(Log::Debug, "Initialization completed successfully");
 }
