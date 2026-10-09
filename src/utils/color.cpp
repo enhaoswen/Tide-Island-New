@@ -10,8 +10,6 @@ using RGBA = array<float, 4>;
 
 namespace {
 
-constexpr RGBA default_color = {0,0,0,1};
-
 // RGB values in Color::Preset order; preset colors are fully opaque.
 constexpr array<array<unsigned char, 3>, 16> preset_colors{{
     {  0,   0,   0}, // Black
@@ -88,16 +86,14 @@ expected<RGBA, string_view> hex_to_rgba(string_view str) {
 
 } // namespace
 
-Color::Color() {
-    color = default_color;
-}
+Color::Color() : Color(Preset::Black) {}
 
 Color::Color(Preset preset, source_location l) {
     const auto index = static_cast<unsigned char>(preset);
     if (index >= preset_colors.size()) {
         Log::logger(Log::Error, "{}:{}: Invalid color preset {}",
                     l.file_name(), l.line(), static_cast<unsigned>(index));
-        color = default_color;
+        color = Color{Preset::Black}.to_rgba();
         return;
     }
     const auto& rgb = preset_colors[index];
@@ -112,7 +108,7 @@ Color::Color(string_view arg_color, source_location l) {
     else {
         Log::logger(Log::Error, R"@({}:{}: {}, value="{}")@",
                     l.file_name(), l.line(), parsed.error(), arg_color);
-        color = default_color;
+        color = Color{Preset::Black}.to_rgba();
     }
 }
 
@@ -136,7 +132,7 @@ Color::Color(array<float, 3> arg_color, source_location l) {
                 l.line(),
                 array_to_string(arg_color)
             );
-            color = default_color;
+            color = Color{Preset::Black}.to_rgba();
             return;
         }
     }
@@ -154,7 +150,7 @@ Color::Color(array<float, 4> arg_color, source_location l) {
                 l.line(),
                 array_to_string(arg_color)
             );
-            color = default_color;
+            color = Color{Preset::Black}.to_rgba();
             return;
         }
     }
