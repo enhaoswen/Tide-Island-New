@@ -10,7 +10,27 @@ using RGBA = array<float, 4>;
 
 namespace {
 
-RGBA default_color = {0,0,0,1};
+constexpr RGBA default_color = {0,0,0,1};
+
+// RGB values in Color::Preset order; preset colors are fully opaque.
+constexpr array<array<unsigned char, 3>, 16> preset_colors{{
+    {  0,   0,   0}, // Black
+    {255, 255, 255}, // White
+    {128, 128, 128}, // Gray
+    {192, 192, 192}, // Silver
+    {255,   0,   0}, // Red
+    {128,   0,   0}, // Maroon
+    {255, 255,   0}, // Yellow
+    {128, 128,   0}, // Olive
+    {  0, 255,   0}, // Lime
+    {  0, 128,   0}, // Green
+    {  0, 255, 255}, // Cyan
+    {  0, 128, 128}, // Teal
+    {  0,   0, 255}, // Blue
+    {  0,   0, 128}, // Navy
+    {255,   0, 255}, // Magenta
+    {128,   0, 128}, // Purple
+}};
 
 template<typename T, size_t N>
 string array_to_string(const array<T, N>& arr) {
@@ -70,6 +90,18 @@ expected<RGBA, string_view> hex_to_rgba(string_view str) {
 
 Color::Color() {
     color = default_color;
+}
+
+Color::Color(Preset preset, source_location l) {
+    const auto index = static_cast<unsigned char>(preset);
+    if (index >= preset_colors.size()) {
+        Log::logger(Log::Error, "{}:{}: Invalid color preset {}",
+                    l.file_name(), l.line(), static_cast<unsigned>(index));
+        color = default_color;
+        return;
+    }
+    const auto& rgb = preset_colors[index];
+    color = {rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, 1.0f};
 }
 
 Color::Color(string_view arg_color, source_location l) {

@@ -21,13 +21,34 @@ private:
     std::array<float,4> color;
 
 public:
+    enum Preset : char {
+        Black,
+        White,
+        Gray,
+        Silver,
+        Red,
+        Maroon,
+        Yellow,
+        Olive,
+        Lime,
+        Green,
+        Cyan,
+        Teal,
+        Blue,
+        Navy,
+        Magenta,
+        Purple,
+    };
+
+    static std::expected<Color, std::string_view> parse(std::string_view input);
+
     Color();
+    Color(Preset preset, std::source_location l = std::source_location::current());
     Color(std::string_view color, std::source_location l = std::source_location::current());
     Color(std::array<float,3> arg_color, std::source_location l = std::source_location::current());
     Color(std::array<float,4> arg_color, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, float a, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, std::source_location l = std::source_location::current());
-    static std::expected<Color, std::string_view> parse(std::string_view input);
     std::string to_string() const;
     std::array<float, 4> to_rgba() const;
 };
