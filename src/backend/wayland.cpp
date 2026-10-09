@@ -334,12 +334,11 @@ void update_buffer_size() {
     }
     wayland_needs_redraw = true;
     Log::logger(Log::Debug, "Surface scale: {:.3f}", surface_scale);
-    Log::logger(Log::Debug, "EGL buffer: {}", buffer_width, buffer_height);
+    Log::logger(Log::Debug, "EGL buffer: {}*{}", buffer_width, buffer_height);
 }
 
 void preferred_scale(void*, wp_fractional_scale_v1*, uint32_t scale) {
     surface_scale = static_cast<double>(scale) / 120.0;
-    Log::logger(Log::Debug, "Wayland scale: {} / 120 = {:.3f}", scale, surface_scale);
     wayland_needs_redraw = true;
     if (surface_configured) {
         update_buffer_size();
@@ -361,7 +360,13 @@ void layer_surface_configure(
 ) {
     zwlr_layer_surface_v1_ack_configure(surface, serial);
 
+    if (width != 0 && width != requested_width) {
+        logger(Log::Warning, "Did not receive expected width {} (requested: {})", width, requested_width);
+    }
     current_width = width != 0 ? width : requested_width;
+    if (height != 0 && height != requested_height) {
+        logger(Log::Warning, "Did not receive expected height {} (requested: {})", height, requested_height);
+    }
     current_height = height != 0 ? height : requested_height;
     surface_configured = true;
     update_buffer_size();
@@ -621,7 +626,7 @@ array<int,2> Wayland::get_buffer_size() {
 }
 
 double Wayland::get_scale() {
-    return surface_scale;
+    return viewport && fractional_scale ? surface_scale : 1.0;
 }
 
 void Wayland::apply_config(

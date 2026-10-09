@@ -46,11 +46,13 @@ struct FaceState {
     int face_index{};
     FT_Face face{};
     hb_font_t* hb_font{};
+    unsigned raster_size{};
 };
 
 struct LoadedFont {
     string family;
     unsigned pixel_size{};
+    unsigned raster_size{};
     vector<FaceState> faces;
     unordered_map<uint64_t, GlyphBitmap> glyph_cache;
     unordered_set<uint32_t> unsupported_codepoints;
@@ -233,13 +235,23 @@ optional<FaceState> font_source(FcPattern* pattern) {
 
 FaceState* get_face(LoadedFont& font, unsigned index) {
     auto& state = font.faces[index];
-    if (state.face && state.hb_font) return &state;
+    if (state.face && state.hb_font) {
+        if (state.raster_size != font.raster_size) {
+            if (FT_Set_Pixel_Sizes(state.face, 0, font.raster_size)) {
+                Log::logger(Log::Error, R"@(Failed to set font size, path="{}")@", state.path);
+                return nullptr;
+            }
+            hb_ft_font_changed(state.hb_font);
+            state.raster_size = font.raster_size;
+        }
+        return &state;
+    }
 
     if (FT_New_Face(ft_library, state.path.c_str(), state.face_index, &state.face)) {
         Log::logger(Log::Error, R"@(Failed to load font file, path="{}")@", state.path);
         return nullptr;
     }
-    if (FT_Set_Pixel_Sizes(state.face, 0, font.pixel_size)) {
+    if (FT_Set_Pixel_Sizes(state.face, 0, font.raster_size)) {
         Log::logger(Log::Error, R"@(Failed to set font size, path="{}")@", state.path);
         FT_Done_Face(state.face);
         state.face = nullptr;
@@ -253,7 +265,30 @@ FaceState* get_face(LoadedFont& font, unsigned index) {
         state.face = nullptr;
         return nullptr;
     }
+    state.raster_size = font.raster_size;
     return &state;
+}
+
+bool prepare_raster_size(LoadedFont& font, double scale) {
+    if (!isfinite(scale) || scale <= 0.0) {
+        Log::logger(Log::Error, "Invalid text scale {}", scale);
+        return false;
+    }
+    const double size = max(1.0, round(font.pixel_size * scale));
+    if (!isfinite(size) || size > numeric_limits<unsigned>::max()) {
+        Log::logger(Log::Error, "Text raster size is too large");
+        return false;
+    }
+    const auto raster_size = static_cast<unsigned>(size);
+    if (font.raster_size != raster_size) {
+        // Cached glyphs contain pixels for the previous raster size.
+        font.glyph_cache.clear();
+        font.raster_size = raster_size;
+    }
+    for (unsigned index = 0; index < font.faces.size(); ++index) {
+        if (!get_face(font, index)) return false;
+    }
+    return true;
 }
 
 bool pattern_covers(FcPattern* pattern, const vector<Codepoint>& cps,
@@ -289,7 +324,7 @@ void resolve_missing_faces(LoadedFont& font, const vector<Codepoint>& cps) {
 
     // One short-lived Fontconfig lookup handles every missing cluster in this
     // line. Only copied paths and face indices remain after this function.
-    FontQuery query(font.family, font.pixel_size);
+    FontQuery query(font.family, font.raster_size);
     if (!query.matches) return;
     for (const auto& cluster : missing) {
         if (choose_face(font, cps, cluster.begin, cluster.end) != font.faces.size())
@@ -471,6 +506,7 @@ FontHandle Text::load_font(string_view family, unsigned pixel_size) {
     auto font = make_unique<LoadedFont>();
     font->family = family;
     font->pixel_size = pixel_size;
+    font->raster_size = pixel_size;
     {
         FontQuery query(font->family, pixel_size);
         if (!query.has_matches()) return {};
@@ -501,10 +537,11 @@ void Text::unload_font(FontHandle font) {
         Log::logger(Log::Warning, "Invalid text font handle {}", font.id);
 }
 
-Text::Bitmap Text::draw(string_view text, FontHandle handle) {
+Text::Bitmap Text::draw(string_view text, FontHandle handle, double scale) {
     LoadedFont* font = require_font(handle);
     Bitmap bitmap;
     if (!font || text.empty()) return bitmap;
+    if (!prepare_raster_size(*font, scale)) return bitmap;
 
     auto cps = decode_utf8(text);
     if (cps.size() > static_cast<size_t>(numeric_limits<int>::max())) {

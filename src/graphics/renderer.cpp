@@ -146,20 +146,20 @@ Frame calculate_frame(
     Frame frame,
     Align horizontal_align,
     Align vertical_align,
-    int image_width,
-    int image_height,
+    float image_width,
+    float image_height,
     bool resize
 ) {
 
     Frame result{};
 
-    result.width = static_cast<float>(image_width);
-    result.height = static_cast<float>(image_height);
+    result.width = image_width;
+    result.height = image_height;
 
     if (resize) {
 
-        float scale_x = frame.width / static_cast<float>(image_width);
-        float scale_y = frame.height / static_cast<float>(image_height);
+        float scale_x = frame.width / image_width;
+        float scale_y = frame.height / image_height;
         float scale = min(scale_x, scale_y);
 
         result.width = image_width * scale;
@@ -419,7 +419,8 @@ void Renderer::draw_text(
     string_view text,
     FontHandle font
 ) {
-    Text::Bitmap bitmap = Text::draw(text, font);
+    const double scale = Wayland::get_scale();
+    Text::Bitmap bitmap = Text::draw(text, font, scale);
     if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
         return;
     }
@@ -432,8 +433,8 @@ void Renderer::draw_text(
         frame, 
         horizontal_align, 
         vertical_align,
-        static_cast<int>(bitmap.width),
-        static_cast<int>(bitmap.height),
+        static_cast<float>(bitmap.width / scale),
+        static_cast<float>(bitmap.height / scale),
         false
     );
 
