@@ -94,12 +94,15 @@ in vec2 uv;
 
 layout(binding = 0) uniform texture2D tex;
 layout(binding = 0) uniform sampler smp;
+layout(binding = 0) uniform text_params {
+    vec4 color;
+};
 
 out vec4 frag_color;
 
 void main() {
     float coverage = texture(sampler2D(tex, smp), uv).r;
-    frag_color = vec4(1.0, 1.0, 1.0, coverage);
+    frag_color = vec4(color.rgb, color.a * coverage);
 }
 @end
 

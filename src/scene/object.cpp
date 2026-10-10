@@ -147,13 +147,13 @@ public:
 
     void draw(source_location l = source_location::current()) {
         if constexpr (is_same_v<T, RectDesc>) {
-            Renderer::draw_rectangle(desc.frame, desc.radius, desc.color.to_rgba());
+            Renderer::draw_rectangle(desc);
         }
         else if constexpr (is_same_v<T, ImageDesc>) {
-            Renderer::draw_image(desc.frame, desc.horizontal_align, desc.vertical_align, desc.radius, desc.path);
+            Renderer::draw_image(desc);
         }
         else if constexpr (is_same_v<T, TextDesc>) {
-            Renderer::draw_text(desc.frame, desc.horizontal_align, desc.vertical_align, desc.text, desc.font);
+            Renderer::draw_text(desc);
         }
 
         else {

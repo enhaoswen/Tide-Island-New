@@ -278,15 +278,12 @@ void Renderer::end_frame() {
     Wayland::swap_buffer();
 }
 
-void Renderer::draw_rectangle(
-    Frame frame,
-    float radius,
-    array<float, 4> color) {
+void Renderer::draw_rectangle(const RectDesc& desc) {
 
-    float max_r = min(frame.width, frame.height) * 0.5f;
-    radius = clamp(radius, 0.0f, max_r);
+    float max_r = min(desc.frame.width, desc.frame.height) * 0.5f;
+    float radius = clamp(desc.radius, 0.0f, max_r);
 
-    RectVert vertices = rectangle_vertices(frame, color);
+    RectVert vertices = rectangle_vertices(desc.frame, desc.color.to_rgba());
     int offset = sg_append_buffer(rect_vertex_buffer, SG_RANGE(vertices));
     if (sg_query_buffer_overflow(rect_vertex_buffer)) {
         Log::fatal("Vertex bufer overflow");
@@ -298,25 +295,20 @@ void Renderer::draw_rectangle(
     sg_apply_pipeline(rectangle_pipeline);
     sg_apply_bindings(&bindings);
     auto project = projection();
-    auto radius_data = radius_uniform<rect_radius_uniform_t>(frame, radius);
+    auto radius_data = radius_uniform<rect_radius_uniform_t>(desc.frame, radius);
     sg_apply_uniforms(UB_rect_proj_uniform, SG_RANGE(project));
     sg_apply_uniforms(UB_rect_radius_uniform, SG_RANGE(radius_data));
     sg_draw(0, 4, 1);
 }
 
-void Renderer::draw_image(
-    Frame frame,
-    Align horizontal_align,
-    Align vertical_align,
-    float radius,
-    string path) {
+void Renderer::draw_image(const ImageDesc& desc) {
 
     int width, height, channels;
 
-    unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+    unsigned char* pixels = stbi_load(desc.path.c_str(), &width, &height, &channels, 4);
 
     if (!pixels) {
-        Log::fatal(R"@(Failed to load picture, path="{}")@", path);
+        Log::fatal(R"@(Failed to load picture, path="{}")@", desc.path);
     }
 
     sg_image_desc image_desc {
@@ -359,9 +351,9 @@ void Renderer::draw_image(
 
     ImgVert vertices = image_vertices(
         calculate_frame(
-            frame, 
-            horizontal_align, 
-            vertical_align, 
+            desc.frame,
+            desc.horizontal_align,
+            desc.vertical_align,
             width, 
             height,
             true
@@ -401,7 +393,7 @@ void Renderer::draw_image(
     auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
 
-    auto radius_data = radius_uniform<img_radius_uniform_t>(frame, radius);
+    auto radius_data = radius_uniform<img_radius_uniform_t>(desc.frame, desc.radius);
     sg_apply_uniforms(UB_img_radius_uniform, SG_RANGE(radius_data));
 
     sg_draw(0, 4, 1);
@@ -412,15 +404,9 @@ void Renderer::draw_image(
     sg_destroy_view(tex_view);
 }
 
-void Renderer::draw_text(
-    Frame frame, 
-    Align horizontal_align, 
-    Align vertical_align, 
-    string_view text,
-    FontHandle font
-) {
+void Renderer::draw_text(const TextDesc& desc) {
     const double scale = Wayland::get_scale();
-    Text::Bitmap bitmap = Text::draw(text, font, scale);
+    Text::Bitmap bitmap = Text::draw(desc.text, desc.font, scale);
     if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
         return;
     }
@@ -430,9 +416,9 @@ void Renderer::draw_text(
     }
 
     Frame new_frame = calculate_frame(
-        frame, 
-        horizontal_align, 
-        vertical_align,
+        desc.frame,
+        desc.horizontal_align,
+        desc.vertical_align,
         static_cast<float>(bitmap.width / scale),
         static_cast<float>(bitmap.height / scale),
         false
@@ -502,6 +488,10 @@ void Renderer::draw_text(
 
     auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
+    text_params_t params{};
+    auto color = desc.color.to_rgba();
+    copy(color.begin(), color.end(), params.color);
+    sg_apply_uniforms(UB_text_params, SG_RANGE(params));
     sg_draw(0, 4, 1);
 
     sg_destroy_view(view);
