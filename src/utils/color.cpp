@@ -10,26 +10,6 @@ using RGBA = array<float, 4>;
 
 namespace {
 
-// RGB values in Color::Preset order; preset colors are fully opaque.
-constexpr array<array<unsigned char, 3>, 16> preset_colors{{
-    {  0,   0,   0}, // Black
-    {255, 255, 255}, // White
-    {128, 128, 128}, // Gray
-    {192, 192, 192}, // Silver
-    {255,   0,   0}, // Red
-    {128,   0,   0}, // Maroon
-    {255, 255,   0}, // Yellow
-    {128, 128,   0}, // Olive
-    {  0, 255,   0}, // Lime
-    {  0, 128,   0}, // Green
-    {  0, 255, 255}, // Cyan
-    {  0, 128, 128}, // Teal
-    {  0,   0, 255}, // Blue
-    {  0,   0, 128}, // Navy
-    {255,   0, 255}, // Magenta
-    {128,   0, 128}, // Purple
-}};
-
 template<typename T, size_t N>
 string array_to_string(const array<T, N>& arr) {
     string result;
@@ -86,18 +66,8 @@ expected<RGBA, string_view> hex_to_rgba(string_view str) {
 
 } // namespace
 
-Color::Color() : Color(Preset::Black) {}
-
-Color::Color(Preset preset, source_location l) {
-    const auto index = static_cast<unsigned char>(preset);
-    if (index >= preset_colors.size()) {
-        Log::logger(Log::Error, "{}:{}: Invalid color preset {}",
-                    l.file_name(), l.line(), static_cast<unsigned>(index));
-        color = Color{Preset::Black}.to_rgba();
-        return;
-    }
-    const auto& rgb = preset_colors[index];
-    color = {rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, 1.0f};
+Color::Color() {
+    color = Black.to_rgba();
 }
 
 Color::Color(string_view arg_color, source_location l) {
@@ -108,7 +78,7 @@ Color::Color(string_view arg_color, source_location l) {
     else {
         Log::logger(Log::Error, R"@({}:{}: {}, value="{}")@",
                     l.file_name(), l.line(), parsed.error(), arg_color);
-        color = Color{Preset::Black}.to_rgba();
+        color = Black.to_rgba();
     }
 }
 
@@ -132,7 +102,7 @@ Color::Color(array<float, 3> arg_color, source_location l) {
                 l.line(),
                 array_to_string(arg_color)
             );
-            color = Color{Preset::Black}.to_rgba();
+            color = Black.to_rgba();
             return;
         }
     }
@@ -150,7 +120,7 @@ Color::Color(array<float, 4> arg_color, source_location l) {
                 l.line(),
                 array_to_string(arg_color)
             );
-            color = Color{Preset::Black}.to_rgba();
+            color = Black.to_rgba();
             return;
         }
     }
@@ -188,8 +158,4 @@ string Color::to_string() const {
         byte(color[2]),
         byte(color[3])
     );
-}
-
-array<float,4> Color::to_rgba() const {
-    return color;
 }

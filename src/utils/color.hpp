@@ -20,35 +20,53 @@ class Color {
 private:
     std::array<float,4> color;
 
+    struct PresetTag {};
+    constexpr Color(PresetTag, unsigned char r, unsigned char g, unsigned char b)
+        : color{r / 255.0f, g / 255.0f, b / 255.0f, 1.0f} {}
+
 public:
-    enum Preset : char {
-        Black,
-        White,
-        Gray,
-        Silver,
-        Red,
-        Maroon,
-        Yellow,
-        Olive,
-        Lime,
-        Green,
-        Cyan,
-        Teal,
-        Blue,
-        Navy,
-        Magenta,
-        Purple,
-    };
+    static const Color Black;
+    static const Color White;
+    static const Color Gray;
+    static const Color Silver;
+    static const Color Red;
+    static const Color Maroon;
+    static const Color Yellow;
+    static const Color Olive;
+    static const Color Lime;
+    static const Color Green;
+    static const Color Cyan;
+    static const Color Teal;
+    static const Color Blue;
+    static const Color Navy;
+    static const Color Magenta;
+    static const Color Purple;
 
     static std::expected<Color, std::string_view> parse(std::string_view input);
 
     Color();
-    Color(Preset preset, std::source_location l = std::source_location::current());
     Color(std::string_view color, std::source_location l = std::source_location::current());
     Color(std::array<float,3> arg_color, std::source_location l = std::source_location::current());
     Color(std::array<float,4> arg_color, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, float a, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, std::source_location l = std::source_location::current());
     std::string to_string() const;
-    std::array<float, 4> to_rgba() const;
+    constexpr std::array<float, 4> to_rgba() const { return color; }
 };
+
+inline constexpr Color Color::Black{PresetTag{}, 0, 0, 0};
+inline constexpr Color Color::White{PresetTag{}, 255, 255, 255};
+inline constexpr Color Color::Gray{PresetTag{}, 128, 128, 128};
+inline constexpr Color Color::Silver{PresetTag{}, 192, 192, 192};
+inline constexpr Color Color::Red{PresetTag{}, 255, 0, 0};
+inline constexpr Color Color::Maroon{PresetTag{}, 128, 0, 0};
+inline constexpr Color Color::Yellow{PresetTag{}, 255, 255, 0};
+inline constexpr Color Color::Olive{PresetTag{}, 128, 128, 0};
+inline constexpr Color Color::Lime{PresetTag{}, 0, 255, 0};
+inline constexpr Color Color::Green{PresetTag{}, 0, 128, 0};
+inline constexpr Color Color::Cyan{PresetTag{}, 0, 255, 255};
+inline constexpr Color Color::Teal{PresetTag{}, 0, 128, 128};
+inline constexpr Color Color::Blue{PresetTag{}, 0, 0, 255};
+inline constexpr Color Color::Navy{PresetTag{}, 0, 0, 128};
+inline constexpr Color Color::Magenta{PresetTag{}, 255, 0, 255};
+inline constexpr Color Color::Purple{PresetTag{}, 128, 0, 128};
