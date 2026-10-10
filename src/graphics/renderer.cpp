@@ -12,6 +12,7 @@
 
 #include <GLES3/gl3.h>
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 #if defined(__GLIBC__)
@@ -415,14 +416,25 @@ void Renderer::draw_text(const TextDesc& desc) {
         Log::fatal("Text bitmap dimensions are too large");
     }
 
+    // Buffer dimensions are rounded by Wayland, so their actual X/Y scales
+    // can differ from the preferred scale used to rasterize the font.
+    const auto surface_size = Wayland::get_surface_size();
+    const auto buffer_size = Wayland::get_buffer_size();
+    const double scale_x = static_cast<double>(buffer_size[0]) / surface_size[0];
+    const double scale_y = static_cast<double>(buffer_size[1]) / surface_size[1];
+
     Frame new_frame = calculate_frame(
         desc.frame,
         desc.horizontal_align,
         desc.vertical_align,
-        static_cast<float>(bitmap.width / scale),
-        static_cast<float>(bitmap.height / scale),
+        static_cast<float>(bitmap.width / scale_x),
+        static_cast<float>(bitmap.height / scale_y),
         false
     );
+    // Snap the whole bitmap after layout, not just the glyphs inside it.
+    // Keep one bitmap pixel per framebuffer pixel, including fractional DPI.
+    new_frame.x = static_cast<float>(round(new_frame.x * scale_x) / scale_x);
+    new_frame.y = static_cast<float>(round(new_frame.y * scale_y) / scale_y);
 
     sg_image_desc image_desc {
         .type = SG_IMAGETYPE_2D,
@@ -451,8 +463,8 @@ void Renderer::draw_text(const TextDesc& desc) {
     }
 
     sg_sampler_desc sampler_desc {
-        .min_filter = SG_FILTER_LINEAR,
-        .mag_filter = SG_FILTER_LINEAR,
+        .min_filter = SG_FILTER_NEAREST,
+        .mag_filter = SG_FILTER_NEAREST,
         .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
         .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
     };

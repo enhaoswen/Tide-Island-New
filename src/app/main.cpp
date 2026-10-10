@@ -45,7 +45,7 @@ int main() {
     TextDesc text_desc {
         .frame = {0, 0, island_conf.island_width, island_conf.island_height},
         .text = "Hello,你好!",
-        .font = API::load_font("Inter Display", 18),
+        .font = API::load_font("Sans Serif", 18),
         .color = Color::White,
         .horizontal_align = Align::Center,
         .vertical_align = Align::Center,
