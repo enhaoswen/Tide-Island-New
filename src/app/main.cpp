@@ -1,7 +1,6 @@
 #include "app/API.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
-#include "scene/layout.hpp"
 
 #include <chrono>
 #include <format>
@@ -9,6 +8,9 @@
 using namespace std;
 
 namespace {
+
+Object::Text* clock_text{};
+
 }
 
 void draw_main_land() {
@@ -25,7 +27,7 @@ void draw_main_land() {
             Log::logger(Log::Debug, "Right click callback triggered");
         },
     };
-    API::draw_rectangle(main_land_desc);
+    API::add_rectangle(main_land_desc);
 }
 
 void set_clock_state() {
@@ -35,20 +37,23 @@ void set_clock_state() {
 
     const IslandConf& island_conf = API::island_state();
 
-    API::clear_status();
+    if (!clock_text) {
+        TextDesc clock_desc {
+            .frame = {0, 0, island_conf.island_width, island_conf.island_height},
+            .text = time,
+            .font = API::load_font("Sans Serif", 18),
+            .color = Color::White,
+            .horizontal_align = Align::Center,
+            .vertical_align = Align::Center,
+        };
+        clock_text = API::add_text(clock_desc);
+    }
+    else {
+        clock_text->set_text(time);
+        clock_text->set_frame({0, 0, island_conf.island_width, island_conf.island_height});
+    }
 
-    TextDesc clock_desc {
-        .frame = {0, 0, island_conf.island_width, island_conf.island_height},
-        .text = time,
-        .font = API::load_font("Sans Serif", 18),
-        .color = Color::White,
-        .horizontal_align = Align::Center,
-        .vertical_align = Align::Center,
-    };
-
-    API::draw_text(clock_desc);
-    
-    chrono::microseconds deadline = duration_cast<chrono::microseconds>(next - now);
+    auto deadline = duration_cast<chrono::microseconds>(next - chrono::system_clock::now());
     API::push_event(deadline, set_clock_state,0);
 }
 
@@ -62,25 +67,11 @@ int main() {
 
     API::init();
 
-    const IslandConf& island_conf = API::island_state();
-
-
-    ImageDesc img_desc {
-        .frame = {0, 0, island_conf.island_width, island_conf.island_height},
-        .radius = 0,
-        .path = "/home/swen/Downloads/images.jpeg",
-        .horizontal_align = Align::Center,
-        .vertical_align = Align::Center,
-        .click_callback_left = []() {
-            Log::logger(Log::Debug, "Left click callback triggered");
-        },
-        .click_callback_right = []() {
-            Log::logger(Log::Debug, "Right click callback triggered");
-        },
-    };
-
+    draw_main_land();
     set_clock_state();
 
     API::run();
+    clock_text = nullptr;
+    API::shutdown();
     return 0;
 }

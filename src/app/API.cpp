@@ -56,16 +56,16 @@ void API::resize(uint32_t width, uint32_t height) {
     Wayland::request_resize(width, height);
 }
 
-void API::draw_rectangle(RectDesc& rect_desc){
-    Object::add_rectangle(rect_desc);
+Object::Rectangle* API::add_rectangle(const RectDesc& desc) {
+    return Object::add_rectangle(desc);
 }
 
-void API::draw_image(ImageDesc& desc) {
-    Object::add_image(desc);
+Object::Image* API::add_image(const ImageDesc& desc) {
+    return Object::add_image(desc);
 }
 
-void API::draw_text(TextDesc &desc){
-    Object::add_text(desc);
+Object::Text* API::add_text(const TextDesc& desc) {
+    return Object::add_text(desc);
 }
 
 void API::push_event(std::chrono::microseconds duration, void (*callback)(), float priority) {
@@ -74,7 +74,6 @@ void API::push_event(std::chrono::microseconds duration, void (*callback)(), flo
 
 void API::clear_status() {
     Object::clear();
-    Island::request_redraw(true);
 }
 
 void API::run(){
@@ -82,6 +81,7 @@ void API::run(){
     while (state->is_running) {
 
         if (state->need_redraw) {
+            Island::request_redraw(false);
             Log::logger(Log::Debug, "Start a new frame");
 
             Renderer::begin_frame();
@@ -89,11 +89,12 @@ void API::run(){
             Renderer::end_frame();
         }
         
-       Island::request_redraw(Timer::wait());
+        Island::request_redraw(Timer::wait() || state->need_redraw);
     }
 
 }
 
 void API::shutdown() {
-
+    Object::clear();
+    Text::shutdown();
 }
