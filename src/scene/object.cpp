@@ -41,13 +41,13 @@ bool handle_click(
         return false;
     }
 
-    if (left && left_callback) {
-        left_callback();
+    auto callback = left ? left_callback : right_callback;
+    if (!callback) {
+        return false;
     }
-    else if (!left && right_callback) {
-        right_callback();
-    }
-    return true;
+
+    callback();
+    return true;;
 }
 
 } // namespace
@@ -242,11 +242,11 @@ Object::Text* Object::add_text(const TextDesc& desc) {
 }
 
 void Object::click(float x, float y, bool left) {
-    for (auto& object : objects) {
-        if (object->click(x, y, left)) {
-            return;
-        }
+    for (auto it = objects.rbegin(); it != objects.rend(); ++it) {
+    if ((*it)->click(x, y, left)) {
+        return;
     }
+}
 }
 
 void Object::draw() {

@@ -18,7 +18,7 @@ namespace {
 
 int timer_fd{-1};
 int wayland_fd{-1};
-IslandConf island;
+const IslandConf* state{};
 
 struct LaterDeadline {
     bool operator()(
@@ -60,7 +60,7 @@ void pop(source_location location = std::source_location::current()) {
     Event timer = timer_queue.top();
     timer_queue.pop();
 
-    if (timer.callback && timer.priority >= island.current_priority) {
+    if (timer.callback && timer.priority >= state->current_priority) {
         timer.callback();
         Island::set_priority(timer.priority);
     }
@@ -98,7 +98,7 @@ void Timer::push(
 }
 
 void Timer::init() {
-    island = Island::state();
+    state = &Island::state();
     timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
 
     if (timer_fd == -1) {

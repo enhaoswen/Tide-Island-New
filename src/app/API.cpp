@@ -52,8 +52,10 @@ const IslandConf& API::island_state() {
     return *state;
 }
 
+// TODO: complete support for animation in the future.
 void API::resize(uint32_t width, uint32_t height) {
     Wayland::request_resize(width, height);
+    Island::set_size(static_cast<int>(width), static_cast<int>(height));
 }
 
 Object::Rectangle* API::add_rectangle(const RectDesc& desc) {

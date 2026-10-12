@@ -25,7 +25,6 @@ using namespace std::filesystem;
 
 namespace {
 
-
 IslandConf island{
     .island_width = 140,
     .island_height = 38,
@@ -155,13 +154,11 @@ void Island::set_zone(int zone) {
     island.zone = zone;
 }
 
-void Island::set_island_width(int width){
-    island.island_width = static_cast<float>(width);
+void Island::set_size(int width, int height) {
+    island.island_width = width;
+    island.island_height = height;
 }
 
-void Island::set_island_height(int height){
-    island.island_height = static_cast<float>(height);
-}
 
 void Island::request_redraw(bool redraw) {
     island.need_redraw = redraw;

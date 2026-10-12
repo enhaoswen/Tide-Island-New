@@ -1,8 +1,10 @@
 #include "app/views/clock_view.hpp"
 #include "app/API.hpp"
+#include "utils/log.hpp"
 
 #include <chrono>
 #include <format>
+#include <source_location>
 
 namespace ClockView {
 namespace {
@@ -46,8 +48,9 @@ void schedule_next_tick() {
 
 } // namespace
 
-void start() {
+void start(std::source_location location) {
     if (running) {
+        Log::logger(Log::Warning, "{}:{}: Clock is running, but still still get called", location.file_name(), location.line());
         return;
     }
 
