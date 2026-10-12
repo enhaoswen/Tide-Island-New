@@ -24,6 +24,7 @@ set(SRC
     src/app/main.cpp
     src/app/API.cpp
     src/app/island.cpp
+    src/app/views/clock_view.cpp
     src/utils/color.cpp
     src/backend/wayland.cpp
     src/backend/timer.cpp
