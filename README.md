@@ -22,6 +22,10 @@ Because we pursue better performance, less resource usage, and a higher ceiling.
 
 Compared with Quickshell, Tide Island uses a pure OpenGL backend, removing the heavyweight QML component system, JavaScript runtime, and Qt dependency stack. This version is perfect for geeks who are concerned about resource usage.
 
+## Live RAM monitor
+
+See the [RAM monitor documentation](tools/README.md) for usage, controls, and memory analysis details.
+
 ## Contributing
 
 Issues, bug reports, design suggestions, and pull requests are all welcome.
