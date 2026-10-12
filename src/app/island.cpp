@@ -147,6 +147,10 @@ void Island::set_radius(float radius, source_location location) {
     island.radius = radius;
 }
 
+void Island::set_priority(float priority) {
+    island.current_priority = priority;
+}
+
 void Island::set_zone(int zone) {
     island.zone = zone;
 }

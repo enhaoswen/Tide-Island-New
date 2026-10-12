@@ -20,6 +20,7 @@ void set_is_running(bool state);
 void set_radius(float radius, std::source_location location = std::source_location::current());
 void set_zone(int zone);
 void request_redraw(bool redraw);
+void set_priority(float priority);
 void set_island_width(int width);
 void set_island_height(int height);
 

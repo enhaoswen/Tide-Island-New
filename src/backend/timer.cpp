@@ -2,6 +2,7 @@
 #include "backend/wayland.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
+#include "app/island.hpp"
 
 #include <chrono>
 #include <cstring>
@@ -17,6 +18,7 @@ namespace {
 
 int timer_fd{-1};
 int wayland_fd{-1};
+IslandConf island;
 
 struct LaterDeadline {
     bool operator()(
@@ -50,30 +52,39 @@ void set_timer_at(steady_clock::time_point deadline) {
     }
 }
 
-void pop() {
+void pop(source_location location = std::source_location::current()) {
     if (timer_queue.empty()) {
-        Log::fatal("Timer queue is empty");
+        Log::fatal("{}:{}: Timer queue is empty", location.file_name(), location.line());
     }
 
     Event timer = timer_queue.top();
-
-    if (timer.callback) {
-        timer.callback();
-    }
     timer_queue.pop();
+
+    if (timer.callback && timer.priority >= island.current_priority) {
+        timer.callback();
+        Island::set_priority(timer.priority);
+    }
 }
 
 } // namespace
 
 void Timer::push(
     microseconds duration,
-    void (*callback)()
+    void (*callback)(),
+    float priority,
+    source_location location
 ) {
     if (timer_fd == -1) {
         Log::fatal("Timer is not initialized");
     }
     if (!callback) {
-        Log::fatal("Timer callback is null");
+        Log::logger(
+            Log::Error,
+            "{}:{}: Timer callback is null", 
+            location.file_name(), 
+            location.line()
+        );
+        
     }
 
     const steady_clock::time_point next_deadline = steady_clock::now() + duration;
@@ -83,10 +94,11 @@ void Timer::push(
         set_timer_at(next_deadline);
     }
 
-    timer_queue.push({next_deadline, callback});
+    timer_queue.push({next_deadline, callback, priority});
 }
 
 void Timer::init() {
+    island = Island::state();
     timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
 
     if (timer_fd == -1) {
@@ -104,7 +116,7 @@ int Timer::get_timer_fd() {
     return timer_fd;
 }
 
-void Timer::handle_events() {
+void Timer::handle_events(std::source_location location) {
 
     uint64_t expiration_count{};
 
@@ -121,7 +133,7 @@ void Timer::handle_events() {
     const auto now = steady_clock::now();
 
     while (!timer_queue.empty() && timer_queue.top().deadline <= now) {
-        pop();
+        pop(location);
     }
 
     if (!timer_queue.empty()) {

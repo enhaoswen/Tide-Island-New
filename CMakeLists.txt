@@ -30,6 +30,7 @@ set(SRC
     src/graphics/renderer.cpp
     src/graphics/text.cpp
     src/scene/object.cpp
+    src/scene/layout.hpp
     third_party/wayland/wlr-layer-shell-unstable-v1-protocol.c
     third_party/wayland/xdg-shell-client-protocol.c
     third_party/wayland/fractional-scale-v1-protocol.c

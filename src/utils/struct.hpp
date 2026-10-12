@@ -62,22 +62,26 @@ struct TextDesc {
     void (*click_callback_right) () = nullptr;
 };
 
+// About Priority
+// Priority used to implement the right callback when 2 events are triggered at the same time.
+// We always implement the callback with the highest priority, and ignore the other one.
+
+// Clock, Lyrics, Custom Page: 0
+
 struct Event {
     std::chrono::steady_clock::time_point deadline;
     void (*callback)();
+    float priority;
 };
 
-// Remember to change `conf_to_island_conf` in config.cpp if you changed `Island Conf`
-
-
-// But make sure the value that you set is always int.
 struct IslandConf {
     float island_width{};
     float island_height{};
     int zone{-1};
     int anchor_top{};
     float radius{};
-    Color color{};
+    float current_priority{};
+    Color color;
 
     bool need_redraw{true};
     bool is_running{true};
@@ -92,16 +96,17 @@ enum struct AnimationTarget : char {
     ColorR,
     ColorG,
     ColorB,
-    ColorA
+    ColorA,
 };
 
 struct Animation {
+    float from{};
+    float to{};
+    float* target_ptr{};
+    float priority{};
     std::chrono::steady_clock::time_point start_time;
     std::chrono::milliseconds duration;
-    float from;
-    float to;
     AnimationTarget target;
-    float* target_ptr{};
 };
 
 struct Font {

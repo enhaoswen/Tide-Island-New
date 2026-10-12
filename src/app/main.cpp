@@ -1,6 +1,7 @@
 #include "app/API.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
+#include "scene/layout.hpp"
 
 using namespace std;
 
@@ -53,7 +54,16 @@ int main() {
 
     // test
     API::draw_rectangle(main_land_desc);
-    //API::draw_image(img_desc);
+    Layout_horizontal_layout(
+        main_land_desc.frame,
+        Align::Right,
+        Align::Center,
+        0,
+        img_desc,
+        text_desc
+    );
+
+    API::draw_image(img_desc);
     API::draw_text(text_desc);
 
     API::run();
