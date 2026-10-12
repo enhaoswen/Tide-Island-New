@@ -16,7 +16,6 @@ const IslandConf* state{};
 
 }
 
-
 void API::init() {
 
     Island::init();
@@ -67,6 +66,15 @@ void API::draw_image(ImageDesc& desc) {
 
 void API::draw_text(TextDesc &desc){
     Object::add_text(desc);
+}
+
+void API::push_event(std::chrono::microseconds duration, void (*callback)(), float priority) {
+    Timer::push(duration, callback, priority);
+}
+
+void API::clear_status() {
+    Object::clear();
+    Island::request_redraw(true);
 }
 
 void API::run(){

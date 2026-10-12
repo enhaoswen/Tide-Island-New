@@ -13,7 +13,7 @@ FontHandle load_font(std::string_view family, unsigned pixel_size);
 void draw_rectangle(RectDesc&);
 void draw_image(ImageDesc&);
 void draw_text(TextDesc&);
-void to_clock_status();
+void push_event(std::chrono::microseconds duration, void (*callback)(), float priority);
 void clear_status();
 void run();
 

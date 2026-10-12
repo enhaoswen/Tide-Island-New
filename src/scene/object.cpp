@@ -8,15 +8,23 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
-#include <variant>
+#include <memory>
 
 using namespace std;
 using namespace std::chrono;
 
 namespace {
 
+class ItemBase {
+public:
+    virtual ~ItemBase() = default;
+    virtual void draw(source_location l = source_location::current()) = 0;
+    virtual void update() = 0;
+    virtual bool click(int x, int y, bool left) = 0;
+};
+
 template <typename T>
-class Item{
+class Item : public ItemBase {
 private:
     T desc;
     vector<Animation> animations;
@@ -145,7 +153,7 @@ public:
         desc.path = arg_path;
     }
 
-    void draw(source_location l = source_location::current()) {
+    void draw(source_location l = source_location::current()) override {
         if constexpr (is_same_v<T, RectDesc>) {
             Renderer::draw_rectangle(desc);
         }
@@ -167,7 +175,7 @@ public:
         }
     }
 
-    void update() {
+    void update() override {
         auto now = steady_clock::now();
 
         for (auto it = animations.begin(); it != animations.end();) {
@@ -188,8 +196,7 @@ public:
         }
     }
 
-    bool click(int x, int y, bool left)
-    requires requires {desc.radius = 1;} {
+    bool click(int x, int y, bool left) override {
         if (
             x < desc.frame.x ||
             x > desc.frame.x + desc.frame.width ||
@@ -199,42 +206,25 @@ public:
             return false;
         }
 
-        float nearest_x = clamp(
-            static_cast<float>(x),
-            desc.frame.x + desc.radius,
-            desc.frame.x + desc.frame.width - desc.radius
-        );
+        if constexpr (requires { desc.radius; }) {
+            float nearest_x = clamp(
+                static_cast<float>(x),
+                desc.frame.x + desc.radius,
+                desc.frame.x + desc.frame.width - desc.radius
+            );
 
-        float nearest_y = clamp(
-            static_cast<float>(y),
-            desc.frame.y + desc.radius,
-            desc.frame.y + desc.frame.height - desc.radius
-        );
+            float nearest_y = clamp(
+                static_cast<float>(y),
+                desc.frame.y + desc.radius,
+                desc.frame.y + desc.frame.height - desc.radius
+            );
 
-        float dx = x - nearest_x;
-        float dy = y - nearest_y;
+            float dx = x - nearest_x;
+            float dy = y - nearest_y;
 
-        if (dx * dx + dy * dy <= desc.radius * desc.radius) {
-
-            if (left && desc.click_callback_left) {
-                desc.click_callback_left();
-            } else if (!left && desc.click_callback_right) {
-                desc.click_callback_right();
+            if (dx * dx + dy * dy > desc.radius * desc.radius) {
+                return false;
             }
-            return true;
-        }
-
-        return false;
-    }
-
-    bool click(int x, int y, bool left) {
-        if (
-            x < desc.frame.x ||
-            x > desc.frame.x + desc.frame.width ||
-            y < desc.frame.y ||
-            y > desc.frame.y + desc.frame.height
-        ) {
-            return false;
         }
 
         if (left && desc.click_callback_left) {
@@ -254,32 +244,25 @@ public:
 
 };
 
-vector<variant<Item<RectDesc>, Item<ImageDesc>, Item<TextDesc>>> objects;
+vector<unique_ptr<ItemBase>> objects;
 
 } // namespace
 
 void Object::add_rectangle(RectDesc& desc) {
-objects.emplace_back(Item<RectDesc>{desc});
+    objects.push_back(make_unique<Item<RectDesc>>(desc));
 }
 
 void Object::add_image(ImageDesc &desc) {
-    objects.emplace_back(Item<ImageDesc>(desc));
+    objects.push_back(make_unique<Item<ImageDesc>>(desc));
 }
 
 void Object::add_text(TextDesc &desc) {
-    objects.emplace_back(Item<TextDesc>(desc));
+    objects.push_back(make_unique<Item<TextDesc>>(desc));
 }
 
 void Object::click(float x, float y, bool left) {
     for (auto& object : objects) {
-        bool handled = std::visit(
-            [&](auto& obj) {
-                return obj.click(x, y, left);
-            },
-            object
-        );
-
-        if (handled) {
+        if (object->click(x, y, left)) {
             return;
         }
     }
@@ -287,13 +270,8 @@ void Object::click(float x, float y, bool left) {
 
 void Object::draw() {
     for (auto& object : objects) {
-        std::visit(
-            [](auto& obj) {
-                obj.update();
-                obj.draw();
-            },
-            object
-        );
+        object->update();
+        object->draw();
     }
 }
 

@@ -53,7 +53,7 @@ struct ImageDesc {
 
 struct TextDesc {
     Frame frame{};
-    std::string_view text;
+    std::string text;
     FontHandle font;
     Color color;
     Align horizontal_align;
