@@ -1,8 +1,6 @@
 ## Live RAM Monitor
 
-This tool helps you monitor the RAM usage of Tide Island in real time. It runs in the terminal with a btop-like interface.
-
-It does not change Tide Island's code. You only need Python 3.10+ for normal monitoring.
+This tool helps you monitor the RAM usage of Tide Island in real time.
 
 ### Usage
 
@@ -29,6 +27,8 @@ You can also change the update interval (default is 1 second):
 ```
 python3 tools/memory_monitor.py --interval 2 -- ./build/Tide-island
 ```
+
+Please make sure you have Python 3.10+ if you want to use this feature.
 
 Use `--plain` if you don't want the dashboard.
 
