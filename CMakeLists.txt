@@ -27,6 +27,7 @@ set(SRC
     src/app/views/clock_view.cpp
     src/utils/color.cpp
     src/backend/wayland.cpp
+    src/backend/egl_vendor.cpp
     src/backend/timer.cpp
     src/graphics/renderer.cpp
     src/graphics/text.cpp

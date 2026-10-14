@@ -1,5 +1,6 @@
 #include "app/API.hpp"
 #include "app/views/clock_view.hpp"
+#include "backend/egl_vendor.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 
@@ -27,6 +28,8 @@ void add_main_land() {
 } // namespace
 
 int main() {
+    EglVendor::select_for_wayland();
+
     println("");
 
     frame_logger(Log::Debug,

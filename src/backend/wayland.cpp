@@ -585,6 +585,15 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
         Log::fatal("eglMakeCurrent failed");
     }
 
+    const auto* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+    Log::logger(Log::Debug, "EGL vendor=\"{}\", GL renderer=\"{}\"",
+                eglQueryString(egl_display, EGL_VENDOR), renderer ? renderer : "unknown");
+    if (renderer && (string_view(renderer).contains("llvmpipe") ||
+                     string_view(renderer).contains("softpipe") ||
+                     string_view(renderer).contains("Software Rasterizer"))) {
+        Log::logger(Log::Warning, "Using software rendering; check the GPU driver if CPU or RAM usage is high");
+    }
+
     wayland_fd = wl_display_get_fd(display.get());
 }
 
