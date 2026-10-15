@@ -93,10 +93,11 @@ void API::run(){
         
         Island::request_redraw(Timer::wait() || state->need_redraw);
     }
-
 }
 
 void API::shutdown() {
     Object::clear();
     Text::shutdown();
+    Renderer::shutdown();
+    Wayland::shutdown();
 }

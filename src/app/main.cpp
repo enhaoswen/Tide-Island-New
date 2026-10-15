@@ -28,7 +28,6 @@ void add_main_land() {
 } // namespace
 
 int main() {
-    EglVendor::select_for_wayland();
 
     println("");
 
@@ -36,6 +35,8 @@ int main() {
         "This build was compiled in debug mode.",
         "Performance may be reduced and additional debug output may appear."
     );
+
+    EglVendor::select_for_wayland();
 
     API::init();
 

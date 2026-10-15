@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/struct.hpp"
+#include "graphics/texture.hpp"
 
 #include <source_location>
 #include <string_view>
@@ -11,11 +12,14 @@ namespace Object {
 class ItemBase {
 private:
     std::vector<Animation> animations;
+    void (*left_callback)(){};
+    void (*right_callback)(){};
 
 protected:
     virtual Frame& mutable_frame() = 0;
     virtual float* radius();
     virtual Color* color();
+    void set_click_callbacks(void (*left)(), void (*right)());
 
 public:
     ItemBase() = default;
@@ -28,7 +32,7 @@ public:
     void add_animation(Animation animation, std::source_location location = std::source_location::current());
     void update();
     virtual void draw() = 0;
-    virtual bool click(float x, float y, bool left) = 0;
+    virtual bool click(float x, float y, bool left);
 };
 
 class Rectangle : public ItemBase {
@@ -45,12 +49,13 @@ public:
     void set_radius(float radius);
     void set_color(const Color& color);
     void draw() override;
-    bool click(float x, float y, bool left) override;
 };
 
 class Image : public ItemBase {
 private:
     ImageDesc desc;
+    Texture texture;
+    bool texture_dirty{true};
     Frame& mutable_frame() override;
     float* radius() override;
 
@@ -60,13 +65,17 @@ public:
     void set_desc(const ImageDesc& desc);
     void set_radius(float radius);
     void set_path(std::string_view path);
+    // Refresh a file whose contents changed at the same path.
+    void reload();
     void draw() override;
-    bool click(float x, float y, bool left) override;
 };
 
 class Text : public ItemBase {
 private:
     TextDesc desc;
+    Texture texture;
+    bool texture_dirty{true};
+    double texture_scale{};
     Frame& mutable_frame() override;
     Color* color() override;
 
@@ -78,7 +87,6 @@ public:
     void set_font(FontHandle font);
     void set_color(const Color& color);
     void draw() override;
-    bool click(float x, float y, bool left) override;
 };
 
 Rectangle* add_rectangle(const RectDesc& desc);

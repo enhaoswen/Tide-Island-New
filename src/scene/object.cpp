@@ -18,26 +18,40 @@ bool is_color_target(AnimationTarget target) {
     return target >= AnimationTarget::ColorR && target <= AnimationTarget::ColorA;
 }
 
-bool handle_click(
-    const Frame& frame,
-    float radius,
-    void (*left_callback)(),
-    void (*right_callback)(),
-    float x,
-    float y,
-    bool left
-) {
+} // namespace
+
+float* Object::ItemBase::radius() {
+    return nullptr;
+}
+
+Color* Object::ItemBase::color() {
+    return nullptr;
+}
+
+void Object::ItemBase::set_click_callbacks(void (*left)(), void (*right)()) {
+    left_callback = left;
+    right_callback = right;
+}
+
+bool Object::ItemBase::click(float x, float y, bool left) {
+    const Frame& bounds = frame();
     if (
-        x < frame.x || x > frame.x + frame.width ||
-        y < frame.y || y > frame.y + frame.height
+        x < bounds.x || x > bounds.x + bounds.width ||
+        y < bounds.y || y > bounds.y + bounds.height
     ) {
         return false;
     }
 
-    radius = clamp(radius, 0.0f, max(0.0f, min(frame.width, frame.height) / 2));
-    float dx = x - clamp(x, frame.x + radius, frame.x + frame.width - radius);
-    float dy = y - clamp(y, frame.y + radius, frame.y + frame.height - radius);
-    if (dx * dx + dy * dy > radius * radius) {
+    const float* current_radius = radius();
+    const float corner_radius = clamp(
+        current_radius ? *current_radius : 0.0f,
+        0.0f, max(0.0f, min(bounds.width, bounds.height) / 2)
+    );
+    const float dx = x - clamp(x, bounds.x + corner_radius,
+                              bounds.x + bounds.width - corner_radius);
+    const float dy = y - clamp(y, bounds.y + corner_radius,
+                              bounds.y + bounds.height - corner_radius);
+    if (dx * dx + dy * dy > corner_radius * corner_radius) {
         return false;
     }
 
@@ -47,17 +61,7 @@ bool handle_click(
     }
 
     callback();
-    return true;;
-}
-
-} // namespace
-
-float* Object::ItemBase::radius() {
-    return nullptr;
-}
-
-Color* Object::ItemBase::color() {
-    return nullptr;
+    return true;
 }
 
 void Object::ItemBase::set_frame(const Frame& frame) {
@@ -124,7 +128,9 @@ void Object::ItemBase::update() {
     Island::request_redraw(true);
 }
 
-Object::Rectangle::Rectangle(const RectDesc& desc) : desc(desc) {}
+Object::Rectangle::Rectangle(const RectDesc& desc) : desc(desc) {
+    set_click_callbacks(desc.click_callback_left, desc.click_callback_right);
+}
 
 Frame& Object::Rectangle::mutable_frame() { return desc.frame; }
 const Frame& Object::Rectangle::frame() const { return desc.frame; }
@@ -133,6 +139,7 @@ Color* Object::Rectangle::color() { return &desc.color; }
 
 void Object::Rectangle::set_desc(const RectDesc& desc) {
     this->desc = desc;
+    set_click_callbacks(desc.click_callback_left, desc.click_callback_right);
     Island::request_redraw(true);
 }
 
@@ -150,18 +157,20 @@ void Object::Rectangle::draw() {
     Renderer::draw_rectangle(desc);
 }
 
-bool Object::Rectangle::click(float x, float y, bool left) {
-    return handle_click(desc.frame, desc.radius, desc.click_callback_left, desc.click_callback_right, x, y, left);
+Object::Image::Image(const ImageDesc& desc) : desc(desc) {
+    set_click_callbacks(desc.click_callback_left, desc.click_callback_right);
 }
-
-Object::Image::Image(const ImageDesc& desc) : desc(desc) {}
 
 Frame& Object::Image::mutable_frame() { return desc.frame; }
 const Frame& Object::Image::frame() const { return desc.frame; }
 float* Object::Image::radius() { return &desc.radius; }
 
 void Object::Image::set_desc(const ImageDesc& desc) {
+    if (this->desc.path != desc.path) {
+        texture_dirty = true;
+    }
     this->desc = desc;
+    set_click_callbacks(desc.click_callback_left, desc.click_callback_right);
     Island::request_redraw(true);
 }
 
@@ -171,36 +180,58 @@ void Object::Image::set_radius(float radius) {
 }
 
 void Object::Image::set_path(string_view path) {
+    if (desc.path == path) {
+        return;
+    }
     desc.path = path;
+    reload();
+}
+
+void Object::Image::reload() {
+    texture_dirty = true;
     Island::request_redraw(true);
 }
 
 void Object::Image::draw() {
-    Renderer::draw_image(desc);
+    if (texture_dirty) {
+        Renderer::prepare_image(desc, texture);
+        texture_dirty = false;
+    }
+    Renderer::draw_image(desc, texture);
 }
 
-bool Object::Image::click(float x, float y, bool left) {
-    return handle_click(desc.frame, desc.radius, desc.click_callback_left, desc.click_callback_right, x, y, left);
+Object::Text::Text(const TextDesc& desc) : desc(desc) {
+    set_click_callbacks(desc.click_callback_left, desc.click_callback_right);
 }
-
-Object::Text::Text(const TextDesc& desc) : desc(desc) {}
 
 Frame& Object::Text::mutable_frame() { return desc.frame; }
 const Frame& Object::Text::frame() const { return desc.frame; }
 Color* Object::Text::color() { return &desc.color; }
 
 void Object::Text::set_desc(const TextDesc& desc) {
+    if (this->desc.text != desc.text || this->desc.font.id != desc.font.id) {
+        texture_dirty = true;
+    }
     this->desc = desc;
+    set_click_callbacks(desc.click_callback_left, desc.click_callback_right);
     Island::request_redraw(true);
 }
 
 void Object::Text::set_text(string_view text) {
+    if (desc.text == text) {
+        return;
+    }
     desc.text = text;
+    texture_dirty = true;
     Island::request_redraw(true);
 }
 
 void Object::Text::set_font(FontHandle font) {
+    if (desc.font.id == font.id) {
+        return;
+    }
     desc.font = font;
+    texture_dirty = true;
     Island::request_redraw(true);
 }
 
@@ -210,11 +241,13 @@ void Object::Text::set_color(const Color& color) {
 }
 
 void Object::Text::draw() {
-    Renderer::draw_text(desc);
-}
-
-bool Object::Text::click(float x, float y, bool left) {
-    return handle_click(desc.frame, 0, desc.click_callback_left, desc.click_callback_right, x, y, left);
+    const double scale = Renderer::get_scale();
+    if (texture_dirty || texture_scale != scale) {
+        Renderer::prepare_text(desc, scale, texture);
+        texture_dirty = false;
+        texture_scale = scale;
+    }
+    Renderer::draw_text(desc, texture);
 }
 
 Object::Rectangle* Object::add_rectangle(const RectDesc& desc) {

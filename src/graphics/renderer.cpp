@@ -4,6 +4,7 @@
 #include "stb_image.h"
 #include "graphics/renderer.hpp"
 #include "backend/wayland.hpp"
+#include "graphics/texture.hpp"
 #include "sokol_gfx.h"
 #include "graphics/shaders/basic.glsl.h"
 #include "sokol_log.h"
@@ -14,12 +15,23 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <memory>
 
 #if defined(__GLIBC__)
 #include <malloc.h>
 #endif
 
 using namespace std;
+
+namespace Renderer {
+
+struct TextureAccess {
+    static sg_view view(const Texture& texture) {
+        return sg_view{texture.view_id()};
+    }
+};
+
+} // namespace Renderer
 
 namespace {
 
@@ -62,6 +74,8 @@ sg_buffer image_vertex_buffer{};
 
 sg_shader text_shader{};
 sg_pipeline text_pipeline{};
+sg_sampler image_sampler{};
+sg_sampler text_sampler{};
 
 RectVert rectangle_vertices(
     Frame frame,
@@ -251,8 +265,25 @@ void Renderer::init() {
     enable_blending(text_pipe_desc);
     text_pipeline = sg_make_pipeline(text_pipe_desc);
 
-    if (sg_query_pipeline_state(text_pipeline) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Text pipeline is invalid (shader compile error?)");
+    if (sg_query_pipeline_state(rectangle_pipeline) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(image_pipeline) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(text_pipeline) != SG_RESOURCESTATE_VALID) {
+        Log::fatal("Renderer pipeline is invalid (shader compile error?)");
+    }
+
+    sg_sampler_desc sampler_desc{};
+    sampler_desc.min_filter = SG_FILTER_LINEAR;
+    sampler_desc.mag_filter = SG_FILTER_LINEAR;
+    sampler_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+    sampler_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+    image_sampler = sg_make_sampler(&sampler_desc);
+
+    sampler_desc.min_filter = SG_FILTER_NEAREST;
+    sampler_desc.mag_filter = SG_FILTER_NEAREST;
+    text_sampler = sg_make_sampler(&sampler_desc);
+    if (sg_query_sampler_state(image_sampler) != SG_RESOURCESTATE_VALID ||
+        sg_query_sampler_state(text_sampler) != SG_RESOURCESTATE_VALID) {
+        Log::fatal("Failed to create shared samplers");
     }
 
     // release mem
@@ -261,6 +292,14 @@ void Renderer::init() {
     #if defined(__GLIBC__)
         static_cast<void>(malloc_trim(0));
     #endif
+}
+
+void Renderer::shutdown() {
+    if (sg_isvalid()) sg_shutdown();
+}
+
+double Renderer::get_scale() {
+    return Wayland::get_scale();
 }
 
 void Renderer::begin_frame() {
@@ -302,176 +341,80 @@ void Renderer::draw_rectangle(const RectDesc& desc) {
     sg_draw(0, 4, 1);
 }
 
-void Renderer::draw_image(const ImageDesc& desc) {
-
-    int width, height, channels;
-
-    unsigned char* pixels = stbi_load(desc.path.c_str(), &width, &height, &channels, 4);
-
+void Renderer::prepare_image(const ImageDesc& desc, Texture& texture) {
+    int width{}, height{}, channels{};
+    unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels{
+        stbi_load(desc.path.c_str(), &width, &height, &channels, 4),
+        &stbi_image_free
+    };
     if (!pixels) {
         Log::fatal(R"@(Failed to load picture, path="{}")@", desc.path);
     }
-
-    sg_image_desc image_desc {
-        .type = SG_IMAGETYPE_2D,
-        .usage = {
-            .immutable = true
-        },
-        .width = width,
-        .height = height,
-        .num_slices = 1,
-        .num_mipmaps = 1,
-        .pixel_format = SG_PIXELFORMAT_RGBA8,
-        .sample_count = 1,
-        .data = {
-            .mip_levels = {
-                {
-                    .ptr = pixels,
-                    .size = static_cast<size_t>(width * height * 4)
-                }
-            }
-        }
-    };
-    sg_image image = sg_make_image(image_desc);
-
-    if (sg_query_image_state(image) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Failed to create image");
+    if (width <= 0 || height <= 0 ||
+        static_cast<size_t>(height) > numeric_limits<size_t>::max() / 4 / width) {
+        Log::fatal(R"@(Invalid image dimensions, path="{}")@", desc.path);
     }
-
-    sg_sampler_desc sampler_desc {
-        .min_filter = SG_FILTER_LINEAR,
-        .mag_filter = SG_FILTER_LINEAR,
-        .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-    };
-    sg_sampler image_sampler = sg_make_sampler(sampler_desc);
-
-    if (sg_query_sampler_state(image_sampler) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Failed to create sampler");
-    }
-
-    ImgVert vertices = image_vertices(
-        calculate_frame(
-            desc.frame,
-            desc.horizontal_align,
-            desc.vertical_align,
-            width, 
-            height,
-            true
-        ));
-
-    int offset = sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices));
-    if (sg_query_buffer_overflow(image_vertex_buffer)) {
-        Log::fatal("Image vertex buffer overflow");
-    }
-
-    sg_view_desc tex_view_desc {
-        .texture = {
-            .image = image
-        }
-    };
-
-    sg_view tex_view = sg_make_view(tex_view_desc);
-
-    if (sg_query_view_state(tex_view) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Failed to create texture view");
-    }
-
-    sg_bindings bindings{};
-    bindings.vertex_buffers[0] = image_vertex_buffer;
-    bindings.vertex_buffer_offsets[0] = offset;
-    bindings.samplers[SMP_smp] = image_sampler;
-    bindings.views[VIEW_tex] = tex_view;
-
-    sg_apply_pipeline(image_pipeline);
-
-    if (sg_query_pipeline_state(image_pipeline) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Image pipeline is invalid (shader compile error?)");
-    }
-
-    sg_apply_bindings(&bindings);
-
-    auto project = projection();
-    sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
-
-    auto radius_data = radius_uniform<img_radius_uniform_t>(desc.frame, desc.radius);
-    sg_apply_uniforms(UB_img_radius_uniform, SG_RANGE(radius_data));
-
-    sg_draw(0, 4, 1);
-
-    stbi_image_free(pixels);
-    sg_destroy_image(image);
-    sg_destroy_sampler(image_sampler);
-    sg_destroy_view(tex_view);
+    const size_t size = static_cast<size_t>(width) * height * 4;
+    texture.upload(width, height, Texture::Format::RGBA8, {pixels.get(), size});
 }
 
-void Renderer::draw_text(const TextDesc& desc) {
-    const double scale = Wayland::get_scale();
+void Renderer::prepare_text(const TextDesc& desc, double scale, Texture& texture) {
     Text::Bitmap bitmap = Text::draw(desc.text, desc.font, scale);
     if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
+        texture.reset();
         return;
     }
     if (bitmap.width > static_cast<unsigned>(numeric_limits<int>::max()) ||
         bitmap.height > static_cast<unsigned>(numeric_limits<int>::max())) {
         Log::fatal("Text bitmap dimensions are too large");
     }
+    texture.upload(static_cast<int>(bitmap.width), static_cast<int>(bitmap.height),
+                   Texture::Format::R8, bitmap.pixels);
+}
 
-    // Buffer dimensions are rounded by Wayland, so their actual X/Y scales
-    // can differ from the preferred scale used to rasterize the font.
+void Renderer::draw_image(const ImageDesc& desc, const Texture& texture) {
+    if (!texture.valid()) {
+        return;
+    }
+    ImgVert vertices = image_vertices(calculate_frame(
+        desc.frame, desc.horizontal_align, desc.vertical_align,
+        texture.width(), texture.height(), true
+    ));
+    int offset = sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices));
+    if (sg_query_buffer_overflow(image_vertex_buffer)) {
+        Log::fatal("Image vertex buffer overflow");
+    }
+
+    sg_bindings bindings{};
+    bindings.vertex_buffers[0] = image_vertex_buffer;
+    bindings.vertex_buffer_offsets[0] = offset;
+    bindings.samplers[SMP_smp] = image_sampler;
+    bindings.views[VIEW_tex] = TextureAccess::view(texture);
+    sg_apply_pipeline(image_pipeline);
+    sg_apply_bindings(&bindings);
+
+    auto project = projection();
+    sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
+    auto radius_data = radius_uniform<img_radius_uniform_t>(desc.frame, desc.radius);
+    sg_apply_uniforms(UB_img_radius_uniform, SG_RANGE(radius_data));
+    sg_draw(0, 4, 1);
+}
+
+void Renderer::draw_text(const TextDesc& desc, const Texture& texture) {
+    if (!texture.valid()) {
+        return;
+    }
     const auto surface_size = Wayland::get_surface_size();
     const auto buffer_size = Wayland::get_buffer_size();
     const double scale_x = static_cast<double>(buffer_size[0]) / surface_size[0];
     const double scale_y = static_cast<double>(buffer_size[1]) / surface_size[1];
-
     Frame new_frame = calculate_frame(
-        desc.frame,
-        desc.horizontal_align,
-        desc.vertical_align,
-        static_cast<float>(bitmap.width / scale_x),
-        static_cast<float>(bitmap.height / scale_y),
-        false
+        desc.frame, desc.horizontal_align, desc.vertical_align,
+        static_cast<float>(texture.width() / scale_x),
+        static_cast<float>(texture.height() / scale_y), false
     );
-    // Snap the whole bitmap after layout, not just the glyphs inside it.
-    // Keep one bitmap pixel per framebuffer pixel, including fractional DPI.
     new_frame.x = static_cast<float>(round(new_frame.x * scale_x) / scale_x);
     new_frame.y = static_cast<float>(round(new_frame.y * scale_y) / scale_y);
-
-    sg_image_desc image_desc {
-        .type = SG_IMAGETYPE_2D,
-        .usage = {
-            .immutable = true
-        },
-        .width = static_cast<int>(bitmap.width),
-        .height = static_cast<int>(bitmap.height),
-        .num_slices = 1,
-        .num_mipmaps = 1,
-        .pixel_format = SG_PIXELFORMAT_R8,
-        .sample_count = 1,
-        .data = {
-            .mip_levels = {
-                {
-                    .ptr = bitmap.pixels.data(),
-                    .size = bitmap.pixels.size()
-                }
-            }
-        }
-    };
-
-    sg_image image = sg_make_image(image_desc);
-    if (sg_query_image_state(image) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Failed to create text image");
-    }
-
-    sg_sampler_desc sampler_desc {
-        .min_filter = SG_FILTER_NEAREST,
-        .mag_filter = SG_FILTER_NEAREST,
-        .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-    };
-    sg_sampler sampler = sg_make_sampler(sampler_desc);
-    if (sg_query_sampler_state(sampler) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Failed to create text sampler");
-    }
 
     ImgVert vertices = image_vertices(new_frame);
     int offset = sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices));
@@ -479,34 +422,19 @@ void Renderer::draw_text(const TextDesc& desc) {
         Log::fatal("Text vertex buffer overflow");
     }
 
-    sg_view_desc view_desc {
-        .texture = {
-            .image = image
-        }
-    };
-    sg_view view = sg_make_view(view_desc);
-    if (sg_query_view_state(view) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Failed to create text texture view");
-    }
-
     sg_bindings bindings{};
     bindings.vertex_buffers[0] = image_vertex_buffer;
     bindings.vertex_buffer_offsets[0] = offset;
-    bindings.samplers[SMP_smp] = sampler;
-    bindings.views[VIEW_tex] = view;
-
+    bindings.samplers[SMP_smp] = text_sampler;
+    bindings.views[VIEW_tex] = TextureAccess::view(texture);
     sg_apply_pipeline(text_pipeline);
     sg_apply_bindings(&bindings);
 
     auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
     text_params_t params{};
-    auto color = desc.color.to_rgba();
+    array<float,4> color = desc.color.to_rgba();
     copy(color.begin(), color.end(), params.color);
     sg_apply_uniforms(UB_text_params, SG_RANGE(params));
     sg_draw(0, 4, 1);
-
-    sg_destroy_view(view);
-    sg_destroy_sampler(sampler);
-    sg_destroy_image(image);
 }
