@@ -72,7 +72,7 @@ uint32_t requested_height{};
 int buffer_width{};
 int buffer_height{};
 bool surface_configured{false};
-double surface_scale{1.0};
+float surface_scale{1.0f};
 
 float pointer_x{};
 float pointer_y{};
@@ -315,11 +315,12 @@ wl_registry_listener registry_listener = {
 
 void update_buffer_size() {
     // A viewport maps the pixel buffer back to the logical surface size.
-    const double scale = viewport && fractional_scale ? surface_scale : 1.0;
-    const double width = round(current_width * scale);
-    const double height = round(current_height * scale);
+    const float scale = viewport && fractional_scale ? surface_scale : 1.0f;
+    const float width = round(current_width * scale);
+    const float height = round(current_height * scale);
     if (width < 1 || height < 1 ||
-        width > numeric_limits<int>::max() || height > numeric_limits<int>::max()) {
+        width >= static_cast<float>(numeric_limits<int>::max()) ||
+        height >= static_cast<float>(numeric_limits<int>::max())) {
         Log::fatal("Invalid EGL buffer size: {}*{}", width, height);
     }
     buffer_width = static_cast<int>(width);
@@ -338,7 +339,7 @@ void update_buffer_size() {
 }
 
 void preferred_scale(void*, wp_fractional_scale_v1*, uint32_t scale) {
-    surface_scale = static_cast<double>(scale) / 120.0;
+    surface_scale = static_cast<float>(scale) / 120.0f;
     wayland_needs_redraw = true;
     if (surface_configured) {
         update_buffer_size();
@@ -634,8 +635,8 @@ array<int,2> Wayland::get_buffer_size() {
     return {buffer_width, buffer_height};
 }
 
-double Wayland::get_scale() {
-    return viewport && fractional_scale ? surface_scale : 1.0;
+float Wayland::get_scale() {
+    return viewport && fractional_scale ? surface_scale : 1.0f;
 }
 
 void Wayland::apply_config(

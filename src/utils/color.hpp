@@ -50,8 +50,8 @@ public:
     Color(std::array<float,4> arg_color, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, float a, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, std::source_location l = std::source_location::current());
-    std::string to_string() const;
-    constexpr std::array<float, 4> to_rgba() const { return color; }
+    [[nodiscard]] std::string to_string() const;
+    [[nodiscard]] constexpr std::array<float, 4> to_rgba() const { return color; }
 };
 
 inline constexpr Color Color::Black{PresetTag{}, 0, 0, 0};

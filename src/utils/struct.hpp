@@ -4,7 +4,7 @@
 
 #include <chrono>
 #include <string>
-#include <string_view>
+#include <vector>
 
 // This file used to put the structure that developer might need in API.cpp / main.cpp.
 // because some struct / enum might not get displaied by clangd if their header is not
@@ -28,6 +28,35 @@ enum struct Align : char{
     Right
 };
 
+enum struct AnimationTarget : char {
+    Width,
+    Height,
+    X,
+    Y,
+    Radius,
+    ColorR,
+    ColorG,
+    ColorB,
+    ColorA,
+};
+
+struct AnimationDesc {
+    float to{};
+    float priority{};
+    std::chrono::milliseconds duration;
+    AnimationTarget target;
+};
+
+struct Animation {
+    float from{};
+    float to{};
+    float* target_ptr{};
+    AnimationTarget target{};
+    float priority{};
+    std::chrono::milliseconds duration;
+    std::chrono::system_clock::time_point start_time;
+};
+
 struct FontHandle {
     std::uint64_t id{};
 };
@@ -36,6 +65,7 @@ struct RectDesc {
     Frame frame{};
     float radius{};
     Color color{};
+    std::vector<Animation> animations{};
     void (*click_callback_left) () = nullptr;
     void (*click_callback_right) () = nullptr;
 };
@@ -46,9 +76,9 @@ struct ImageDesc {
     std::string path;
     Align horizontal_align;
     Align vertical_align;
+    std::vector<Animation> animations{};
     void (*click_callback_left) () = nullptr;
     void (*click_callback_right) () = nullptr;
-
 };
 
 struct TextDesc {
@@ -58,6 +88,8 @@ struct TextDesc {
     Color color;
     Align horizontal_align;
     Align vertical_align;
+    std::vector<Animation> animations{};
+
     void (*click_callback_left) () = nullptr;
     void (*click_callback_right) () = nullptr;
 };
@@ -87,27 +119,6 @@ struct IslandConf {
     bool is_running{true};
 };
 
-enum struct AnimationTarget : char {
-    Width,
-    Height,
-    X,
-    Y,
-    Radius,
-    ColorR,
-    ColorG,
-    ColorB,
-    ColorA,
-};
-
-struct Animation {
-    float from{};
-    float to{};
-    float* target_ptr{};
-    float priority{};
-    std::chrono::steady_clock::time_point start_time;
-    std::chrono::milliseconds duration;
-    AnimationTarget target;
-};
 
 struct Font {
     std::string path;

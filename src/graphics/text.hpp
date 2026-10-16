@@ -37,7 +37,7 @@ void init();
 // pixel_size is the logical font size; draw applies the raster scale.
 [[nodiscard]] FontHandle load_font(std::string_view family, unsigned pixel_size);
 void unload_font(FontHandle font);
-[[nodiscard]] Bitmap draw(std::string_view text, FontHandle font, double scale = 1.0);
+[[nodiscard]] Bitmap draw(std::string_view text, FontHandle font, float scale = 1.0f);
 void shutdown();
 
 }

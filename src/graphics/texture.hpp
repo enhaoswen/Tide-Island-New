@@ -12,8 +12,6 @@ class Texture {
 private:
     struct Impl;
     Impl* impl{};
-    friend struct Renderer::TextureAccess;
-    std::uint32_t view_id() const;
 public:
     enum class Format : char{
         R8,
@@ -24,19 +22,16 @@ public:
     Texture(const Texture&) = delete;
     Texture& operator=(const Texture&) = delete;
 
-    Texture(Texture&& other) noexcept : impl(other.impl) {
-        other.impl = nullptr;
-    }
-
+    Texture(Texture&& other) noexcept : impl(other.impl) { other.impl = nullptr; }
     ~Texture();
 
-    // Release GPU resources before shutting down Sokol or the EGL context.
     void reset();
-    // Pixels must be tightly packed. CPU storage is borrowed only during upload.
-    void upload(int width, int height, Format format,
-                std::span<const std::uint8_t> pixels);
+    [[nodiscard]] std::uint32_t view_id() const;
 
-    bool valid() const;
-    int width() const;
-    int height() const;
+    void upload(int width, int height, Format format, std::span<const std::uint8_t> pixels);
+
+    [[nodiscard]] bool valid() const;
+    [[nodiscard]] int width() const;
+    [[nodiscard]] int height() const;
+
 };

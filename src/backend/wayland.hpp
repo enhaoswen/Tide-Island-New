@@ -16,7 +16,7 @@ void init(uint32_t width, uint32_t height, int32_t exclusive_zone, int32_t margi
 void request_resize(uint32_t width, uint32_t height);
 std::array<int,2> get_surface_size();
 std::array<int,2> get_buffer_size();
-double get_scale();
+float get_scale();
 void swap_buffer();
 void apply_config(uint32_t width, uint32_t height, int32_t exclusive_zone, int32_t margin_top);
 void set_report_click(void (*callback)(float x, float y, bool left));

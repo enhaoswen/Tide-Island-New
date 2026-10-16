@@ -23,16 +23,6 @@
 
 using namespace std;
 
-namespace Renderer {
-
-struct TextureAccess {
-    static sg_view view(const Texture& texture) {
-        return sg_view{texture.view_id()};
-    }
-};
-
-} // namespace Renderer
-
 namespace {
 
 struct RectVert {
@@ -298,10 +288,6 @@ void Renderer::shutdown() {
     if (sg_isvalid()) sg_shutdown();
 }
 
-double Renderer::get_scale() {
-    return Wayland::get_scale();
-}
-
 void Renderer::begin_frame() {
     sg_pass pass{};
     pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
@@ -358,8 +344,8 @@ void Renderer::prepare_image(const ImageDesc& desc, Texture& texture) {
     texture.upload(width, height, Texture::Format::RGBA8, {pixels.get(), size});
 }
 
-void Renderer::prepare_text(const TextDesc& desc, double scale, Texture& texture) {
-    Text::Bitmap bitmap = Text::draw(desc.text, desc.font, scale);
+void Renderer::prepare_text(const TextDesc& desc, Texture& texture) {
+    Text::Bitmap bitmap = Text::draw(desc.text, desc.font,Wayland::get_scale());
     if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
         texture.reset();
         return;
@@ -389,7 +375,7 @@ void Renderer::draw_image(const ImageDesc& desc, const Texture& texture) {
     bindings.vertex_buffers[0] = image_vertex_buffer;
     bindings.vertex_buffer_offsets[0] = offset;
     bindings.samplers[SMP_smp] = image_sampler;
-    bindings.views[VIEW_tex] = TextureAccess::view(texture);
+    bindings.views[VIEW_tex] = sg_view(texture.view_id());
     sg_apply_pipeline(image_pipeline);
     sg_apply_bindings(&bindings);
 
@@ -406,15 +392,15 @@ void Renderer::draw_text(const TextDesc& desc, const Texture& texture) {
     }
     const auto surface_size = Wayland::get_surface_size();
     const auto buffer_size = Wayland::get_buffer_size();
-    const double scale_x = static_cast<double>(buffer_size[0]) / surface_size[0];
-    const double scale_y = static_cast<double>(buffer_size[1]) / surface_size[1];
+    const float scale_x = static_cast<float>(buffer_size[0]) / surface_size[0];
+    const float scale_y = static_cast<float>(buffer_size[1]) / surface_size[1];
     Frame new_frame = calculate_frame(
         desc.frame, desc.horizontal_align, desc.vertical_align,
-        static_cast<float>(texture.width() / scale_x),
-        static_cast<float>(texture.height() / scale_y), false
+        texture.width() / scale_x,
+        texture.height() / scale_y, false
     );
-    new_frame.x = static_cast<float>(round(new_frame.x * scale_x) / scale_x);
-    new_frame.y = static_cast<float>(round(new_frame.y * scale_y) / scale_y);
+    new_frame.x = round(new_frame.x * scale_x) / scale_x;
+    new_frame.y = round(new_frame.y * scale_y) / scale_y;
 
     ImgVert vertices = image_vertices(new_frame);
     int offset = sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices));
@@ -426,7 +412,7 @@ void Renderer::draw_text(const TextDesc& desc, const Texture& texture) {
     bindings.vertex_buffers[0] = image_vertex_buffer;
     bindings.vertex_buffer_offsets[0] = offset;
     bindings.samplers[SMP_smp] = text_sampler;
-    bindings.views[VIEW_tex] = TextureAccess::view(texture);
+    bindings.views[VIEW_tex] = sg_view(texture.view_id());
     sg_apply_pipeline(text_pipeline);
     sg_apply_bindings(&bindings);
 

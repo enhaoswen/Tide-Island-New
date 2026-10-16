@@ -13,8 +13,10 @@ struct Texture::Impl {
     int height{};
 
     void reset() {
-        if (view.id) sg_destroy_view(view);
-        if (image.id) sg_destroy_image(image);
+        if (view.id)
+            sg_destroy_view(view);
+        if (image.id)
+            sg_destroy_image(image);
 
         view = {};
         image = {};
@@ -41,7 +43,7 @@ void Texture::reset() {
 }
 
 void Texture::upload(int width, int height, Format format,
-                     span<const uint8_t> pixels) {
+    span<const uint8_t> pixels) {
     if (width <= 0 || height <= 0) {
         Log::fatal("Invalid texture dimensions: {}*{}", width, height);
     }
@@ -49,17 +51,17 @@ void Texture::upload(int width, int height, Format format,
     size_t channels{};
     sg_pixel_format pixel_format{};
     switch (format) {
-        case Format::R8:
-            channels = 1;
-            pixel_format = SG_PIXELFORMAT_R8;
-            break;
-        case Format::RGBA8:
-            channels = 4;
-            pixel_format = SG_PIXELFORMAT_RGBA8;
-            break;
-        default:
-            Log::fatal("Invalid texture format");
-            return;
+    case Format::R8:
+        channels = 1;
+        pixel_format = SG_PIXELFORMAT_R8;
+        break;
+    case Format::RGBA8:
+        channels = 4;
+        pixel_format = SG_PIXELFORMAT_RGBA8;
+        break;
+    default:
+        Log::fatal("Invalid texture format");
+        return;
     }
 
     if (static_cast<size_t>(width) >
@@ -69,7 +71,7 @@ void Texture::upload(int width, int height, Format format,
     const auto required = static_cast<size_t>(width) * height * channels;
     if (pixels.size() != required) {
         Log::fatal("Texture pixel data size mismatch: expected={}, actual={}",
-                   required, pixels.size());
+            required, pixels.size());
     }
     if (!sg_isvalid()) {
         Log::fatal("Texture upload requires an initialized renderer");

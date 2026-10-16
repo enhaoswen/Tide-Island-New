@@ -269,13 +269,13 @@ FaceState* get_face(LoadedFont& font, unsigned index) {
     return &state;
 }
 
-bool prepare_raster_size(LoadedFont& font, double scale) {
-    if (!isfinite(scale) || scale <= 0.0) {
+bool prepare_raster_size(LoadedFont& font, float scale) {
+    if (!isfinite(scale) || scale <= 0.0f) {
         Log::logger(Log::Error, "Invalid text scale {}", scale);
         return false;
     }
-    const double size = max(1.0, round(font.pixel_size * scale));
-    if (!isfinite(size) || size > numeric_limits<unsigned>::max()) {
+    const float size = max(1.0f, round(font.pixel_size * scale));
+    if (!isfinite(size) || size >= static_cast<float>(numeric_limits<unsigned>::max())) {
         Log::logger(Log::Error, "Text raster size is too large");
         return false;
     }
@@ -537,7 +537,7 @@ void Text::unload_font(FontHandle font) {
         Log::logger(Log::Warning, "Invalid text font handle {}", font.id);
 }
 
-Text::Bitmap Text::draw(string_view text, FontHandle handle, double scale) {
+Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale) {
     LoadedFont* font = require_font(handle);
     Bitmap bitmap;
     if (!font || text.empty()) return bitmap;
