@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <array>
+#include <cstddef>
 #include <expected>
 
 // input can be #RRGGBB or #RRGGBBAA
@@ -52,6 +53,8 @@ public:
     Color(float r, float g, float b, std::source_location l = std::source_location::current());
     [[nodiscard]] std::string to_string() const;
     [[nodiscard]] constexpr std::array<float, 4> to_rgba() const { return color; }
+    [[nodiscard]] constexpr float& operator[](std::size_t index) { return color[index]; }
+    [[nodiscard]] constexpr const float& operator[](std::size_t index) const { return color[index]; }
 };
 
 inline constexpr Color Color::Black{PresetTag{}, 0, 0, 0};

@@ -18,10 +18,6 @@ namespace {
 
 vector<unique_ptr<Objects>> objects;
 
-bool is_color_target(AnimationTarget target) {
-    return target >= AnimationTarget::ColorR && target <= AnimationTarget::ColorA;
-}
-
 } // namespace
 
 template<typename desc_type>
@@ -41,8 +37,7 @@ Object<desc_type>::Object(desc_type arg_desc) {
 template<typename desc_type>
 requires is_desc<desc_type>
 void Object<desc_type>::add_animation(AnimationDesc anim_desc, source_location location) {
-    Animation animation;
-    animation.target_ptr = nullptr;
+    Animation animation{};
     switch (anim_desc.target) {
     case AnimationTarget::Width:
         animation.target_ptr = &desc.frame.width;
@@ -57,13 +52,21 @@ void Object<desc_type>::add_animation(AnimationDesc anim_desc, source_location l
         animation.target_ptr = &desc.frame.y;
         break;
     case AnimationTarget::Radius:
-        animation.target_ptr = &desc.radius;
+        if constexpr (requires { { desc.radius } -> std::same_as<float&>; }) {
+            animation.target_ptr = &desc.radius;
+        }
+        break;
+    case AnimationTarget::ColorR:
+    case AnimationTarget::ColorG:
+    case AnimationTarget::ColorB:
+    case AnimationTarget::ColorA:
+        if constexpr (requires { { desc.color[0] } -> same_as<float&>; }) {
+            auto index = static_cast<unsigned>(anim_desc.target)
+                       - static_cast<unsigned>(AnimationTarget::ColorR);
+            animation.target_ptr = &desc.color[index];
+        }
         break;
     default:
-        break;
-    }
-
-    if (!animation.target_ptr && !(is_color_target(anim_desc.target) && requires {{desc.color} -> same_as<Color>;})) {
         Log::logger(
             Log::Error,
             "{}:{}: Animation target {} is not supported for this object",
@@ -72,14 +75,7 @@ void Object<desc_type>::add_animation(AnimationDesc anim_desc, source_location l
     }
 
     animation.target = anim_desc.target;
-    if (animation.target_ptr) {
-        animation.from = *animation.target_ptr;
-    }
-    else {
-        auto rgba = color()->to_rgba();
-        auto index = static_cast<unsigned>(animation.target) - static_cast<unsigned>(AnimationTarget::ColorR);
-        animation.from = rgba[index];
-    }
+    animation.from = *animation.target_ptr;
     animation.to = anim_desc.to;
     animation.duration = anim_desc.duration;
     animation.priority = anim_desc.priority;
@@ -101,15 +97,7 @@ void Object<desc_type>::update() {
         float progress = finished ? 1.0f : clamp(duration<float>(now - it->start_time).count() / duration<float>(it->duration).count(), 0.0f, 1.0f);
         float value = finished ? it->to : it->from + (it->to - it->from) * progress;
 
-        if (it->target_ptr) {
-            *it->target_ptr = value;
-        }
-        else {
-            Color* target = color();
-            auto rgba = target->to_rgba();
-            rgba[static_cast<unsigned>(it->target) - static_cast<unsigned>(AnimationTarget::ColorR)] = value;
-            *target = Color{rgba};
-        }
+        *it->target_ptr = value;
 
         if (finished) {
             it = desc.animations.erase(it);
@@ -121,39 +109,21 @@ void Object<desc_type>::update() {
     Island::request_redraw(true);
 }
 
-
-// till here
-
-float* Object::ItemBase::radius() {
-    return nullptr;
-}
-
-Color* Object::ItemBase::color() {
-    return nullptr;
-}
-
-void Object::ItemBase::set_click_callback_left(void (*left)()) {
-    mutable_click_callback(true) = left;
-}
-
-void Object::ItemBase::set_click_callback_right(void (*right)()) {
-    mutable_click_callback(false) = right;
-}
-
-bool Object::ItemBase::click(float x, float y, bool left) {
-    const Frame& bounds = frame();
+template<typename desc_type>
+requires is_desc<desc_type>
+bool Object<desc_type>::click(float x, float y, bool left) {
     if (
-        x < bounds.x || x > bounds.x + bounds.width ||
-        y < bounds.y || y > bounds.y + bounds.height) {
+        x < desc.frame.x || x > desc.frame.x + desc.frame.width ||
+        y < desc.frame.y || y > desc.frame.y + desc.frame.height) {
         return false;
     }
 
-    const float* current_radius = radius();
+    const float* current_radius = desc.radius;
     const float corner_radius = clamp(
-        current_radius ? *current_radius : 0.0f,
-        0.0f, max(0.0f, min(bounds.width, bounds.height) / 2));
-    const float dx = x - clamp(x, bounds.x + corner_radius, bounds.x + bounds.width - corner_radius);
-    const float dy = y - clamp(y, bounds.y + corner_radius, bounds.y + bounds.height - corner_radius);
+    current_radius ? *current_radius : 0.0f,
+        0.0f, max(0.0f, min(desc.frame.width, desc.frame.height) / 2));
+    const float dx = x - clamp(x, desc.frame.x + corner_radius, desc.frame.x + desc.frame.width - corner_radius);
+    const float dy = y - clamp(y, desc.frame.y + corner_radius, desc.frame.y + desc.frame.height - corner_radius);
     if (dx * dx + dy * dy > corner_radius * corner_radius) {
         return false;
     }
@@ -167,35 +137,9 @@ bool Object::ItemBase::click(float x, float y, bool left) {
     return true;
 }
 
-void Object::ItemBase::set_frame(const Frame& frame) {
-    mutable_frame() = frame;
-    Island::request_redraw(true);
-}
 
-Object::Rectangle::Rectangle(const RectDesc& desc) : desc(desc) {}
+// till here
 
-Frame& Object::Rectangle::mutable_frame() { return desc.frame; }
-Object::ItemBase::ClickCallback& Object::Rectangle::mutable_click_callback(bool left) {
-    return left ? desc.click_callback_left : desc.click_callback_right;
-}
-const Frame& Object::Rectangle::frame() const { return desc.frame; }
-float* Object::Rectangle::radius() { return &desc.radius; }
-Color* Object::Rectangle::color() { return &desc.color; }
-
-void Object::Rectangle::set_desc(const RectDesc& arg_desc) {
-    desc = arg_desc;
-    Island::request_redraw(true);
-}
-
-void Object::Rectangle::set_radius(float radius) {
-    desc.radius = radius;
-    Island::request_redraw(true);
-}
-
-void Object::Rectangle::set_color(const Color& color) {
-    desc.color = color;
-    Island::request_redraw(true);
-}
 
 void Object::Rectangle::draw() {
     Renderer::draw_rectangle(desc);
