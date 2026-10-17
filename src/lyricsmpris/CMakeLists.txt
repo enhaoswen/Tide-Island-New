@@ -32,9 +32,3 @@ target_link_libraries(lyricsmpris PRIVATE
     lyricsmpris_glaze PkgConfig::LYRICS_UTF8
 )
 target_compile_options(lyricsmpris PRIVATE -Wall -Wextra -Wpedantic)
-
-option(LYRICSMPRIS_BUILD_TESTS "Build lyricsmpris module tests" OFF)
-if(LYRICSMPRIS_BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()

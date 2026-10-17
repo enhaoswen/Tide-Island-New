@@ -19,5 +19,3 @@ void draw_rectangle(const RectDesc& desc);
 void draw_image(const ImageDesc& desc, const Texture& texture);
 void draw_text(const TextDesc& desc, const Texture& texture);
 }
-
-}

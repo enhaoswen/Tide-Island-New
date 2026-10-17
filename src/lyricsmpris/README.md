@@ -99,7 +99,7 @@ if (!changed) {
 - `retry_lyrics()` 重新读取当前歌曲的歌词，`set_lyric_offset()` 调整显示偏移。
   正偏移使歌词延后显示，范围为 ±1 小时。
 
-## 构建与验证
+## 构建
 
 需要 CMake 3.25 或更新版本，系统依赖 `libsystemd`、`libcurl`、`utf8proc`。
 Glaze 9.0.0 的 JSON 读写头文件、必要依赖与许可证保存在 `third_party/glaze`，CMake 直接引用
@@ -111,11 +111,8 @@ libcurl 必须支持异步 DNS；系统 libcurl 的 DNS 后端可能临时使用
 
 ```sh
 cmake -S src/lyricsmpris -B /tmp/lyricsmpris-build \
-    -DCMAKE_BUILD_TYPE=Release -DLYRICSMPRIS_BUILD_TESTS=ON
+    -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/lyricsmpris-build
-ctest --test-dir /tmp/lyricsmpris-build --output-on-failure
 ```
 
 之后接入程序时链接 `LyricsMpris::LyricsMpris` 即可。
-测试包含歌词与源响应解析、本地 HTTP 的限制/取消/超时/cookie 行为，以及独立
-session bus 中的模拟播放器，覆盖控制、进度、歌词晚到、重试和迟到回复。

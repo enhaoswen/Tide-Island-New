@@ -26,17 +26,18 @@ using namespace std::filesystem;
 namespace {
 
 IslandConf island{
-    .island_width = 140,
+    .island_width  = 140,
     .island_height = 38,
-    .zone = 40,
-    .anchor_top = 2,
-    .radius = 19,
-    .color = Color{0, 0, 0, 1},
+    .zone          = 40,
+    .anchor_top    = 2,
+    .radius        = 19,
+    .color         = Color{0, 0, 0, 1},
 };
 
 path get_conf_path() {
     const char* home = getenv("HOME");
-    if (home == nullptr) Log::fatal("HOME is not set");
+    if (home == nullptr)
+        Log::fatal("HOME is not set");
     return path(home) / ".config" / "Tide Island" / "config.json";
 }
 
@@ -57,20 +58,20 @@ void Island::init() {
         create_directories(conf_path.parent_path());
     }
 
-    auto write_default = [&]() {
+    auto write_default = [&] {
         string json;
 
         auto error = glz::write<glz::opts{.prettify = true}>(
             island,
             json
-        );
+            );
 
         if (error) {
             Log::logger(
                 Log::Error,
                 "Failed to serialize island configuration: {}",
                 glz::format_error(error, json)
-            );
+                );
             return false;
         }
 
@@ -81,7 +82,7 @@ void Island::init() {
                 Log::Error,
                 "Failed to open configuration file for writing: {}",
                 conf_path.string()
-            );
+                );
             return false;
         }
 
@@ -101,7 +102,7 @@ void Island::init() {
             Log::Error,
             "Failed to open configuration file: {}",
             conf_path.string()
-        );
+            );
         return;
     }
 
@@ -116,14 +117,14 @@ void Island::init() {
     }
 
     auto loaded = island;
-    auto error = glz::read_json(loaded, json);
+    auto error  = glz::read_json(loaded, json);
 
     if (error) {
         Log::logger(
             Log::Error,
             "Failed to parse island configuration: {}",
             glz::format_error(error, json)
-        );
+            );
         return;
     }
     island = loaded;
@@ -155,8 +156,8 @@ void Island::set_zone(int zone) {
 }
 
 void Island::set_size(int width, int height) {
-    island.island_width = width;
-    island.island_height = height;
+    island.island_width  = static_cast<float>(width);
+    island.island_height = static_cast<float>(height);
 }
 
 

@@ -17,7 +17,7 @@
 #include <limits>
 #include <memory>
 
-#if defined(__GLIBC__)
+#ifdef __GLIBC__
 #include <malloc.h>
 #endif
 
@@ -70,33 +70,33 @@ sg_sampler text_sampler{};
 RectVert rectangle_vertices(
     Frame frame,
     array<float, 4> color
-) {
-    float left   = frame.x;
-    float top    = frame.y;
-    float right  = left + frame.width;
+    ) {
+    float left = frame.x;
+    float top = frame.y;
+    float right = left + frame.width;
     float bottom = top + frame.height;
 
     // x, y, r, g, b, a
 
     return {
-        left,  top,    color[0], color[1], color[2], color[3],
-        right, top,    color[0], color[1], color[2], color[3],
-        left,  bottom, color[0], color[1], color[2], color[3],
+        left, top, color[0], color[1], color[2], color[3],
+        right, top, color[0], color[1], color[2], color[3],
+        left, bottom, color[0], color[1], color[2], color[3],
         right, bottom, color[0], color[1], color[2], color[3],
     };
 }
 
 ImgVert image_vertices(Frame frame) {
-    float left   = frame.x;
-    float top    = frame.y;
-    float right  = left + frame.width;
+    float left = frame.x;
+    float top = frame.y;
+    float right = left + frame.width;
     float bottom = top + frame.height;
 
     return {
         // x, y, u, v
-        left,  top,    0.0f, 0.0f,
-        right, top,    1.0f, 0.0f,
-        left,  bottom, 0.0f, 1.0f,
+        left, top, 0.0f, 0.0f,
+        right, top, 1.0f, 0.0f,
+        left, bottom, 0.0f, 1.0f,
         right, bottom, 1.0f, 1.0f,
     };
 }
@@ -135,7 +135,7 @@ void enable_blending(sg_pipeline_desc& descriptor) {
 }
 
 sg_swapchain swapchain() {
-    auto surface_size= Wayland::get_buffer_size();
+    auto surface_size = Wayland::get_buffer_size();
 
     sg_swapchain result{};
     result.width = surface_size[0];
@@ -154,7 +154,7 @@ Frame calculate_frame(
     float image_width,
     float image_height,
     bool resize
-) {
+    ) {
 
     Frame result{};
 
@@ -173,17 +173,21 @@ Frame calculate_frame(
 
     if (horizontal_align == Align::Left) {
         result.x = frame.x;
-    } else if (horizontal_align == Align::Center) {
+    }
+    else if (horizontal_align == Align::Center) {
         result.x = frame.x + (frame.width - result.width) / 2;
-    } else if (horizontal_align == Align::Right) {
+    }
+    else if (horizontal_align == Align::Right) {
         result.x = frame.x + frame.width - result.width;
     }
 
     if (vertical_align == Align::Left) {
         result.y = frame.y;
-    } else if (vertical_align == Align::Center) {
+    }
+    else if (vertical_align == Align::Center) {
         result.y = frame.y + (frame.height - result.height) / 2;
-    } else if (vertical_align == Align::Right) {
+    }
+    else if (vertical_align == Align::Right) {
         result.y = frame.y + frame.height - result.height;
     }
 
@@ -279,13 +283,14 @@ void Renderer::init() {
     // release mem
 
     glReleaseShaderCompiler();
-    #if defined(__GLIBC__)
-        static_cast<void>(malloc_trim(0));
-    #endif
+#if defined(__GLIBC__)
+    static_cast<void>(malloc_trim(0));
+#endif
 }
 
 void Renderer::shutdown() {
-    if (sg_isvalid()) sg_shutdown();
+    if (sg_isvalid())
+        sg_shutdown();
 }
 
 void Renderer::begin_frame() {
@@ -345,7 +350,7 @@ void Renderer::prepare_image(const ImageDesc& desc, Texture& texture) {
 }
 
 void Renderer::prepare_text(const TextDesc& desc, Texture& texture) {
-    Text::Bitmap bitmap = Text::draw(desc.text, desc.font,Wayland::get_scale());
+    Text::Bitmap bitmap = Text::draw(desc.text, desc.font, Wayland::get_scale());
     if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
         texture.reset();
         return;
@@ -355,7 +360,7 @@ void Renderer::prepare_text(const TextDesc& desc, Texture& texture) {
         Log::fatal("Text bitmap dimensions are too large");
     }
     texture.upload(static_cast<int>(bitmap.width), static_cast<int>(bitmap.height),
-                   Texture::Format::R8, bitmap.pixels);
+        Texture::Format::R8, bitmap.pixels);
 }
 
 void Renderer::draw_image(const ImageDesc& desc, const Texture& texture) {
@@ -365,7 +370,7 @@ void Renderer::draw_image(const ImageDesc& desc, const Texture& texture) {
     ImgVert vertices = image_vertices(calculate_frame(
         desc.frame, desc.horizontal_align, desc.vertical_align,
         texture.width(), texture.height(), true
-    ));
+        ));
     int offset = sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices));
     if (sg_query_buffer_overflow(image_vertex_buffer)) {
         Log::fatal("Image vertex buffer overflow");
@@ -398,7 +403,7 @@ void Renderer::draw_text(const TextDesc& desc, const Texture& texture) {
         desc.frame, desc.horizontal_align, desc.vertical_align,
         texture.width() / scale_x,
         texture.height() / scale_y, false
-    );
+        );
     new_frame.x = round(new_frame.x * scale_x) / scale_x;
     new_frame.y = round(new_frame.y * scale_y) / scale_y;
 
@@ -419,7 +424,7 @@ void Renderer::draw_text(const TextDesc& desc, const Texture& texture) {
     auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
     text_params_t params{};
-    array<float,4> color = desc.color.to_rgba();
+    array<float, 4> color = desc.color.to_rgba();
     copy(color.begin(), color.end(), params.color);
     sg_apply_uniforms(UB_text_params, SG_RANGE(params));
     sg_draw(0, 4, 1);

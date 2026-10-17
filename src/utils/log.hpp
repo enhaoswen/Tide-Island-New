@@ -35,7 +35,7 @@ namespace Log {
 enum LogLevel : char {
     Error,
     Warning,
-    Debug
+    Debug,
 };
 
 } // namespace Log
@@ -44,21 +44,11 @@ enum LogLevel : char {
 // [Internal Details]
 // ============================================================================
 
-namespace {
-
-inline constexpr auto RESET = "\033[0m";
-inline constexpr auto GREEN = "\033[32m";
-inline constexpr auto RED = "\033[31m";
-inline constexpr auto GRAY = "\033[90m";
-inline constexpr auto YELLOW = "\033[33m";
-
 #if defined(_DEBUG) || !defined(NDEBUG)
 inline constexpr bool is_debug_mode = true;
 #else
 inline constexpr bool is_debug_mode = false;
 #endif
-
-} // namespace
 
 // ============================================================================
 // [Public API Implementation]
@@ -66,6 +56,13 @@ inline constexpr bool is_debug_mode = false;
 
 
 namespace Log {
+
+inline constexpr auto RESET  = "\033[0m";
+inline constexpr auto GREEN  = "\033[32m";
+inline constexpr auto RED    = "\033[31m";
+inline constexpr auto GRAY   = "\033[90m";
+inline constexpr auto YELLOW = "\033[33m";
+
 
 inline void logger(LogLevel level, std::string_view msg) {
     if (level == LogLevel::Error) {
@@ -105,7 +102,7 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     std::array<std::string_view, sizeof...(Args)> msgs{
         std::string_view{std::forward<Args>(args)}...};
 
-    size_t msg_len = 0;
+    size_t msg_len     = 0;
     size_t total_lines = 0;
     for (const auto& s : msgs) {
         if (s.size() > msg_len)
@@ -114,7 +111,7 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     }
     msg_len = std::min<size_t>(msg_len, 80);
 
-    size_t border_bytes = 3 + (msg_len + 2) * 3 + 4;
+    size_t border_bytes  = 3 + (msg_len + 2) * 3 + 4;
     size_t content_bytes = total_lines * (4 + msg_len + 5);
 
     std::string out_msg;
@@ -129,11 +126,11 @@ inline void frame_logger(LogLevel level, Args&&... args) {
         size_t handled_char = 0;
         while (s.size() - handled_char > 80) {
             std::string_view line = s.substr(handled_char, 80);
-            out_msg += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
-            handled_char += 80;
+            out_msg               += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
+            handled_char          += 80;
         }
         std::string_view line = s.substr(handled_char);
-        out_msg += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
+        out_msg               += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
     }
 
     out_msg += "└";
@@ -160,16 +157,16 @@ std::string get_type_name() {
     else if constexpr (std::is_same_v<T, bool>) {
         return "bool";
     }
-    else if constexpr (std::is_same_v<T, std::vector<int>>) {
+    else if constexpr (std::is_same_v<T, std::vector<int> >) {
         return "list<int>";
     }
-    else if constexpr (std::is_same_v<T, std::vector<float>>) {
+    else if constexpr (std::is_same_v<T, std::vector<float> >) {
         return "list<float>";
     }
-    else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
+    else if constexpr (std::is_same_v<T, std::vector<std::string> >) {
         return "list<string>";
     }
-    else if constexpr (std::is_same_v<T, std::vector<bool>>) {
+    else if constexpr (std::is_same_v<T, std::vector<bool> >) {
         return "list<bool>";
     }
     else if constexpr (std::is_same_v<T, Color>) {

@@ -22,7 +22,7 @@ struct Frame {
     float x, y, width, height;
 };
 
-enum struct Align : char{
+enum struct Align : char {
     Left,
     Center,
     Right
@@ -41,20 +41,20 @@ enum struct AnimationTarget : char {
 };
 
 struct AnimationDesc {
-    float to{};
-    float priority{};
+    float                     to{};
+    float                     priority{};
     std::chrono::milliseconds duration;
-    AnimationTarget target;
+    AnimationTarget           target;
 };
 
 struct Animation {
-    float from{};
-    float to{};
-    float* target_ptr{};
-    AnimationTarget target{};
-    float priority{};
-    std::chrono::milliseconds duration;
-    std::chrono::system_clock::time_point start_time;
+    float                                 from{};
+    float                                 to{};
+    float*                                target_ptr{};
+    AnimationTarget                       target{};
+    float                                 priority{};
+    std::chrono::milliseconds             duration;
+    std::chrono::steady_clock::time_point start_time;
 };
 
 struct FontHandle {
@@ -62,36 +62,41 @@ struct FontHandle {
 };
 
 struct RectDesc {
-    Frame frame{};
-    float radius{};
-    Color color{};
+    Frame                  frame{};
+    float                  radius{};
+    Color                  color{};
     std::vector<Animation> animations{};
-    void (*click_callback_left) () = nullptr;
-    void (*click_callback_right) () = nullptr;
+
+    void (*click_callback_left)() = nullptr;
+
+    void (*click_callback_right)() = nullptr;
 };
 
 struct ImageDesc {
-    Frame frame{};
-    float radius{};
-    std::string path;
-    Align horizontal_align;
-    Align vertical_align;
+    Frame                  frame{};
+    float                  radius{};
+    std::string            path;
+    Align                  horizontal_align;
+    Align                  vertical_align;
     std::vector<Animation> animations{};
-    void (*click_callback_left) () = nullptr;
-    void (*click_callback_right) () = nullptr;
+
+    void (*click_callback_left)() = nullptr;
+
+    void (*click_callback_right)() = nullptr;
 };
 
 struct TextDesc {
-    Frame frame{};
-    std::string text;
-    FontHandle font;
-    Color color;
-    Align horizontal_align;
-    Align vertical_align;
+    Frame                  frame{};
+    std::string            text;
+    FontHandle             font;
+    Color                  color;
+    Align                  horizontal_align;
+    Align                  vertical_align;
     std::vector<Animation> animations{};
 
-    void (*click_callback_left) () = nullptr;
-    void (*click_callback_right) () = nullptr;
+    void (*click_callback_left)() = nullptr;
+
+    void (*click_callback_right)() = nullptr;
 };
 
 // About Priority
@@ -102,15 +107,15 @@ struct TextDesc {
 
 struct Event {
     std::chrono::steady_clock::time_point deadline;
-    void (*callback)();
-    float priority;
+    void (*callback)(){};
+    float priority{};
 };
 
 struct IslandConf {
     float island_width{};
     float island_height{};
-    int zone{-1};
-    int anchor_top{};
+    int   zone{-1};
+    int   anchor_top{};
     float radius{};
     float current_priority{};
     Color color;
@@ -122,5 +127,5 @@ struct IslandConf {
 
 struct Font {
     std::string path;
-    size_t size;
+    size_t      size;
 };

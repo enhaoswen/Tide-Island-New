@@ -17,8 +17,12 @@ requires requires { {obj.frame} -> std::same_as<const Frame&>; } {
     return obj.frame;
 }
 
-inline Frame get_frame(const Object::ItemBase& obj) { return obj.frame(); }
-inline Frame get_frame(const Object::ItemBase* obj) { return obj->frame(); }
+inline Frame get_frame(const Object::Rectangle& obj) { return obj.frame(); }
+inline Frame get_frame(const Object::Rectangle* obj) { return obj->frame(); }
+inline Frame get_frame(const Object::Image& obj) { return obj.frame(); }
+inline Frame get_frame(const Object::Image* obj) { return obj->frame(); }
+inline Frame get_frame(const Object::Text& obj) { return obj.frame(); }
+inline Frame get_frame(const Object::Text* obj) { return obj->frame(); }
 
 template <typename T>
 void set_frame(T& obj, const Frame& frame)
@@ -26,8 +30,12 @@ requires requires { {obj.frame} -> std::same_as<Frame&>; } {
     obj.frame = frame;
 }
 
-inline void set_frame(Object::ItemBase& obj, const Frame& frame) { obj.set_frame(frame); }
-inline void set_frame(Object::ItemBase* obj, const Frame& frame) { obj->set_frame(frame); }
+inline void set_frame(Object::Rectangle& obj, const Frame& frame) { obj.set_frame(frame); }
+inline void set_frame(Object::Rectangle* obj, const Frame& frame) { obj->set_frame(frame); }
+inline void set_frame(Object::Image& obj, const Frame& frame) { obj.set_frame(frame); }
+inline void set_frame(Object::Image* obj, const Frame& frame) { obj->set_frame(frame); }
+inline void set_frame(Object::Text& obj, const Frame& frame) { obj.set_frame(frame); }
+inline void set_frame(Object::Text* obj, const Frame& frame) { obj->set_frame(frame); }
 
 template <typename T>
 bool valid_object(const T& obj) {
