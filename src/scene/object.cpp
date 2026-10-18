@@ -20,7 +20,10 @@ namespace {
 using SceneObject = variant<
     unique_ptr<Object::Rectangle>,
     unique_ptr<Object::Image>,
-    unique_ptr<Object::Text> >;
+    unique_ptr<Object::Text>,
+    unique_ptr<Object::ClickableRect>,
+    unique_ptr<Object::ClickableImage>,
+    unique_ptr<Object::ClickableText> >;
 vector<SceneObject> objects;
 
 float* animation_target(Frame& frame, float* radius, Color* color, AnimationTarget target) {
@@ -135,6 +138,14 @@ bool click_object(const Frame& frame, float radius, const ClickCallback& callbac
 
 } // namespace
 
+void Object::DontUse::ClickableItem::set_callback_left(ClickCallback left) {
+    callback_left = std::move(left);
+}
+
+void Object::DontUse::ClickableItem::set_callback_right(ClickCallback right) {
+    callback_right = std::move(right);
+}
+
 Object::Rectangle::Rectangle(const RectDesc& arg_desc) : desc(arg_desc) {
     desc.animations.clear();
 }
@@ -152,6 +163,8 @@ void Object::Rectangle::set_desc(const RectDesc& arg_desc) {
     Island::request_redraw(true);
 }
 
+float Object::Rectangle::radius() const { return desc.radius; }
+
 void Object::Rectangle::set_radius(float radius) {
     desc.radius = radius;
     Island::request_redraw(true);
@@ -162,21 +175,8 @@ void Object::Rectangle::set_color(const Color& color) {
     Island::request_redraw(true);
 }
 
-void Object::Rectangle::set_click_callback_left(ClickCallback left) {
-    desc.click_callback_left = std::move(left);
-}
-
-void Object::Rectangle::set_click_callback_right(ClickCallback right) {
-    desc.click_callback_right = std::move(right);
-}
-
 void Object::Rectangle::add_animation(AnimationDesc anim_desc, source_location location) {
     start_animation(desc.animations, desc.frame, &desc.radius, &desc.color, anim_desc, location);
-}
-
-bool Object::Rectangle::click(float x, float y, bool left) {
-    return click_object(desc.frame, desc.radius,
-        left ? desc.click_callback_left : desc.click_callback_right, x, y);
 }
 
 void Object::Rectangle::update() {
@@ -207,6 +207,8 @@ void Object::Image::set_desc(const ImageDesc& arg_desc) {
     Island::request_redraw(true);
 }
 
+float Object::Image::radius() const { return desc.radius; }
+
 void Object::Image::set_radius(float radius) {
     desc.radius = radius;
     Island::request_redraw(true);
@@ -225,21 +227,8 @@ void Object::Image::reload() {
     Island::request_redraw(true);
 }
 
-void Object::Image::set_click_callback_left(ClickCallback left) {
-    desc.click_callback_left = std::move(left);
-}
-
-void Object::Image::set_click_callback_right(ClickCallback right) {
-    desc.click_callback_right = std::move(right);
-}
-
 void Object::Image::add_animation(AnimationDesc anim_desc, source_location location) {
     start_animation(desc.animations, desc.frame, &desc.radius, nullptr, anim_desc, location);
-}
-
-bool Object::Image::click(float x, float y, bool left) {
-    return click_object(desc.frame, desc.radius,
-        left ? desc.click_callback_left : desc.click_callback_right, x, y);
 }
 
 void Object::Image::update() {
@@ -298,21 +287,8 @@ void Object::Text::set_font(FontHandle font) {
     Island::request_redraw(true);
 }
 
-void Object::Text::set_click_callback_left(ClickCallback left) {
-    desc.click_callback_left = std::move(left);
-}
-
-void Object::Text::set_click_callback_right(ClickCallback right) {
-    desc.click_callback_right = std::move(right);
-}
-
 void Object::Text::add_animation(AnimationDesc anim_desc, source_location location) {
     start_animation(desc.animations, desc.frame, nullptr, &desc.color, anim_desc, location);
-}
-
-bool Object::Text::click(float x, float y, bool left) {
-    return click_object(desc.frame, 0.0f,
-        left ? desc.click_callback_left : desc.click_callback_right, x, y);
 }
 
 void Object::Text::update() {
@@ -327,6 +303,18 @@ void Object::Text::draw() {
         texture_scale = scale;
     }
     Renderer::draw_text(desc, texture);
+}
+
+bool Object::ClickableRect::click(float x, float y, bool left) {
+    return click_object(frame(), radius(), left ? callback_left : callback_right, x, y);
+}
+
+bool Object::ClickableImage::click(float x, float y, bool left) {
+    return click_object(frame(), radius(), left ? callback_left : callback_right, x, y);
+}
+
+bool Object::ClickableText::click(float x, float y, bool left) {
+    return click_object(frame(), 0.0f, left ? callback_left : callback_right, x, y);
 }
 
 Object::Rectangle* Object::add_rectangle(const RectDesc& desc) {
@@ -353,9 +341,40 @@ Object::Text* Object::add_text(const TextDesc& desc) {
     return handle;
 }
 
+Object::ClickableRect* Object::add_clickable_rect(const RectDesc& desc) {
+    auto  object = make_unique<ClickableRect>(desc);
+    auto* handle = object.get();
+    objects.emplace_back(std::move(object));
+    Island::request_redraw(true);
+    return handle;
+}
+
+Object::ClickableImage* Object::add_clickable_image(const ImageDesc& desc) {
+    auto  object = make_unique<ClickableImage>(desc);
+    auto* handle = object.get();
+    objects.emplace_back(std::move(object));
+    Island::request_redraw(true);
+    return handle;
+}
+
+Object::ClickableText* Object::add_clickable_text(const TextDesc& desc) {
+    auto  object = make_unique<ClickableText>(desc);
+    auto* handle = object.get();
+    objects.emplace_back(std::move(object));
+    Island::request_redraw(true);
+    return handle;
+}
+
 void Object::click(float x, float y, bool left) {
     for (auto& object : views::reverse(objects)) {
-        if (visit([=](const auto& item) { return item->click(x, y, left); }, object)) {
+        if (visit([=](const auto& item) {
+            if constexpr (requires { item->click(x, y, left); }) {
+                return item->click(x, y, left);
+            }
+            else {
+                return false;
+            }
+        }, object)) {
             return;
         }
     }

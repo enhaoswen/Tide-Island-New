@@ -116,8 +116,7 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     size_t msg_len     = 0;
     size_t total_lines = 0;
     for (const auto& s : msgs) {
-        if (s.size() > msg_len)
-            msg_len = s.size();
+        msg_len = std::max(s.size(), msg_len);
         total_lines += s.empty() ? 1 : (s.size() + 79) / 80;
     }
     msg_len = std::min<size_t>(msg_len, 80);
@@ -186,6 +185,7 @@ std::string get_type_name() {
     else {
         return typeid(T).name();
     }
+
 }
 
 } // namespace Log

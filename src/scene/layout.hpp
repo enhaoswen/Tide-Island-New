@@ -9,34 +9,17 @@
 
 namespace Layout::DontUse {
 
-// Accept descriptors, objects, and object pointers. Sizes stay unchanged.
-// For y_align, Left means top and Right means bottom.
 template <typename T>
 Frame get_frame(const T& obj)
-requires requires { {obj.frame} -> std::same_as<const Frame&>; } {
+    requires requires { { obj.frame } -> std::same_as<const Frame&>; } {
     return obj.frame;
 }
 
-inline Frame get_frame(const Object::Rectangle& obj) { return obj.frame(); }
-inline Frame get_frame(const Object::Rectangle* obj) { return obj->frame(); }
-inline Frame get_frame(const Object::Image& obj) { return obj.frame(); }
-inline Frame get_frame(const Object::Image* obj) { return obj->frame(); }
-inline Frame get_frame(const Object::Text& obj) { return obj.frame(); }
-inline Frame get_frame(const Object::Text* obj) { return obj->frame(); }
-
 template <typename T>
 void set_frame(T& obj, const Frame& frame)
-requires requires { {obj.frame} -> std::same_as<Frame&>; } {
+    requires requires { { obj.frame } -> std::same_as<Frame&>; } {
     obj.frame = frame;
 }
-
-inline void set_frame(Object::Rectangle& obj, const Frame& frame) { obj.set_frame(frame); }
-inline void set_frame(Object::Rectangle* obj, const Frame& frame) { obj->set_frame(frame); }
-inline void set_frame(Object::Image& obj, const Frame& frame) { obj.set_frame(frame); }
-inline void set_frame(Object::Image* obj, const Frame& frame) { obj->set_frame(frame); }
-inline void set_frame(Object::Text& obj, const Frame& frame) { obj.set_frame(frame); }
-inline void set_frame(Object::Text* obj, const Frame& frame) { obj->set_frame(frame); }
-
 template <typename T>
 bool valid_object(const T& obj) {
     if constexpr (std::is_pointer_v<T>) {
@@ -45,19 +28,21 @@ bool valid_object(const T& obj) {
     else {
         return true;
     }
+
 }
 
 template <typename... Objs>
 void calculate_horizontal_layout(
     std::source_location location,
-    Frame parent_frame,
-    Align x_align,
-    Align y_align,
-    float spacing,
-    Objs&&... objs
-) requires (
-    requires(Objs& obj, Frame frame) {
-        {get_frame(obj)} -> std::same_as<Frame>;
+    Frame                parent_frame,
+    Align                x_align,
+    Align                y_align,
+    float                spacing,
+    Objs&&...            objs
+    ) requires (
+    requires(Objs& obj, Frame frame)
+    {
+        { get_frame(obj) } -> std::same_as<Frame>;
         set_frame(obj, frame);
     } && ...
 ) {
@@ -67,7 +52,7 @@ void calculate_horizontal_layout(
             "{}:{}: No objects provided for layout calculation",
             location.file_name(),
             location.line()
-        );
+            );
     }
     else {
         if (!(valid_object(objs) && ...)) {
@@ -75,7 +60,7 @@ void calculate_horizontal_layout(
                 Log::Error,
                 "{}:{}: Layout object is null",
                 location.file_name(), location.line()
-            );
+                );
             return;
         }
 
@@ -92,8 +77,8 @@ void calculate_horizontal_layout(
 
         auto place = [&](auto& obj) {
             Frame frame = get_frame(obj);
-            frame.x = x;
-            frame.y = parent_frame.y;
+            frame.x     = x;
+            frame.y     = parent_frame.y;
 
             if (y_align == Align::Center) {
                 frame.y += (parent_frame.height - frame.height) / 2;
@@ -117,26 +102,27 @@ void calculate_horizontal_layout(
     Align,
     float,
     Objs&&...
-) {
+    ) {
     Log::logger(
         Log::Error,
         "{}:{}: Not supported object",
         location.file_name(),
         location.line()
-    );
+        );
 }
 
 template <typename... Objs>
 void calculate_vertical_layout(
     std::source_location location,
-    Frame parent_frame,
-    Align x_align,
-    Align y_align,
-    float spacing,
-    Objs&&... objs
-) requires (
-    requires(Objs& obj, Frame frame) {
-        {get_frame(obj)} -> std::same_as<Frame>;
+    Frame                parent_frame,
+    Align                x_align,
+    Align                y_align,
+    float                spacing,
+    Objs&&...            objs
+    ) requires (
+    requires(Objs& obj, Frame frame)
+    {
+        { get_frame(obj) } -> std::same_as<Frame>;
         set_frame(obj, frame);
     } && ...
 ) {
@@ -146,7 +132,7 @@ void calculate_vertical_layout(
             "{}:{}: No objects provided for layout calculation",
             location.file_name(),
             location.line()
-        );
+            );
     }
     else {
         if (!(valid_object(objs) && ...)) {
@@ -154,7 +140,7 @@ void calculate_vertical_layout(
                 Log::Error,
                 "{}:{}: Layout object is null",
                 location.file_name(), location.line()
-            );
+                );
             return;
         }
 
@@ -171,8 +157,8 @@ void calculate_vertical_layout(
 
         auto place = [&](auto& obj) {
             Frame frame = get_frame(obj);
-            frame.y = y;
-            frame.x = parent_frame.x;
+            frame.y     = y;
+            frame.x     = parent_frame.x;
 
             if (x_align == Align::Center) {
                 frame.x += (parent_frame.width - frame.width) / 2;
@@ -196,13 +182,13 @@ void calculate_vertical_layout(
     Align,
     float,
     Objs&&...
-) {
+    ) {
     Log::logger(
         Log::Error,
         "{}:{}: Not supported object",
         location.file_name(),
         location.line()
-    );
+        );
 }
 
 } // namespace Layout::DontUse

@@ -19,6 +19,9 @@
 
 // width and height must be float, because we need to support animation, 
 // and the value might be float during animation
+
+using ClickCallback = std::function<void()>;
+
 struct Frame {
     float x, y, width, height;
 };
@@ -26,7 +29,7 @@ struct Frame {
 enum struct Align : char {
     Left,
     Center,
-    Right
+    Right,
 };
 
 enum struct AnimationTarget : char {
@@ -62,30 +65,21 @@ struct FontHandle {
     std::uint64_t id{};
 };
 
-using ClickCallback = std::function<void()>;
 
 struct RectDesc {
     Frame                  frame{};
     float                  radius{};
     Color                  color{};
     std::vector<Animation> animations{};
-
-    ClickCallback click_callback_left{};
-
-    ClickCallback click_callback_right{};
 };
 
 struct ImageDesc {
     Frame                  frame{};
     float                  radius{};
     std::string            path;
+    std::vector<Animation> animations{};
     Align                  horizontal_align;
     Align                  vertical_align;
-    std::vector<Animation> animations{};
-
-    ClickCallback click_callback_left{};
-
-    ClickCallback click_callback_right{};
 };
 
 struct TextDesc {
@@ -96,10 +90,6 @@ struct TextDesc {
     Align                  horizontal_align;
     Align                  vertical_align;
     std::vector<Animation> animations{};
-
-    ClickCallback click_callback_left{};
-
-    ClickCallback click_callback_right{};
 };
 
 // About Priority
@@ -125,11 +115,9 @@ struct IslandConf {
     float radius{};
     float current_priority{};
     Color color;
-
-    bool need_redraw{true};
-    bool is_running{true};
+    bool  need_redraw{true};
+    bool  is_running{true};
 };
-
 
 struct Font {
     std::string path;
