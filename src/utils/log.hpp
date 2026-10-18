@@ -99,8 +99,19 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     if constexpr (sizeof...(Args) == 0)
         return;
 
-    std::array<std::string_view, sizeof...(Args)> msgs{
+    std::array<std::string_view, sizeof...(Args)> raw_msgs{
         std::string_view{std::forward<Args>(args)}...};
+
+    std::vector<std::string_view> msgs;
+    for (auto s : raw_msgs) {
+        do {
+            const auto pos = s.find('\n');
+            msgs.push_back(s.substr(0, pos));
+            if (pos == std::string_view::npos)
+                break;
+            s.remove_prefix(pos + 1);
+        } while (!s.empty());
+    }
 
     size_t msg_len     = 0;
     size_t total_lines = 0;

@@ -71,6 +71,7 @@ void start_animation(
     vector<Animation>& animations, Frame&         frame, float* radius, Color* color,
     AnimationDesc      anim_desc, source_location location
     ) {
+
     float* target = animation_target(frame, radius, color, anim_desc.target);
     if (!target) {
         Log::logger(
@@ -80,7 +81,6 @@ void start_animation(
         return;
     }
 
-    // Sample once so an interruption starts exactly where the old animation is.
     const auto now = steady_clock::now();
     if (!animations.empty()) {
         advance_animations(animations, now);
@@ -100,7 +100,7 @@ void start_animation(
         .duration   = anim_desc.duration,
         .start_time = now,
     };
-    // Replacing the record cancels it permanently; equal priority favors the new request.
+
     if (existing != animations.end()) {
         *existing = animation;
     }
@@ -118,7 +118,7 @@ void update_animations(vector<Animation>& animations) {
     Island::request_redraw(true);
 }
 
-bool click_object(const Frame& frame, float radius, void (*callback)(), float x, float y) {
+bool click_object(const Frame& frame, float radius, const ClickCallback& callback, float x, float y) {
     if (x < frame.x || x > frame.x + frame.width ||
         y < frame.y || y > frame.y + frame.height) {
         return false;
@@ -162,12 +162,12 @@ void Object::Rectangle::set_color(const Color& color) {
     Island::request_redraw(true);
 }
 
-void Object::Rectangle::set_click_callback_left(void (*left)()) {
-    desc.click_callback_left = left;
+void Object::Rectangle::set_click_callback_left(ClickCallback left) {
+    desc.click_callback_left = std::move(left);
 }
 
-void Object::Rectangle::set_click_callback_right(void (*right)()) {
-    desc.click_callback_right = right;
+void Object::Rectangle::set_click_callback_right(ClickCallback right) {
+    desc.click_callback_right = std::move(right);
 }
 
 void Object::Rectangle::add_animation(AnimationDesc anim_desc, source_location location) {
@@ -225,12 +225,12 @@ void Object::Image::reload() {
     Island::request_redraw(true);
 }
 
-void Object::Image::set_click_callback_left(void (*left)()) {
-    desc.click_callback_left = left;
+void Object::Image::set_click_callback_left(ClickCallback left) {
+    desc.click_callback_left = std::move(left);
 }
 
-void Object::Image::set_click_callback_right(void (*right)()) {
-    desc.click_callback_right = right;
+void Object::Image::set_click_callback_right(ClickCallback right) {
+    desc.click_callback_right = std::move(right);
 }
 
 void Object::Image::add_animation(AnimationDesc anim_desc, source_location location) {
@@ -298,12 +298,12 @@ void Object::Text::set_font(FontHandle font) {
     Island::request_redraw(true);
 }
 
-void Object::Text::set_click_callback_left(void (*left)()) {
-    desc.click_callback_left = left;
+void Object::Text::set_click_callback_left(ClickCallback left) {
+    desc.click_callback_left = std::move(left);
 }
 
-void Object::Text::set_click_callback_right(void (*right)()) {
-    desc.click_callback_right = right;
+void Object::Text::set_click_callback_right(ClickCallback right) {
+    desc.click_callback_right = std::move(right);
 }
 
 void Object::Text::add_animation(AnimationDesc anim_desc, source_location location) {

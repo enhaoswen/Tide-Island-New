@@ -164,3 +164,7 @@ void Island::set_size(int width, int height) {
 void Island::request_redraw(bool redraw) {
     island.need_redraw = redraw;
 }
+
+void Island::set_animation_scale(float scale) {
+    island.animation_scale = scale;
+}

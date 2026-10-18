@@ -38,6 +38,8 @@ set(SRC
     third_party/wayland/xdg-shell-client-protocol.c
     third_party/wayland/fractional-scale-v1-protocol.c
     third_party/wayland/viewporter-protocol.c
+        src/backend/command.cpp
+        src/backend/command.hpp
 )
 
 add_executable(Tide-island ${SRC})

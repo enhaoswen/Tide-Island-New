@@ -3,9 +3,11 @@
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 #include "app/island.hpp"
+#include "command.hpp"
 
 #include <chrono>
 #include <cstring>
+#include <iostream>
 #include <queue>
 #include <poll.h>
 #include <sys/timerfd.h>
@@ -18,13 +20,14 @@ namespace {
 
 int timer_fd{-1};
 int wayland_fd{-1};
+
 const IslandConf* state{};
 
 struct LaterDeadline {
     bool operator()(
         const Event& left,
         const Event& right
-    ) const noexcept {
+        ) const noexcept {
         return left.deadline > right.deadline;
     }
 };
@@ -32,10 +35,10 @@ struct LaterDeadline {
 priority_queue<Event, vector<Event>, LaterDeadline> timer_queue;
 
 void set_timer_at(steady_clock::time_point deadline) {
-    const duration since_epoch = deadline.time_since_epoch();
-    const duration seconds_part = duration_cast<seconds>(since_epoch);
-    const auto nanoseconds_part = duration_cast<nanoseconds>(since_epoch - seconds_part);
-    itimerspec spec{};
+    const duration since_epoch      = deadline.time_since_epoch();
+    const duration seconds_part     = duration_cast<seconds>(since_epoch);
+    const auto     nanoseconds_part = duration_cast<nanoseconds>(since_epoch - seconds_part);
+    itimerspec     spec{};
 
     spec.it_value.tv_sec = static_cast<time_t>(seconds_part.count());
 
@@ -47,7 +50,7 @@ void set_timer_at(steady_clock::time_point deadline) {
         TFD_TIMER_ABSTIME,
         &spec,
         nullptr
-    ) == -1) {
+        ) == -1) {
         Log::fatal("timerfd_settime failed");
     }
 }
@@ -69,26 +72,26 @@ void pop(source_location location = std::source_location::current()) {
 } // namespace
 
 void Timer::push(
-    microseconds duration,
-    void (*callback)(),
-    float priority,
+    microseconds    duration,
+    void (*         callback)(),
+    float           priority,
     source_location location
-) {
+    ) {
     if (timer_fd == -1) {
         Log::fatal("Timer is not initialized");
     }
     if (!callback) {
         Log::logger(
             Log::Error,
-            "{}:{}: Timer callback is null", 
-            location.file_name(), 
+            "{}:{}: Timer callback is null",
+            location.file_name(),
             location.line()
-        );
-        
+            );
+
     }
 
-    const steady_clock::time_point next_deadline = steady_clock::now() + duration;
-    const bool becomes_earliest = timer_queue.empty() || next_deadline < timer_queue.top().deadline;
+    const steady_clock::time_point next_deadline    = steady_clock::now() + duration;
+    const bool                     becomes_earliest = timer_queue.empty() || next_deadline < timer_queue.top().deadline;
 
     if (becomes_earliest) {
         set_timer_at(next_deadline);
@@ -98,7 +101,7 @@ void Timer::push(
 }
 
 void Timer::init() {
-    state = &Island::state();
+    state    = &Island::state();
     timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
 
     if (timer_fd == -1) {
@@ -124,7 +127,7 @@ void Timer::handle_events(std::source_location location) {
         timer_fd,
         &expiration_count,
         sizeof(expiration_count)
-    );
+        );
 
     if (result != sizeof(expiration_count)) {
         Log::fatal("timerfd read failed");
@@ -146,13 +149,18 @@ bool Timer::wait() {
 
     pollfd fds[] = {
         {
-            .fd = wayland_fd,
-            .events = wayland_events,
+            .fd      = wayland_fd,
+            .events  = wayland_events,
             .revents = 0,
         },
         {
-            .fd = timer_fd,
-            .events = POLLIN,
+            .fd      = timer_fd,
+            .events  = POLLIN,
+            .revents = 0,
+        },
+        {
+            .fd      = STDIN_FILENO,
+            .events  = POLLIN,
             .revents = 0,
         },
     };
@@ -160,7 +168,7 @@ bool Timer::wait() {
     int result{};
 
     do {
-        result = poll(fds, 2, -1);
+        result = poll(fds, 3, -1);
     } while (result == -1 && errno == EINTR);
 
     if (result == -1) {
@@ -174,12 +182,18 @@ bool Timer::wait() {
         Log::fatal(
             "Timer fd poll error: {}",
             fds[1].revents
-        );
+            );
     }
 
     if (fds[1].revents & POLLIN) {
         handle_events();
         return true;
+    }
+
+    if (fds[2].revents & POLLIN) {
+        string cmd;
+        getline(cin, cmd);
+        Command::handle_command(cmd);
     }
 
     return Wayland::get_wayland_redraw();

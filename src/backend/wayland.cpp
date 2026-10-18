@@ -46,19 +46,19 @@ struct DeleteWayland {
     }
 };
 
-unique_ptr<wl_display, DeleteWayland<wl_display_disconnect>> display{nullptr};
-unique_ptr<wl_registry, DeleteWayland<wl_registry_destroy>> registry{nullptr};
-unique_ptr<wl_compositor, DeleteWayland<wl_compositor_destroy>> compositor{nullptr};
-unique_ptr<zwlr_layer_shell_v1, DeleteWayland<zwlr_layer_shell_v1_destroy>> layer_shell{nullptr};
-unique_ptr<wp_fractional_scale_manager_v1, DeleteWayland<wp_fractional_scale_manager_v1_destroy>> fractional_scale_manager{nullptr};
-unique_ptr<wp_viewporter, DeleteWayland<wp_viewporter_destroy>> viewporter{nullptr};
-unique_ptr<wl_surface, DeleteWayland<wl_surface_destroy>> surface{nullptr};
-unique_ptr<wp_fractional_scale_v1, DeleteWayland<wp_fractional_scale_v1_destroy>> fractional_scale{nullptr};
-unique_ptr<wp_viewport, DeleteWayland<wp_viewport_destroy>> viewport{nullptr};
-unique_ptr<zwlr_layer_surface_v1, DeleteWayland<zwlr_layer_surface_v1_destroy>> layer_surface{nullptr};
-unique_ptr<wl_egl_window, DeleteWayland<wl_egl_window_destroy>> egl_window{nullptr};
-unique_ptr<wl_seat, DeleteWayland<wl_seat_release>> seat{nullptr};
-unique_ptr<wl_pointer, DeleteWayland<wl_pointer_release>> pointer{nullptr};
+unique_ptr<wl_display, DeleteWayland<wl_display_disconnect> >                                      display{nullptr};
+unique_ptr<wl_registry, DeleteWayland<wl_registry_destroy> >                                       registry{nullptr};
+unique_ptr<wl_compositor, DeleteWayland<wl_compositor_destroy> >                                   compositor{nullptr};
+unique_ptr<zwlr_layer_shell_v1, DeleteWayland<zwlr_layer_shell_v1_destroy> >                       layer_shell{nullptr};
+unique_ptr<wp_fractional_scale_manager_v1, DeleteWayland<wp_fractional_scale_manager_v1_destroy> > fractional_scale_manager{nullptr};
+unique_ptr<wp_viewporter, DeleteWayland<wp_viewporter_destroy> >                                   viewporter{nullptr};
+unique_ptr<wl_surface, DeleteWayland<wl_surface_destroy> >                                         surface{nullptr};
+unique_ptr<wp_fractional_scale_v1, DeleteWayland<wp_fractional_scale_v1_destroy> >                 fractional_scale{nullptr};
+unique_ptr<wp_viewport, DeleteWayland<wp_viewport_destroy> >                                       viewport{nullptr};
+unique_ptr<zwlr_layer_surface_v1, DeleteWayland<zwlr_layer_surface_v1_destroy> >                   layer_surface{nullptr};
+unique_ptr<wl_egl_window, DeleteWayland<wl_egl_window_destroy> >                                   egl_window{nullptr};
+unique_ptr<wl_seat, DeleteWayland<wl_seat_release> >                                               seat{nullptr};
+unique_ptr<wl_pointer, DeleteWayland<wl_pointer_release> >                                         pointer{nullptr};
 
 EGLDisplay egl_display{EGL_NO_DISPLAY};
 EGLConfig  egl_config{};
@@ -69,15 +69,15 @@ uint32_t current_width{};
 uint32_t current_height{};
 uint32_t requested_width{};
 uint32_t requested_height{};
-int buffer_width{};
-int buffer_height{};
-bool surface_configured{false};
-float surface_scale{1.0f};
+int      buffer_width{};
+int      buffer_height{};
+bool     surface_configured{false};
+float    surface_scale{1.0f};
 
 float pointer_x{};
 float pointer_y{};
-bool pointer_inside{};
-bool wayland_needs_redraw{false};
+bool  pointer_inside{};
+bool  wayland_needs_redraw{false};
 
 int wayland_fd{-1};
 
@@ -90,16 +90,16 @@ void pointer_enter(
     wl_pointer*,
     uint32_t,
     wl_surface* entered_surface,
-    wl_fixed_t surface_x,
-    wl_fixed_t surface_y
-) {
+    wl_fixed_t  surface_x,
+    wl_fixed_t  surface_y
+    ) {
     if (entered_surface != surface.get()) {
         return;
     }
 
     pointer_inside = true;
-    pointer_x = static_cast<float>(wl_fixed_to_double(surface_x));
-    pointer_y = static_cast<float>(wl_fixed_to_double(surface_y));
+    pointer_x      = static_cast<float>(wl_fixed_to_double(surface_x));
+    pointer_y      = static_cast<float>(wl_fixed_to_double(surface_y));
 
 }
 
@@ -108,7 +108,7 @@ void pointer_leave(
     wl_pointer*,
     uint32_t,
     wl_surface* left_surface
-) {
+    ) {
     if (left_surface == surface.get()) {
         pointer_inside = false;
     }
@@ -120,7 +120,7 @@ void pointer_motion(
     uint32_t,
     wl_fixed_t surface_x,
     wl_fixed_t surface_y
-) {
+    ) {
     pointer_x = static_cast<float>(wl_fixed_to_double(surface_x));
     pointer_y = static_cast<float>(wl_fixed_to_double(surface_y));
 }
@@ -132,9 +132,10 @@ void pointer_button(
     uint32_t,
     uint32_t button,
     uint32_t state
-) { 
-    if (report_click == nullptr) Log::fatal("Func report_click is not initilized");
-    if (state == WL_POINTER_BUTTON_STATE_PRESSED){
+    ) {
+    if (report_click == nullptr)
+        Log::fatal("Func report_click is not initilized");
+    if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
         if (button == BTN_LEFT && report_click) {
             report_click(pointer_x, pointer_y, true);
         }
@@ -142,7 +143,7 @@ void pointer_button(
         else if (button == BTN_RIGHT && report_click) {
             report_click(pointer_x, pointer_y, false);
         }
-   }
+    }
 }
 
 void pointer_axis(
@@ -150,8 +151,7 @@ void pointer_axis(
     wl_pointer*,
     uint32_t,
     uint32_t,
-    wl_fixed_t
-) {
+    wl_fixed_t) {
 }
 
 void pointer_frame(void*, wl_pointer*) {
@@ -167,16 +167,16 @@ void pointer_axis_discrete(void*, wl_pointer*, uint32_t, int32_t) {
 }
 
 const wl_pointer_listener pointer_listener{
-    .enter = pointer_enter,
-    .leave = pointer_leave,
-    .motion = pointer_motion,
-    .button = pointer_button,
-    .axis = pointer_axis,
-    .frame = pointer_frame,
-    .axis_source = pointer_axis_source,
-    .axis_stop = pointer_axis_stop,
-    .axis_discrete = pointer_axis_discrete,
-    .axis_value120 = nullptr,
+    .enter                   = pointer_enter,
+    .leave                   = pointer_leave,
+    .motion                  = pointer_motion,
+    .button                  = pointer_button,
+    .axis                    = pointer_axis,
+    .frame                   = pointer_frame,
+    .axis_source             = pointer_axis_source,
+    .axis_stop               = pointer_axis_stop,
+    .axis_discrete           = pointer_axis_discrete,
+    .axis_value120           = nullptr,
     .axis_relative_direction = nullptr,
 };
 
@@ -184,7 +184,7 @@ void seat_capabilities(
     void*,
     wl_seat* current_seat,
     uint32_t capabilities
-) {
+    ) {
     const bool has_pointer =
         capabilities & WL_SEAT_CAPABILITY_POINTER;
 
@@ -196,12 +196,13 @@ void seat_capabilities(
         }
 
         if (wl_pointer_add_listener(
-                pointer.get(),
-                &pointer_listener,
-                nullptr) == -1) {
+            pointer.get(),
+            &pointer_listener,
+            nullptr) == -1) {
             Log::fatal("Failed to add Wayland pointer listener");
         }
-    } else if (!has_pointer && pointer) {
+    }
+    else if (!has_pointer && pointer) {
         pointer.reset();
         pointer_inside = false;
     }
@@ -211,21 +212,21 @@ void seat_name(
     void*,
     wl_seat*,
     const char*
-) {
+    ) {
 }
 
 wl_seat_listener seat_listener = {
     .capabilities = seat_capabilities,
-    .name = seat_name,
+    .name         = seat_name,
 };
 
 void registry_global(
     void*,
     wl_registry* registry,
-    uint32_t name,
-    const char* interface,
-    uint32_t version
-) {
+    uint32_t     name,
+    const char*  interface,
+    uint32_t     version
+    ) {
     string_view interface_name{interface};
 
     if (interface_name == wl_compositor_interface.name) {
@@ -235,7 +236,7 @@ void registry_global(
                 name,
                 &wl_compositor_interface,
                 min(version, 4u)
-            )
+                )
         ));
     }
     else if (interface_name == zwlr_layer_shell_v1_interface.name) {
@@ -245,7 +246,7 @@ void registry_global(
                 name,
                 &zwlr_layer_shell_v1_interface,
                 min(version, 4u)
-            )
+                )
         ));
     }
 
@@ -256,7 +257,7 @@ void registry_global(
                 name,
                 &wp_fractional_scale_manager_v1_interface,
                 min(version, 1u)
-            )
+                )
         ));
 
         if (!fractional_scale_manager) {
@@ -271,7 +272,7 @@ void registry_global(
                 name,
                 &wp_viewporter_interface,
                 min(version, 1u)
-            )
+                )
         ));
 
         if (!viewporter) {
@@ -286,7 +287,7 @@ void registry_global(
                 name,
                 &wl_seat_interface,
                 min(version, 7u)
-            )
+                )
         ));
 
         if (!seat) {
@@ -294,9 +295,9 @@ void registry_global(
         }
 
         if (wl_seat_add_listener(
-                seat.get(),
-                &seat_listener,
-                nullptr) == -1) {
+            seat.get(),
+            &seat_listener,
+            nullptr) == -1) {
             Log::fatal("Failed to add Wayland seat listener");
         }
     }
@@ -315,15 +316,15 @@ wl_registry_listener registry_listener = {
 
 void update_buffer_size() {
     // A viewport maps the pixel buffer back to the logical surface size.
-    const float scale = viewport && fractional_scale ? surface_scale : 1.0f;
-    const float width = round(current_width * scale);
+    const float scale  = viewport && fractional_scale ? surface_scale : 1.0f;
+    const float width  = round(current_width * scale);
     const float height = round(current_height * scale);
     if (width < 1 || height < 1 ||
         width >= static_cast<float>(numeric_limits<int>::max()) ||
         height >= static_cast<float>(numeric_limits<int>::max())) {
         Log::fatal("Invalid EGL buffer size: {}*{}", width, height);
     }
-    buffer_width = static_cast<int>(width);
+    buffer_width  = static_cast<int>(width);
     buffer_height = static_cast<int>(height);
 
     if (viewport) {
@@ -339,7 +340,7 @@ void update_buffer_size() {
 }
 
 void preferred_scale(void*, wp_fractional_scale_v1*, uint32_t scale) {
-    surface_scale = static_cast<float>(scale) / 120.0f;
+    surface_scale        = static_cast<float>(scale) / 120.0f;
     wayland_needs_redraw = true;
     if (surface_configured) {
         update_buffer_size();
@@ -355,10 +356,10 @@ const wp_fractional_scale_v1_listener fractional_scale_listener{
 void layer_surface_configure(
     void*,
     zwlr_layer_surface_v1* surface,
-    uint32_t serial,
-    uint32_t width,
-    uint32_t height
-) {
+    uint32_t               serial,
+    uint32_t               width,
+    uint32_t               height
+    ) {
     zwlr_layer_surface_v1_ack_configure(surface, serial);
 
     if (width != 0 && width != requested_width) {
@@ -368,7 +369,7 @@ void layer_surface_configure(
     if (height != 0 && height != requested_height) {
         logger(Log::Warning, "Did not receive expected height {} (requested: {})", height, requested_height);
     }
-    current_height = height != 0 ? height : requested_height;
+    current_height     = height != 0 ? height : requested_height;
     surface_configured = true;
     update_buffer_size();
 }
@@ -401,8 +402,8 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
     ++width;
     ++height;
 
-    requested_width = width;
-    requested_height = height;
+    requested_width    = width;
+    requested_height   = height;
     surface_configured = false;
 
     // 1. Establish Wayland Connection & Registry
@@ -412,15 +413,15 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
     }
 
     registry.reset(wl_display_get_registry(display.get()));
-    
-    if (!registry){
+
+    if (!registry) {
         Log::fatal("Failed to get registry");
     }
 
     if (wl_registry_add_listener(
-            registry.get(),
-            &registry_listener,
-            nullptr) == -1) {
+        registry.get(),
+        &registry_listener,
+        nullptr) == -1) {
         Log::fatal("Failed to add Wayland registry listener");
     }
     if (wl_display_roundtrip(display.get()) == -1) {
@@ -442,19 +443,19 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
     // 2. Setup Wayland Surface & Layer Shell
     surface.reset(wl_compositor_create_surface(compositor.get()));
 
-    if (!surface){
+    if (!surface) {
         Log::fatal("Failed to create surface");
     }
 
     if (fractional_scale_manager) {
         fractional_scale.reset(wp_fractional_scale_manager_v1_get_fractional_scale(
             fractional_scale_manager.get(), surface.get()
-        ));
+            ));
         if (!fractional_scale) {
             Log::fatal("Failed to create fractional scale object");
         }
         if (wp_fractional_scale_v1_add_listener(
-                fractional_scale.get(), &fractional_scale_listener, nullptr) == -1) {
+            fractional_scale.get(), &fractional_scale_listener, nullptr) == -1) {
             Log::fatal("Failed to add fractional scale listener");
         }
     }
@@ -472,7 +473,7 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
         nullptr,
         ZWLR_LAYER_SHELL_V1_LAYER_TOP,
         "tide-island"
-    ));
+        ));
 
     if (!layer_surface) {
         Log::fatal("Failed to create layer surface");
@@ -481,19 +482,19 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
     zwlr_layer_surface_v1_set_anchor(
         layer_surface.get(),
         ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP
-    );
+        );
     zwlr_layer_surface_v1_set_size(
         layer_surface.get(),
         width,
         height
-    );
+        );
     zwlr_layer_surface_v1_set_exclusive_zone(layer_surface.get(), exclusive_zone);
     zwlr_layer_surface_v1_set_margin(layer_surface.get(), margin_top, 0, 0, 0);
 
     if (zwlr_layer_surface_v1_add_listener(
-            layer_surface.get(),
-            &layer_surface_listener,
-            nullptr) == -1) {
+        layer_surface.get(),
+        &layer_surface_listener,
+        nullptr) == -1) {
         Log::fatal("Failed to add layer surface listener");
     }
     wl_surface_commit(surface.get());
@@ -513,7 +514,7 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
         surface.get(),
         buffer_width,
         buffer_height
-    ));
+        ));
     if (!egl_window) {
         Log::fatal("Failed to create wl_egl_window");
     }
@@ -533,14 +534,14 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
     if (!eglBindAPI(EGL_OPENGL_ES_API)) {
         Log::fatal("eglBindAPI failed");
     }
-    
+
     // 4. Configure EGL Surface & Context
     constexpr array<EGLint, 13> attribs = {
-        EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
-        EGL_RED_SIZE,        8,
-        EGL_GREEN_SIZE,      8,
-        EGL_BLUE_SIZE,       8,
-        EGL_ALPHA_SIZE,      8,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
         EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
         EGL_NONE
     };
@@ -561,7 +562,7 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
         egl_config,
         EGL_NO_CONTEXT,
         ctx_attribs.data()
-    );
+        );
     if (egl_context == EGL_NO_CONTEXT) {
         Log::fatal("eglCreateContext failed");
     }
@@ -571,7 +572,7 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
         egl_config,
         (EGLNativeWindowType)egl_window.get(),
         nullptr
-    );
+        );
 
     if (egl_surface == EGL_NO_SURFACE) {
         Log::fatal("eglCreateWindowSurface failed");
@@ -582,16 +583,16 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
         egl_surface,
         egl_surface,
         egl_context
-    )) {
+        )) {
         Log::fatal("eglMakeCurrent failed");
     }
 
     const auto* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
     Log::logger(Log::Debug, "EGL vendor=\"{}\", GL renderer=\"{}\"",
-                eglQueryString(egl_display, EGL_VENDOR), renderer ? renderer : "unknown");
+        eglQueryString(egl_display, EGL_VENDOR), renderer ? renderer : "unknown");
     if (renderer && (string_view(renderer).contains("llvmpipe") ||
-                     string_view(renderer).contains("softpipe") ||
-                     string_view(renderer).contains("Software Rasterizer"))) {
+        string_view(renderer).contains("softpipe") ||
+        string_view(renderer).contains("Software Rasterizer"))) {
         Log::logger(Log::Warning, "Using software rendering; check the GPU driver if CPU or RAM usage is high");
     }
 
@@ -607,31 +608,31 @@ void Wayland::swap_buffer() {
 void Wayland::request_resize(
     uint32_t width,
     uint32_t height
-) {
+    ) {
     if (!layer_surface) {
         Log::fatal("request_resize called before layer_surface creation");
     }
 
-    if (width <= 0 || height <= 0){
+    if (width <= 0 || height <= 0) {
         Log::fatal("Island size should not be neagative");
     }
 
-    if (!egl_window){
+    if (!egl_window) {
         Log::fatal("EGL_window is not initialized");
     }
 
     zwlr_layer_surface_v1_set_size(layer_surface.get(), width, height);
-    requested_width = width;
+    requested_width  = width;
     requested_height = height;
     wl_surface_commit(surface.get());
 
 }
 
-array<int,2> Wayland::get_surface_size() {
+array<int, 2> Wayland::get_surface_size() {
     return {static_cast<int>(current_width), static_cast<int>(current_height)};
 }
 
-array<int,2> Wayland::get_buffer_size() {
+array<int, 2> Wayland::get_buffer_size() {
     return {buffer_width, buffer_height};
 }
 
@@ -640,29 +641,29 @@ float Wayland::get_scale() {
 }
 
 void Wayland::apply_config(
-    uint32_t width, 
-    uint32_t height, 
-    int32_t exclusive_zone, 
-    int32_t margin_top
-) {
-    requested_width = width;
+    uint32_t width,
+    uint32_t height,
+    int32_t  exclusive_zone,
+    int32_t  margin_top
+    ) {
+    requested_width  = width;
     requested_height = height;
     zwlr_layer_surface_v1_set_size(
         layer_surface.get(),
         width,
         height
-    );
+        );
 
     zwlr_layer_surface_v1_set_exclusive_zone(
         layer_surface.get(),
         exclusive_zone
-    );
+        );
 
     zwlr_layer_surface_v1_set_margin(
         layer_surface.get(),
         margin_top,
         0, 0, 0
-    );
+        );
 
     wl_surface_commit(surface.get());
 
@@ -679,7 +680,7 @@ void Wayland::handle_events(short revents) {
         Log::fatal(
             "Wayland fd poll error: {}",
             revents
-        );
+            );
     }
 
     if (revents & POLLIN) {
@@ -687,9 +688,10 @@ void Wayland::handle_events(short revents) {
             Log::fatal(
                 "wl_display_read_events failed: {}",
                 strerror(errno)
-            );
+                );
         }
-    } else {
+    }
+    else {
         wl_display_cancel_read(display.get());
     }
 
@@ -699,7 +701,7 @@ void Wayland::handle_events(short revents) {
             Log::fatal(
                 "wl_display_flush failed: {}",
                 strerror(errno)
-            );
+                );
         }
     }
 
@@ -719,12 +721,13 @@ short Wayland::prepare_events() {
     if (wl_display_flush(display.get()) == -1) {
         if (errno == EAGAIN) {
             events |= POLLOUT;
-        } else {
+        }
+        else {
             wl_display_cancel_read(display.get());
             Log::fatal(
                 "wl_display_flush failed: {}",
                 strerror(errno)
-            );
+                );
         }
     }
 
@@ -751,7 +754,7 @@ void Wayland::shutdown() {
             EGL_NO_SURFACE,
             EGL_NO_SURFACE,
             EGL_NO_CONTEXT
-        );
+            );
 
         if (egl_surface != EGL_NO_SURFACE) {
             eglDestroySurface(egl_display, egl_surface);

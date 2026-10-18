@@ -3,6 +3,7 @@
 #include "color.hpp"
 
 #include <chrono>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -61,15 +62,17 @@ struct FontHandle {
     std::uint64_t id{};
 };
 
+using ClickCallback = std::function<void()>;
+
 struct RectDesc {
     Frame                  frame{};
     float                  radius{};
     Color                  color{};
     std::vector<Animation> animations{};
 
-    void (*click_callback_left)() = nullptr;
+    ClickCallback click_callback_left{};
 
-    void (*click_callback_right)() = nullptr;
+    ClickCallback click_callback_right{};
 };
 
 struct ImageDesc {
@@ -80,9 +83,9 @@ struct ImageDesc {
     Align                  vertical_align;
     std::vector<Animation> animations{};
 
-    void (*click_callback_left)() = nullptr;
+    ClickCallback click_callback_left{};
 
-    void (*click_callback_right)() = nullptr;
+    ClickCallback click_callback_right{};
 };
 
 struct TextDesc {
@@ -94,9 +97,9 @@ struct TextDesc {
     Align                  vertical_align;
     std::vector<Animation> animations{};
 
-    void (*click_callback_left)() = nullptr;
+    ClickCallback click_callback_left{};
 
-    void (*click_callback_right)() = nullptr;
+    ClickCallback click_callback_right{};
 };
 
 // About Priority
@@ -107,7 +110,9 @@ struct TextDesc {
 
 struct Event {
     std::chrono::steady_clock::time_point deadline;
+
     void (*callback)(){};
+
     float priority{};
 };
 
@@ -116,6 +121,7 @@ struct IslandConf {
     float island_height{};
     int   zone{-1};
     int   anchor_top{};
+    float animation_scale{1};
     float radius{};
     float current_priority{};
     Color color;

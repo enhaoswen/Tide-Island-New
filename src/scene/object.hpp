@@ -23,8 +23,8 @@ public:
     void set_radius(float radius);
     void set_color(const Color& color);
 
-    void set_click_callback_left(void (*left)());
-    void set_click_callback_right(void (*right)());
+    void set_click_callback_left(ClickCallback left);
+    void set_click_callback_right(ClickCallback right);
     void add_animation(AnimationDesc anim_desc, std::source_location location = std::source_location::current());
     bool click(float x, float y, bool left);
     void update();
@@ -49,8 +49,8 @@ public:
     void set_path(std::string_view path);
     void reload();
 
-    void set_click_callback_left(void (*left)());
-    void set_click_callback_right(void (*right)());
+    void set_click_callback_left(ClickCallback left);
+    void set_click_callback_right(ClickCallback right);
     void add_animation(AnimationDesc anim_desc, std::source_location location = std::source_location::current());
     bool click(float x, float y, bool left);
     void update();
@@ -76,8 +76,8 @@ public:
     void set_text(std::string_view text);
     void set_font(FontHandle font);
 
-    void set_click_callback_left(void (*left)());
-    void set_click_callback_right(void (*right)());
+    void set_click_callback_left(ClickCallback left);
+    void set_click_callback_right(ClickCallback right);
     void add_animation(AnimationDesc anim_desc, std::source_location location = std::source_location::current());
     bool click(float x, float y, bool left);
     void update();

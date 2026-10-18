@@ -14,13 +14,23 @@
 namespace Island {
 
 const IslandConf& state();
+
 void init();
+
 void set_anchor_top(int distance);
+
 void set_is_running(bool state);
+
 void set_radius(float radius, std::source_location location = std::source_location::current());
+
 void set_zone(int zone);
+
 void request_redraw(bool redraw);
+
 void set_priority(float priority);
+
 void set_size(int width, int height);
+
+void set_animation_scale(float scale);
 
 } // namespace Island
