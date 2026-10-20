@@ -16,13 +16,14 @@ protected:
 
 public:
     void set_callback_left(ClickCallback left);
+
     void set_callback_right(ClickCallback right);
 };
 
 }
 
 class Rectangle {
-private:
+protected:
     RectDesc desc;
 
 public:
@@ -32,27 +33,21 @@ public:
 
     Rectangle& operator=(const Rectangle&) = delete;
 
-    [[nodiscard]] const Frame& frame() const;
-
     void set_frame(const Frame& frame);
 
     void set_desc(const RectDesc& desc);
-
-    [[nodiscard]] float radius() const;
 
     void set_radius(float radius);
 
     void set_color(const Color& color);
 
-    void add_animation(AnimationDesc anim_desc, std::source_location location = std::source_location::current());
-
-    void update();
+    void add_animation(AnimationDesc anim_desc);
 
     void draw();
 };
 
 class Image {
-private:
+protected:
     ImageDesc desc;
     Texture   texture;
     bool      texture_dirty{false};
@@ -64,13 +59,9 @@ public:
 
     Image& operator=(const Image&) = delete;
 
-    [[nodiscard]] const Frame& frame() const;
-
     void set_frame(const Frame& frame);
 
     void set_desc(const ImageDesc& desc);
-
-    [[nodiscard]] float radius() const;
 
     void set_radius(float radius);
 
@@ -78,15 +69,13 @@ public:
 
     void reload();
 
-    void add_animation(AnimationDesc anim_desc, std::source_location location = std::source_location::current());
-
-    void update();
+    void add_animation(AnimationDesc anim_desc);
 
     void draw();
 };
 
 class Text {
-private:
+protected:
     TextDesc desc;
     Texture  texture;
     bool     texture_dirty{false};
@@ -99,8 +88,6 @@ public:
 
     Text& operator=(const Text&) = delete;
 
-    [[nodiscard]] const Frame& frame() const;
-
     void set_frame(const Frame& frame);
 
     void set_desc(const TextDesc& desc);
@@ -111,9 +98,7 @@ public:
 
     void set_font(FontHandle font);
 
-    void add_animation(AnimationDesc anim_desc, std::source_location location = std::source_location::current());
-
-    void update();
+    void add_animation(AnimationDesc anim_desc);
 
     void draw();
 };

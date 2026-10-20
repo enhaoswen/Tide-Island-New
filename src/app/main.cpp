@@ -5,8 +5,6 @@
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 
-#include <chrono>
-
 using namespace std;
 
 namespace {
@@ -17,7 +15,7 @@ Object::ClickableRect* add_main_land() {
     AnimationDesc main_land_w = {
         .to       = 400,
         .priority = 1,
-        .duration = 300ms,
+        .duration = 300,
         .target   = AnimationTarget::Width,
     };
 
@@ -31,8 +29,8 @@ Object::ClickableRect* add_main_land() {
     main_land->set_callback_right([]() {
         Log::logger(Log::Debug, "Right click callback triggered");
     });
-    main_land->set_callback_left([main_land, main_land_w]() {
-        API::resize(main_land_w.to, main_land->frame().height);
+    main_land->set_callback_left([main_land, main_land_w, island_conf]() {
+        API::resize(main_land_w.to, island_conf.island_height);
         main_land->add_animation(main_land_w);
     });
 

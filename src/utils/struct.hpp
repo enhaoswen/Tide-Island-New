@@ -16,7 +16,6 @@
 // don't want to include it again in main.cpp because it might looks messy.
 // so we just put all of them in struct.hpp
 
-
 // width and height must be float, because we need to support animation, 
 // and the value might be float during animation
 
@@ -45,19 +44,22 @@ enum struct AnimationTarget : char {
 };
 
 struct AnimationDesc {
-    float                     to{};
-    float                     priority{};
-    std::chrono::milliseconds duration;
-    AnimationTarget           target;
+    float           to{};
+    float           priority{};
+    uint32_t        duration{};
+
+    // we keep it nullptr when submit to object.animation
+    float*          target_ptr{};
+    AnimationTarget target{};
 };
 
+// 32B
 struct Animation {
     float                                 from{};
     float                                 to{};
     float*                                target_ptr{};
-    AnimationTarget                       target{};
     float                                 priority{};
-    std::chrono::milliseconds             duration;
+    uint32_t                              duration{};
     std::chrono::steady_clock::time_point start_time;
 };
 
