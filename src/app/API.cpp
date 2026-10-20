@@ -2,6 +2,7 @@
 #include "backend/wayland.hpp"
 #include "graphics/renderer.hpp"
 #include "scene/object.hpp"
+#include "scene/animation.hpp"
 #include "backend/timer.hpp"
 #include "app/island.hpp"
 #include "utils/log.hpp"
@@ -96,8 +97,7 @@ void API::run(){
 
         if (state->need_redraw) {
             Island::request_redraw(false);
-            Log::logger(Log::Debug, "Start a new frame");
-
+            AnimationManager::update();
             Renderer::begin_frame();
             Object::draw();
             Renderer::end_frame();

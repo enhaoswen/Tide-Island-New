@@ -1,6 +1,8 @@
 #include "animation.hpp"
 #include "utils/log.hpp"
+#include "app/island.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <vector>
@@ -38,8 +40,7 @@ Animation* AnimationManager::add_animation(const AnimationDesc& anim_desc) {
                 result_anim->priority   = anim_desc.priority;
                 result_anim->duration   = anim_desc.duration;
                 result_anim->start_time = chrono::steady_clock::now();
-
-                anim = move(result_anim);
+                anim                    = move(result_anim);
                 return anim.get();
             }
 
@@ -69,21 +70,32 @@ void AnimationManager::remove_animation(Animation* arg_anim) {
     });
 }
 
+bool AnimationManager::has_active() {
+    return !animations.empty();
+}
+
 void AnimationManager::update() {
     const auto now = chrono::steady_clock::now();
-    erase_if(animations, [now](const unique_ptr<Animation>& animation) {
-        const auto elapsed  = chrono::duration<float, milli>(now - animation->start_time).count();
-        const bool finished = elapsed >= animation->duration;
+    const float scale = Island::state().animation_scale;
 
-        const float progress = finished
-            ? 1.0
-            : clamp(
-                elapsed / animation->duration,
-                0.0f, 1.0f);
+    erase_if(animations, [now, scale](const unique_ptr<Animation>& animation) {
+        const float elapsed =
+            chrono::duration<float, milli>(
+                now - animation->start_time
+            ).count();
+
+        const float progress = clamp(
+            elapsed * scale / animation->duration,
+            0.0f, 1.0f
+        );
+
+        const bool finished = progress >= 1.0f;
 
         *animation->target_ptr = finished
             ? animation->to
-            : animation->from + (animation->to - animation->from) * progress;
+            : animation->from +
+              (animation->to - animation->from) * progress;
+
         return finished;
     });
 }

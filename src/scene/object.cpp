@@ -303,13 +303,13 @@ void Object::click(float x, float y, bool left) {
 void Object::draw() {
     for (auto& object : objects) {
         visit([](const auto& item) {
-            AnimationManager::update();
             item->draw();
         }, object);
     }
 }
 
 void Object::clear() {
+    AnimationManager::clear();
     objects.clear();
     Island::request_redraw(true);
 }
