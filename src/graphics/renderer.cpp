@@ -3,6 +3,7 @@
 
 #include "stb_image.h"
 #include "graphics/renderer.hpp"
+#include "graphics/driver_memory.hpp"
 #include "backend/wayland.hpp"
 #include "graphics/texture.hpp"
 #include "sokol_gfx.h"
@@ -66,6 +67,7 @@ sg_shader text_shader{};
 sg_pipeline text_pipeline{};
 sg_sampler image_sampler{};
 sg_sampler text_sampler{};
+bool reclaim_compiler_after_first_frame{};
 
 RectVert rectangle_vertices(
     Frame frame,
@@ -286,9 +288,11 @@ void Renderer::init() {
 #if defined(__GLIBC__)
     static_cast<void>(malloc_trim(0));
 #endif
+    reclaim_compiler_after_first_frame = true;
 }
 
 void Renderer::shutdown() {
+    reclaim_compiler_after_first_frame = false;
     if (sg_isvalid())
         sg_shutdown();
 }
@@ -307,6 +311,13 @@ void Renderer::end_frame() {
     sg_commit();
 
     Wayland::swap_buffer();
+
+    // Run once per renderer initialization, after the first successful swap.
+    // Later frames must not repeatedly discard and reload compiler pages.
+    if (reclaim_compiler_after_first_frame) {
+        reclaim_compiler_after_first_frame = false;
+        DriverMemory::release_idle_compiler_pages();
+    }
 }
 
 void Renderer::draw_rectangle(const RectDesc& desc) {

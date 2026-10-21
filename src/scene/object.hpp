@@ -3,8 +3,10 @@
 #include "utils/struct.hpp"
 #include "graphics/texture.hpp"
 
+#include <memory>
 #include <source_location>
 #include <string_view>
+#include <vector>
 
 namespace Object {
 
@@ -22,18 +24,45 @@ public:
 
 }
 
-class Rectangle {
+// Elements stay at a fixed address because animations point into desc.
+template <typename Desc>
+class Element {
 protected:
-    RectDesc desc;
+    Desc                                     desc;
+    std::vector<std::unique_ptr<Animation> > animations;
+
+    ~Element() = default;
+
+    void replace_desc(const Desc& arg_desc);
 
 public:
-    explicit Rectangle(const RectDesc& desc);
+    explicit Element(const Desc& arg_desc);
 
-    Rectangle(const Rectangle&) = delete;
+    Element(const Element&) = delete;
 
-    Rectangle& operator=(const Rectangle&) = delete;
+    Element& operator=(const Element&) = delete;
+
+    Element(Element&&) = delete;
+
+    Element& operator=(Element&&) = delete;
 
     void set_frame(const Frame& frame);
+
+    void add_animation(AnimationDesc anim_desc, std::source_location l = std::source_location::current());
+
+    void update();
+
+    [[nodiscard]] bool has_active_animations() const;
+};
+
+// Implementations are compiled once for the supported descriptor types.
+extern template class Element<RectDesc>;
+extern template class Element<ImageDesc>;
+extern template class Element<TextDesc>;
+
+class Rectangle : public Element<RectDesc> {
+public:
+    using Element<RectDesc>::Element;
 
     void set_desc(const RectDesc& desc);
 
@@ -41,25 +70,16 @@ public:
 
     void set_color(const Color& color);
 
-    void add_animation(AnimationDesc anim_desc);
-
     void draw();
 };
 
-class Image {
+class Image : public Element<ImageDesc> {
 protected:
-    ImageDesc desc;
-    Texture   texture;
-    bool      texture_dirty{false};
+    Texture texture;
+    bool    texture_dirty{false};
 
 public:
     explicit Image(const ImageDesc& desc);
-
-    Image(const Image&) = delete;
-
-    Image& operator=(const Image&) = delete;
-
-    void set_frame(const Frame& frame);
 
     void set_desc(const ImageDesc& desc);
 
@@ -69,26 +89,17 @@ public:
 
     void reload();
 
-    void add_animation(AnimationDesc anim_desc);
-
     void draw();
 };
 
-class Text {
+class Text : public Element<TextDesc> {
 protected:
-    TextDesc desc;
-    Texture  texture;
-    bool     texture_dirty{false};
-    float    texture_scale{1.0f};
+    Texture texture;
+    bool    texture_dirty{false};
+    float   texture_scale{1.0f};
 
 public:
     explicit Text(const TextDesc& desc);
-
-    Text(const Text&) = delete;
-
-    Text& operator=(const Text&) = delete;
-
-    void set_frame(const Frame& frame);
 
     void set_desc(const TextDesc& desc);
 
@@ -97,8 +108,6 @@ public:
     void set_text(std::string_view text);
 
     void set_font(FontHandle font);
-
-    void add_animation(AnimationDesc anim_desc);
 
     void draw();
 };
@@ -140,6 +149,10 @@ ClickableText* add_clickable_text(const TextDesc& desc);
 void click(float x, float y, bool left);
 
 void draw();
+
+void update();
+
+bool has_active_animations();
 
 void clear();
 

@@ -75,3 +75,39 @@ Deep mode also saves Heaptrack data for more analysis.
 This tool only monitors the process's RAM. It does not measure GPU memory (VRAM), Hyprland memory, or all driver memory.
 
 Heaptrack results and RSS are different measurements, so don't add them together. Also, high memory usage does not always mean a memory leak.
+
+### NVIDIA compiler file pages
+
+On Linux with NVIDIA, normal startup now reclaims clean, unmodified file pages
+from `libnvidia-gpucomp` once after the first successful frame swap. No preload
+library or extra launch flags are required. Rebuild the application after pulling
+the change:
+
+```sh
+cmake --build build --target Tide-island -j 4
+./build/Tide-island
+```
+
+The first draw can trigger driver work beyond shader linking. Waiting until the
+first swap and calling `glFinish()` lets that initial work complete before
+`glReleaseShaderCompiler()` and the page reclamation. This wait happens once per
+renderer initialization, not on every frame.
+
+The optimization keeps the library mapped and skips writable, relocated,
+anonymous, dirty, swapped, or locked ranges. It uses `MADV_NOHUGEPAGE` followed by
+`MADV_DONTNEED` on eligible file mappings. It preserves GPU rendering and existing
+GL objects. Non-NVIDIA renderers are skipped; unavailable memory-accounting data
+or failed advice leaves rendering operational.
+
+To disable it for comparison or driver troubleshooting:
+
+```sh
+TIDE_NVIDIA_RECLAIM_COMPILER=0 ./build/Tide-island
+```
+
+Debug builds log the advised range count and its previous RSS. This number is
+not a measurement of freed system RAM: shared file pages may still be cached or
+used by other processes. The optimization primarily lowers this process's RSS
+and PSS, not its private allocations or VRAM. Compiling new shaders can fault the
+file pages back in, adding latency. This is a Linux page-residency optimization,
+not an NVIDIA-supported compiler-unload API; driver upgrades need revalidation.

@@ -29,6 +29,7 @@ set(SRC
     src/backend/wayland.cpp
     src/backend/egl_vendor.cpp
     src/backend/timer.cpp
+    src/graphics/driver_memory.cpp
     src/graphics/renderer.cpp
     src/graphics/text.cpp
     src/scene/object.cpp
@@ -40,8 +41,6 @@ set(SRC
     third_party/wayland/viewporter-protocol.c
         src/backend/command.cpp
         src/backend/command.hpp
-        src/scene/animation.cpp
-        src/scene/animation.hpp
 )
 
 add_executable(Tide-island ${SRC})

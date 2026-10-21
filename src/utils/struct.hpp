@@ -5,6 +5,8 @@
 #include <chrono>
 #include <functional>
 #include <string>
+#include <memory>
+#include <limits>
 #include <vector>
 
 // This file used to put the structure that developer might need in API.cpp / main.cpp.
@@ -23,6 +25,14 @@ using ClickCallback = std::function<void()>;
 
 struct Frame {
     float x, y, width, height;
+};
+
+// we use it if we want to show that the frame is ignored.
+constexpr Frame EMPTY_FRAME = {
+    .x = std::numeric_limits<float>::max(),
+    .y = std::numeric_limits<float>::max(),
+    .width = std::numeric_limits<float>::max(),
+    .height = std::numeric_limits<float>::max()
 };
 
 enum struct Align : char {
@@ -44,12 +54,10 @@ enum struct AnimationTarget : char {
 };
 
 struct AnimationDesc {
-    float           to{};
-    float           priority{};
-    uint32_t        duration{};
+    float    to{};
+    float    priority{};
+    uint32_t duration{};
 
-    // we keep it nullptr when submit to object.animation
-    float*          target_ptr{};
     AnimationTarget target{};
 };
 
@@ -67,31 +75,27 @@ struct FontHandle {
     std::uint64_t id{};
 };
 
-
 struct RectDesc {
     Frame                  frame{};
     float                  radius{};
-    Color                  color{};
-    std::vector<Animation> animations{};
+    Color                  color;
 };
 
 struct ImageDesc {
     Frame                  frame{};
     float                  radius{};
     std::string            path;
-    std::vector<Animation> animations{};
     Align                  horizontal_align;
     Align                  vertical_align;
 };
 
 struct TextDesc {
-    Frame                  frame{};
-    std::string            text;
-    FontHandle             font;
-    Color                  color;
-    Align                  horizontal_align;
-    Align                  vertical_align;
-    std::vector<Animation> animations{};
+    Frame       frame{};
+    std::string text;
+    FontHandle  font;
+    Color       color;
+    Align       horizontal_align;
+    Align       vertical_align;
 };
 
 // About Priority

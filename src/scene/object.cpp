@@ -11,7 +11,6 @@
 #include "app/island.hpp"
 #include "backend/wayland.hpp"
 #include "graphics/renderer.hpp"
-#include "scene/animation.hpp"
 #include "utils/log.hpp"
 
 using namespace std;
@@ -43,10 +42,8 @@ bool click_object(const Frame& frame, float radius, const ClickCallback& callbac
     return true;
 }
 
-// should check the type while initializing
 template <typename desc_type>
-    requires (
-        same_as<desc_type, RectDesc> ||
+    requires (same_as<desc_type, RectDesc> ||
         same_as<desc_type, ImageDesc> ||
         same_as<desc_type, TextDesc>
     )
@@ -60,8 +57,12 @@ float* animation_target(desc_type& type, AnimationTarget target) {
         return &type.frame.x;
     case AnimationTarget::Y:
         return &type.frame.y;
+
     case AnimationTarget::Radius:
-        return &type.radius;
+        if constexpr (requires { type.radius; })
+            return &type.radius;
+        return nullptr;
+
     case AnimationTarget::ColorR:
     case AnimationTarget::ColorG:
     case AnimationTarget::ColorB:
@@ -77,7 +78,116 @@ float* animation_target(desc_type& type, AnimationTarget target) {
     }
 }
 
+void add_animation(
+    vector<unique_ptr<Animation> >& animations, float* target_ptr, const AnimationDesc& anim_desc) {
+    auto existing = find_if(animations.begin(), animations.end(), [target_ptr](const auto& anim) {
+        return anim->target_ptr == target_ptr;
+    });
+
+    if (existing != animations.end()) {
+        if (!((*existing)->priority <= anim_desc.priority)) {
+            return;
+        }
+        if ((*existing)->priority == anim_desc.priority) {
+            Log::logger(Log::Warning,
+                "Animation conflict: target={}, from={}, to={}",
+                static_cast<const void*>((*existing)->target_ptr),
+                (*existing)->from,
+                (*existing)->to
+                );
+        }
+    }
+
+    auto animation = make_unique<Animation>();
+
+    animation->from       = *target_ptr;
+    animation->to         = anim_desc.to;
+    animation->target_ptr = target_ptr;
+    animation->priority   = anim_desc.priority;
+    animation->duration   = anim_desc.duration;
+    animation->start_time = chrono::steady_clock::now();
+
+    if (existing != animations.end()) {
+        *existing = move(animation);
+    }
+    else {
+        animations.push_back(move(animation));
+    }
+}
+
+void update(vector<unique_ptr<Animation> >& animations) {
+    const auto  now   = chrono::steady_clock::now();
+    const float scale = Island::state().animation_scale;
+
+    erase_if(animations, [now, scale](const unique_ptr<Animation>& animation) {
+        const float elapsed =
+            chrono::duration<float, milli>(
+                now - animation->start_time
+                ).count();
+
+        const float progress = animation->duration == 0
+            ? 1.0f
+            : clamp(
+                elapsed * scale / animation->duration,
+                0.0f, 1.0f
+                );
+
+        const bool finished = progress >= 1.0f;
+
+        *animation->target_ptr = finished
+            ? animation->to
+            : animation->from +
+            (animation->to - animation->from) * progress;
+
+        return finished;
+    });
+}
+
 } // namespace
+
+template <typename Desc>
+Object::Element<Desc>::Element(const Desc& arg_desc) : desc(arg_desc) {
+}
+
+template <typename Desc>
+void Object::Element<Desc>::replace_desc(const Desc& arg_desc) {
+    desc = arg_desc;
+    animations.clear();
+    Island::request_redraw(true);
+}
+
+template <typename Desc>
+void Object::Element<Desc>::set_frame(const Frame& frame) {
+    desc.frame = frame;
+    Island::request_redraw(true);
+}
+
+template <typename Desc>
+void Object::Element<Desc>::add_animation(AnimationDesc anim_desc, source_location l) {
+    float* target_ptr = animation_target(desc, anim_desc.target);
+    if (target_ptr == nullptr) {
+        Log::logger(Log::Error,
+            "{}:{}: Unsupported animation target, id = {}",
+            l.file_name(), l.line(), static_cast<int>(anim_desc.target));
+        return;
+    }
+    ::add_animation(animations, target_ptr, anim_desc);
+    Island::request_redraw(true);
+}
+
+template <typename Desc>
+void Object::Element<Desc>::update() {
+    ::update(animations);
+}
+
+template <typename Desc>
+bool Object::Element<Desc>::has_active_animations() const {
+    return !animations.empty();
+}
+
+template class Object::Element<RectDesc>;
+template class Object::Element<ImageDesc>;
+template class Object::Element<TextDesc>;
 
 void Object::DontUse::ClickableItem::set_callback_left(ClickCallback left) {
     callback_left = move(left);
@@ -87,19 +197,8 @@ void Object::DontUse::ClickableItem::set_callback_right(ClickCallback right) {
     callback_right = move(right);
 }
 
-Object::Rectangle::Rectangle(const RectDesc& arg_desc) : desc(arg_desc) {
-    desc.animations.clear();
-}
-
-void Object::Rectangle::set_frame(const Frame& frame) {
-    desc.frame = frame;
-    Island::request_redraw(true);
-}
-
 void Object::Rectangle::set_desc(const RectDesc& arg_desc) {
-    desc = arg_desc;
-    desc.animations.clear();
-    Island::request_redraw(true);
+    replace_desc(arg_desc);
 }
 
 void Object::Rectangle::set_radius(float radius) {
@@ -112,31 +211,17 @@ void Object::Rectangle::set_color(const Color& color) {
     Island::request_redraw(true);
 }
 
-void Object::Rectangle::add_animation(AnimationDesc anim_desc) {
-    anim_desc.target_ptr = animation_target(desc, anim_desc.target);
-    AnimationManager::add_animation(anim_desc);
-}
-
 void Object::Rectangle::draw() {
     Renderer::draw_rectangle(desc);
 }
 
-Object::Image::Image(const ImageDesc& arg_desc) : desc(arg_desc) {
-    // Animation pointers from the descriptor belong to another object.
-    desc.animations.clear();
+Object::Image::Image(const ImageDesc& arg_desc) : Element(arg_desc) {
     Renderer::prepare_image(desc, texture);
-}
-
-void Object::Image::set_frame(const Frame& frame) {
-    desc.frame = frame;
-    Island::request_redraw(true);
 }
 
 void Object::Image::set_desc(const ImageDesc& arg_desc) {
     texture_dirty = texture_dirty || desc.path != arg_desc.path;
-    desc          = arg_desc;
-    desc.animations.clear();
-    Island::request_redraw(true);
+    replace_desc(arg_desc);
 }
 
 void Object::Image::set_radius(float radius) {
@@ -157,10 +242,6 @@ void Object::Image::reload() {
     Island::request_redraw(true);
 }
 
-void Object::Image::add_animation(AnimationDesc anim_desc) {
-    AnimationManager::add_animation(anim_desc);
-}
-
 void Object::Image::draw() {
     if (texture_dirty) {
         Renderer::prepare_image(desc, texture);
@@ -169,23 +250,14 @@ void Object::Image::draw() {
     Renderer::draw_image(desc, texture);
 }
 
-Object::Text::Text(const TextDesc& arg_desc) : desc(arg_desc) {
-    // Animation pointers from the descriptor belong to another object.
-    desc.animations.clear();
+Object::Text::Text(const TextDesc& arg_desc) : Element(arg_desc) {
     texture_scale = Wayland::get_scale();
     Renderer::prepare_text(desc, texture);
 }
 
-void Object::Text::set_frame(const Frame& frame) {
-    desc.frame = frame;
-    Island::request_redraw(true);
-}
-
 void Object::Text::set_desc(const TextDesc& arg_desc) {
     texture_dirty = texture_dirty || desc.text != arg_desc.text || desc.font.id != arg_desc.font.id;
-    desc          = arg_desc;
-    desc.animations.clear();
-    Island::request_redraw(true);
+    replace_desc(arg_desc);
 }
 
 void Object::Text::set_color(const Color& color) {
@@ -209,10 +281,6 @@ void Object::Text::set_font(FontHandle font) {
     desc.font     = font;
     texture_dirty = true;
     Island::request_redraw(true);
-}
-
-void Object::Text::add_animation(AnimationDesc anim_desc) {
-    AnimationManager::add_animation(anim_desc);
 }
 
 void Object::Text::draw() {
@@ -308,8 +376,19 @@ void Object::draw() {
     }
 }
 
+void Object::update() {
+    for (auto& object : objects) {
+        visit([](const auto& item) { item->update(); }, object);
+    }
+}
+
+bool Object::has_active_animations() {
+    return ranges::any_of(objects, [](const auto& object) {
+        return visit([](const auto& item) { return item->has_active_animations(); }, object);
+    });
+}
+
 void Object::clear() {
-    AnimationManager::clear();
     objects.clear();
     Island::request_redraw(true);
 }

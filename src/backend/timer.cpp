@@ -4,7 +4,7 @@
 #include "utils/struct.hpp"
 #include "app/island.hpp"
 #include "command.hpp"
-#include "scene/animation.hpp"
+#include "scene/object.hpp"
 
 #include <chrono>
 #include <cstring>
@@ -168,7 +168,7 @@ bool Timer::wait() {
 
     int result{};
     // Keep frames advancing while animations run; sleep indefinitely when idle.
-    const int timeout_ms = AnimationManager::has_active() ? 16 : -1;
+    const int timeout_ms = Object::has_active_animations() ? 16 : -1;
 
     do {
         result = poll(fds, 3, timeout_ms);
@@ -200,5 +200,5 @@ bool Timer::wait() {
     }
 
     const bool wayland_redraw = Wayland::get_wayland_redraw();
-    return result == 0 || wayland_redraw || AnimationManager::has_active();
+    return result == 0 || wayland_redraw || Object::has_active_animations();
 }
