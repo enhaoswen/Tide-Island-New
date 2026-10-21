@@ -26,6 +26,8 @@ Compared with Quickshell, Tide Island uses a pure OpenGL backend, removing the h
 
 See the [RAM monitor documentation](tools/README.md) for usage, controls, and memory analysis details.
 
+NVIDIA compiler file-page reclamation is disabled during normal operation. Its [manual API](tools/README.md#nvidia-compiler-file-pages) remains available for explicit use.
+
 ## Contributing
 
 Issues, bug reports, design suggestions, and pull requests are all welcome.

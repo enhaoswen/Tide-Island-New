@@ -1,17 +1,19 @@
 ## Live RAM Monitor
 
-This tool helps you monitor the RAM usage of Tide Island in real time.
+Use this tool to check the RAM usage of Tide Island while it is running.
+
+You need Python 3.10 or newer.
 
 ### Usage
 
-```
+```sh
 python3 tools/memory_monitor.py -- ./build/Tide-island
 ```
 
 You can see:
 
 * RSS, PSS and USS memory usage
-* Highest RAM usage during monitoring
+* Highest RAM usage during the run
 * RAM history graph
 * Where the RAM is used
 
@@ -22,31 +24,31 @@ You can see:
 * `Enter` - Show mapped files
 * `q` or `Ctrl+C` - Stop and save the report
 
-You can also change the update interval (default is 1 second):
+It updates every second by default. To change this:
 
-```
+```sh
 python3 tools/memory_monitor.py --interval 2 -- ./build/Tide-island
 ```
 
-Please make sure you have Python 3.10+ if you want to use this feature.
-
-Use `--plain` if you don't want the dashboard.
+Use `--plain` for text output without the dashboard.
 
 ### Deep Analysis
 
-If you want to know which parts of the code are allocating memory, you can use Heaptrack:
+To check which parts of the code allocate memory, use Heaptrack:
 
-```
+```sh
 python3 tools/memory_monitor.py --deep -- ./build/Tide-island
 ```
 
-This requires `heaptrack` and `heaptrack_print` to be installed.
+You need to install `heaptrack` and `heaptrack_print` first.
 
-Deep mode records heap allocations and shows where memory was allocated at the highest heap usage.
+Deep mode records heap allocations. It shows which code allocated the memory
+that was still in use at the heap peak.
 
-For better results, you can build Tide Island with debug symbols (`RelWithDebInfo`).
+Build Tide Island with debug symbols (`RelWithDebInfo`) to get more useful results.
 
-**Note:** Deep mode uses extra memory and CPU, so don't use it to measure normal RAM usage. It is mainly for finding memory problems.
+Deep mode uses extra RAM and CPU. Use normal mode to measure RAM usage, and deep
+mode to look for memory problems.
 
 ### Results
 
@@ -59,55 +61,70 @@ build/memory-monitor/<timestamp>-<monitor-pid>/
 Main files:
 
 * `report.txt` - RAM usage and memory sources
-* `summary.json` - Summary of the results
+* `summary.json` - Results in JSON
 * `samples.csv` - RAM usage over time
 * `categories.csv` - RAM usage by category
 * `application.log` - Tide Island's output
 
-Deep mode also saves Heaptrack data for more analysis.
+Deep mode also saves the Heaptrack data.
 
 ### About RAM Usage
 
 * **RSS:** Total RAM used by the process, including shared memory.
-* **PSS:** RAM usage after dividing shared memory between processes.
-* **USS:** RAM only used by this process.
+* **PSS:** Shared pages are divided between the processes using them.
+* **USS:** Private resident pages of this process.
 
-This tool only monitors the process's RAM. It does not measure GPU memory (VRAM), Hyprland memory, or all driver memory.
+This tool only checks RAM in the Tide Island process. It does not measure VRAM,
+Hyprland memory, or driver memory outside this process.
 
-Heaptrack results and RSS are different measurements, so don't add them together. Also, high memory usage does not always mean a memory leak.
+Heaptrack results and RSS measure different things. Don't add them together.
+High RAM usage alone does not mean there is a memory leak.
 
 ### NVIDIA compiler file pages
 
-On Linux with NVIDIA, normal startup now reclaims clean, unmodified file pages
-from `libnvidia-gpucomp` once after the first successful frame swap. No preload
-library or extra launch flags are required. Rebuild the application after pulling
-the change:
+This feature is disabled by default. The program does not call it automatically.
+The API is still available if you want to call it yourself on Linux with NVIDIA:
 
-```sh
-cmake --build build --target Tide-island -j 4
-./build/Tide-island
+```cpp
+#include "graphics/driver_memory.hpp"
+
+// Call on the rendering thread, after shader warmup and a successful swap.
+DriverMemory::release_idle_compiler_pages();
 ```
 
-The first draw can trigger driver work beyond shader linking. Waiting until the
-first swap and calling `glFinish()` lets that initial work complete before
-`glReleaseShaderCompiler()` and the page reclamation. This wait happens once per
-renderer initialization, not on every frame.
+Call it after the shaders are ready and at least one frame has been drawn and
+swapped. The driver may still do some work when a shader is first used. The GL
+context must be current, and no other thread should be compiling shaders at the
+same time.
 
-The optimization keeps the library mapped and skips writable, relocated,
-anonymous, dirty, swapped, or locked ranges. It uses `MADV_NOHUGEPAGE` followed by
-`MADV_DONTNEED` on eligible file mappings. It preserves GPU rendering and existing
-GL objects. Non-NVIDIA renderers are skipped; unavailable memory-accounting data
-or failed advice leaves rendering operational.
+The function calls `glFinish()` to wait for earlier GL commands, then calls
+`glReleaseShaderCompiler()`. It reads `/proc/self/smaps` and looks for clean,
+read-only file pages from `libnvidia-gpucomp`. Writable, relocated, anonymous,
+dirty, swapped and locked memory is skipped.
 
-To disable it for comparison or driver troubleshooting:
+It uses `MADV_NOHUGEPAGE` and `MADV_DONTNEED` on those file pages. The library stays
+mapped, and existing shaders and textures are kept. It still uses GPU rendering.
+If the renderer is not NVIDIA or the memory check fails, it skips the work. Failed
+system calls are logged in debug builds, and rendering continues.
+
+Each call waits and checks the memory mappings again. Don't call it every frame
+or every time you switch state.
+
+You can also block manual calls with:
 
 ```sh
 TIDE_NVIDIA_RECLAIM_COMPILER=0 ./build/Tide-island
 ```
 
-Debug builds log the advised range count and its previous RSS. This number is
-not a measurement of freed system RAM: shared file pages may still be cached or
-used by other processes. The optimization primarily lowers this process's RSS
-and PSS, not its private allocations or VRAM. Compiling new shaders can fault the
-file pages back in, adding latency. This is a Linux page-residency optimization,
-not an NVIDIA-supported compiler-unload API; driver upgrades need revalidation.
+Setting it to `1` does not make the program call the API automatically.
+
+Debug builds print how many memory ranges were processed and their RSS before
+the call. This does not mean the system gets the same amount of free RAM. Other
+processes may still use those pages, or the pages may stay in the file cache.
+
+It mainly reduces this process's RSS and PSS. It does not free textures, VRAM, or
+the driver's private allocations. Compiling new shaders may load the file pages
+again and take extra time.
+
+This uses Linux memory APIs, not an official NVIDIA API for unloading the
+compiler. Test it again after updating the driver.
