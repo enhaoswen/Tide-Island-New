@@ -66,6 +66,7 @@ sg_shader text_shader{};
 sg_pipeline text_pipeline{};
 sg_sampler image_sampler{};
 sg_sampler text_sampler{};
+array<int, 4> current_clip{-1, -1, -1, -1};
 
 RectVert rectangle_vertices(
     Frame frame,
@@ -300,6 +301,24 @@ void Renderer::begin_frame() {
     pass.swapchain = swapchain();
 
     sg_begin_pass(&pass);
+    current_clip = {-1, -1, -1, -1};
+}
+
+void Renderer::set_clip(const Frame& frame) {
+    const auto surface = Wayland::get_surface_size();
+    const auto buffer = Wayland::get_buffer_size();
+    const float scale_x = static_cast<float>(buffer[0]) / surface[0];
+    const float scale_y = static_cast<float>(buffer[1]) / surface[1];
+    // Round shared edges identically so adjacent groups neither overlap nor leave seams.
+    const int x = static_cast<int>(round(clamp(frame.x, 0.0f, static_cast<float>(surface[0])) * scale_x));
+    const int y = static_cast<int>(round(clamp(frame.y, 0.0f, static_cast<float>(surface[1])) * scale_y));
+    const int right = static_cast<int>(round(clamp(frame.x + frame.width, 0.0f, static_cast<float>(surface[0])) * scale_x));
+    const int bottom = static_cast<int>(round(clamp(frame.y + frame.height, 0.0f, static_cast<float>(surface[1])) * scale_y));
+    const array<int, 4> clip{x, y, max(0, right - x), max(0, bottom - y)};
+    if (clip != current_clip) {
+        sg_apply_scissor_rect(clip[0], clip[1], clip[2], clip[3], true);
+        current_clip = clip;
+    }
 }
 
 void Renderer::end_frame() {

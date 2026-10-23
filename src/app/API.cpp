@@ -58,30 +58,6 @@ void API::resize(uint32_t width, uint32_t height) {
     Island::set_size(static_cast<int>(width), static_cast<int>(height));
 }
 
-Object::Rectangle* API::add_rectangle(const RectDesc& desc) {
-    return Object::add_rectangle(desc);
-}
-
-Object::Image* API::add_image(const ImageDesc& desc) {
-    return Object::add_image(desc);
-}
-
-Object::Text* API::add_text(const TextDesc& desc) {
-    return Object::add_text(desc);
-}
-
-Object::ClickableRect* API::add_clickable_rect(const RectDesc& desc) {
-    return Object::add_clickable_rect(desc);
-}
-
-Object::ClickableImage* API::add_clickable_image(const ImageDesc& desc) {
-    return Object::add_clickable_image(desc);
-}
-
-Object::ClickableText* API::add_clickable_text(const TextDesc& desc) {
-    return Object::add_clickable_text(desc);
-}
-
 void API::push_event(std::chrono::microseconds duration, void (*callback)(), float priority) {
     Timer::push(duration, callback, priority);
 }

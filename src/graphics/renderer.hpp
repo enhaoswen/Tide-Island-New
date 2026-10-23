@@ -12,6 +12,9 @@ void shutdown();
 void begin_frame();
 void end_frame();
 
+// Logical scene coordinates, clipped to the surface. Call inside a render pass.
+void set_clip(const Frame& frame);
+
 void prepare_image(const ImageDesc& desc, Texture& texture);
 void prepare_text(const TextDesc& desc, Texture& texture);
 

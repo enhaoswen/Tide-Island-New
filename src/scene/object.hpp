@@ -1,8 +1,10 @@
 #pragma once
 
-#include "utils/struct.hpp"
 #include "graphics/texture.hpp"
+#include "utils/struct.hpp"
 
+#include <array>
+#include <concepts>
 #include <memory>
 #include <source_location>
 #include <string_view>
@@ -11,6 +13,8 @@
 namespace Object {
 
 namespace DontUse {
+struct SceneAccess;
+
 class ClickableItem {
 protected:
     ClickCallback callback_left;
@@ -27,6 +31,8 @@ public:
 // Elements stay at a fixed address because animations point into desc.
 template <typename Desc>
 class Element {
+    friend struct DontUse::SceneAccess;
+
 protected:
     Desc                                     desc;
     std::vector<std::unique_ptr<Animation> > animations;
@@ -48,6 +54,8 @@ public:
 
     void set_frame(const Frame& frame);
 
+    [[nodiscard]] Frame get_frame() const;
+
     void add_animation(AnimationDesc anim_desc, std::source_location l = std::source_location::current());
 
     void update();
@@ -59,6 +67,7 @@ public:
 extern template class Element<RectDesc>;
 extern template class Element<ImageDesc>;
 extern template class Element<TextDesc>;
+extern template class Element<LayoutDesc>;
 
 class Rectangle : public Element<RectDesc> {
 public:
@@ -74,6 +83,10 @@ public:
 };
 
 class Image : public Element<ImageDesc> {
+    friend struct DontUse::SceneAccess;
+
+    void prepare();
+
 protected:
     Texture texture;
     bool    texture_dirty{false};
@@ -93,6 +106,10 @@ public:
 };
 
 class Text : public Element<TextDesc> {
+    friend struct DontUse::SceneAccess;
+
+    void prepare();
+
 protected:
     Texture texture;
     bool    texture_dirty{false};
@@ -133,6 +150,76 @@ public:
     bool click(float x, float y, bool left);
 };
 
+class Layout;
+
+namespace DontUse {
+
+template <typename T>
+concept LayoutElement = std::same_as<T, Rectangle> || std::same_as<T, Image> ||
+    std::same_as<T, Text> || std::same_as<T, ClickableRect> ||
+    std::same_as<T, ClickableImage> || std::same_as<T, ClickableText> ||
+    std::same_as<T, Layout>;
+
+}
+
+// Layouts and their members must be created by the scene's add_* factories.
+// Membership does not transfer ownership; all handles expire at Object::clear().
+// Each group preserves insertion order. Center stays centered on the whole frame;
+// sides take space first, losing equal inner portions if they collide. Drawing and
+// clicks are clipped to each group's region and every ancestor's region.
+class Layout : public Element<LayoutDesc> {
+    friend struct DontUse::SceneAccess;
+
+    struct Item {
+        std::uint32_t index;
+        Align         align;
+        bool          auto_size;
+    };
+
+    std::vector<Item>    elements;
+    std::array<float, 3> lengths{};
+
+    bool add_element_impl(const void* element, Align align);
+    bool delete_element_impl(const void* element);
+    bool set_auto_size_impl(const void* element, bool enabled);
+
+public:
+    explicit Layout(const LayoutDesc& desc);
+
+    void set_desc(const LayoutDesc& desc);
+
+    void set_frame(const Frame& frame);
+
+    void set_spacing(float spacing);
+
+    void set_vertical(bool vertical);
+
+    void set_cross_align(Align align);
+
+    // Existing members keep their insertion order when their group changes.
+    // EMPTY_FRAME enables content sizing for images/text, including clickable ones.
+    template <DontUse::LayoutElement T>
+    bool add_element(T* element, Align align = Align::Left) {
+        return add_element_impl(element, align);
+    }
+
+    // Detaches without destroying the element or changing its last frame.
+    template <DontUse::LayoutElement T>
+    bool delete_element(T* element) {
+        return delete_element_impl(element);
+    }
+
+    // Disable before manually setting or animating a member's width/height.
+    template <DontUse::LayoutElement T>
+    bool set_auto_size(T* element, bool enabled) {
+        return set_auto_size_impl(element, enabled);
+    }
+
+    // Updates this subtree's sizes/positions; Object::update advances animations.
+    // Parent layouts control member x/y. Frames use absolute scene coordinates.
+    void update();
+};
+
 // Returned pointers remain valid until clear().
 Rectangle* add_rectangle(const RectDesc& desc);
 
@@ -145,6 +232,8 @@ ClickableRect* add_clickable_rect(const RectDesc& desc);
 ClickableImage* add_clickable_image(const ImageDesc& desc);
 
 ClickableText* add_clickable_text(const TextDesc& desc);
+
+Layout* add_layout(const LayoutDesc& desc);
 
 void click(float x, float y, bool left);
 

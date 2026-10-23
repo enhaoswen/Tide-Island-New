@@ -24,7 +24,7 @@ Object::ClickableRect* add_main_land() {
         .radius               = island_conf.radius,
         .color                = island_conf.color,
     };
-    Object::ClickableRect* main_land = API::add_clickable_rect(main_land_desc);
+    Object::ClickableRect* main_land = Object::add_clickable_rect(main_land_desc);
 
     main_land->set_callback_right([]() {
         Log::logger(Log::Debug, "Right click callback triggered");

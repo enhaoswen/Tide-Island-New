@@ -25,20 +25,29 @@ using ClickCallback = std::function<void()>;
 
 struct Frame {
     float x, y, width, height;
+
+    bool operator==(const Frame&) const = default;
 };
 
 // we use it if we want to show that the frame is ignored.
 constexpr Frame EMPTY_FRAME = {
-    .x = std::numeric_limits<float>::max(),
-    .y = std::numeric_limits<float>::max(),
-    .width = std::numeric_limits<float>::max(),
-    .height = std::numeric_limits<float>::max()
+    .x      = std::numeric_limits<float>::max(),
+    .y      = std::numeric_limits<float>::max(),
+    .width  = std::numeric_limits<float>::max(),
+    .height = std::numeric_limits<float>::max(),
 };
 
 enum struct Align : char {
     Left,
     Center,
     Right,
+};
+
+struct LayoutDesc {
+    Frame frame{};
+    float spacing{}; // Between adjacent members of the same group.
+    bool  vertical{}; // Left/Center/Right become top/center/bottom.
+    Align cross_align{Align::Center};
 };
 
 enum struct AnimationTarget : char {
@@ -76,17 +85,17 @@ struct FontHandle {
 };
 
 struct RectDesc {
-    Frame                  frame{};
-    float                  radius{};
-    Color                  color;
+    Frame frame{};
+    float radius{};
+    Color color;
 };
 
 struct ImageDesc {
-    Frame                  frame{};
-    float                  radius{};
-    std::string            path;
-    Align                  horizontal_align;
-    Align                  vertical_align;
+    Frame       frame{};
+    float       radius{};
+    std::string path;
+    Align       horizontal_align;
+    Align       vertical_align;
 };
 
 struct TextDesc {

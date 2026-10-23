@@ -56,7 +56,7 @@ void start(std::source_location location) {
 
     if (!time_text) {
         const auto& conf = API::island_state();
-        time_text = API::add_text(TextDesc{
+        time_text = Object::add_text(TextDesc{
             .frame = {0, 0, conf.island_width, conf.island_height},
             .text = "",
             .font = API::load_font("Sans Serif", 18),
