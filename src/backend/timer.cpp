@@ -1,15 +1,15 @@
 #include "backend/timer.hpp"
+#include "backend/event_queue.hpp"
 #include "backend/wayland.hpp"
 #include "utils/log.hpp"
-#include "utils/struct.hpp"
-#include "app/island.hpp"
 #include "command.hpp"
 #include "scene/object.hpp"
 
 #include <chrono>
 #include <cstring>
 #include <iostream>
-#include <queue>
+#include <algorithm>
+#include <cmath>
 #include <poll.h>
 #include <sys/timerfd.h>
 #include <unistd.h>
@@ -22,18 +22,7 @@ namespace {
 int timer_fd{-1};
 int wayland_fd{-1};
 
-const IslandConf* state{};
-
-struct LaterDeadline {
-    bool operator()(
-        const Event& left,
-        const Event& right
-        ) const noexcept {
-        return left.deadline > right.deadline;
-    }
-};
-
-priority_queue<Event, vector<Event>, LaterDeadline> timer_queue;
+Timer::Detail::EventQueue timer_queue;
 
 void set_timer_at(steady_clock::time_point deadline) {
     const duration since_epoch      = deadline.time_since_epoch();
@@ -56,54 +45,52 @@ void set_timer_at(steady_clock::time_point deadline) {
     }
 }
 
-void pop(source_location location = std::source_location::current()) {
+void arm_next() {
+    if (timer_fd == -1) return;
     if (timer_queue.empty()) {
-        Log::fatal("{}:{}: Timer queue is empty", location.file_name(), location.line());
+        const itimerspec disarmed{};
+        if (timerfd_settime(timer_fd, 0, &disarmed, nullptr) == -1) Log::fatal("timerfd_settime failed");
     }
-
-    Event timer = timer_queue.top();
-    timer_queue.pop();
-
-    if (timer.callback && timer.priority >= state->current_priority) {
-        timer.callback();
-        Island::set_priority(timer.priority);
-    }
+    else set_timer_at(timer_queue.next_deadline());
 }
 
 } // namespace
 
-void Timer::push(
-    microseconds    duration,
-    void (*         callback)(),
-    float           priority,
-    source_location location
-    ) {
-    if (timer_fd == -1) {
-        Log::fatal("Timer is not initialized");
+Timer::EventHandle Timer::push(microseconds duration, void (*callback)(), float priority, source_location location) {
+    if (timer_fd == -1) Log::fatal("Timer is not initialized");
+    if (!callback || !isfinite(priority)) {
+        Log::logger(Log::Error, "{}:{}: Invalid timer callback or priority", location.file_name(), location.line());
+        return {};
     }
-    if (!callback) {
-        Log::logger(
-            Log::Error,
-            "{}:{}: Timer callback is null",
-            location.file_name(),
-            location.line()
-            );
+    const auto previous = timer_queue.next_deadline();
+    const auto handle = timer_queue.push(steady_clock::now() + max(duration, microseconds::zero()), callback, priority);
+    if (timer_queue.next_deadline() != previous) arm_next();
+    return handle;
+}
 
-    }
+bool Timer::cancel(EventHandle event) {
+    const auto previous = timer_queue.next_deadline();
+    const bool removed = timer_queue.cancel(event);
+    if (removed && timer_queue.next_deadline() != previous) arm_next();
+    return removed;
+}
 
-    const steady_clock::time_point next_deadline    = steady_clock::now() + duration;
-    const bool                     becomes_earliest = timer_queue.empty() || next_deadline < timer_queue.top().deadline;
+bool Timer::is_pending(EventHandle event) { return timer_queue.contains(event); }
 
-    if (becomes_earliest) {
-        set_timer_at(next_deadline);
-    }
+void Timer::clear() {
+    timer_queue.clear();
+    arm_next();
+}
 
-    timer_queue.push({next_deadline, callback, priority});
+void Timer::shutdown() {
+    timer_queue.clear();
+    if (timer_fd != -1) close(timer_fd);
+    timer_fd = wayland_fd = -1;
 }
 
 void Timer::init() {
-    state    = &Island::state();
-    timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+    if (timer_fd != -1) return;
+    timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
 
     if (timer_fd == -1) {
         Log::fatal("timerfd_create failed");
@@ -120,29 +107,22 @@ int Timer::get_timer_fd() {
     return timer_fd;
 }
 
-void Timer::handle_events(std::source_location location) {
+void Timer::handle_events(std::source_location) {
 
     uint64_t expiration_count{};
 
-    const ssize_t result = read(
-        timer_fd,
-        &expiration_count,
-        sizeof(expiration_count)
-        );
-
-    if (result != sizeof(expiration_count)) {
-        Log::fatal("timerfd read failed");
-    }
+    ssize_t result;
+    do {
+        result = read(timer_fd, &expiration_count, sizeof(expiration_count));
+    } while (result == -1 && errno == EINTR);
+    // A Wayland callback can cancel/rearm the timer after poll reported readiness.
+    if (result == -1 && errno == EAGAIN) return;
+    if (result != sizeof(expiration_count)) Log::fatal("timerfd read failed");
 
     const auto now = steady_clock::now();
 
-    while (!timer_queue.empty() && timer_queue.top().deadline <= now) {
-        pop(location);
-    }
-
-    if (!timer_queue.empty()) {
-        set_timer_at(timer_queue.top().deadline);
-    }
+    while (auto callback = timer_queue.pop_ready(now)) callback();
+    arm_next();
 }
 
 bool Timer::wait() {

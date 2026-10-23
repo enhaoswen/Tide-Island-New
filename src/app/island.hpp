@@ -13,7 +13,7 @@
 
 namespace Island {
 
-const IslandConf& state();
+const IslandConf& get_island();
 
 void init();
 
@@ -32,5 +32,8 @@ void set_priority(float priority);
 void set_size(int width, int height);
 
 void set_animation_scale(float scale);
+
+StateType get_state();
+void set_state(StateType state);
 
 } // namespace Island

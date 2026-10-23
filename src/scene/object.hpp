@@ -8,12 +8,103 @@
 #include <memory>
 #include <source_location>
 #include <string_view>
+#include <stdexcept>
+#include <limits>
 #include <vector>
 
 namespace Object {
 
+class Rectangle;
+class Image;
+class Text;
+class ClickableRect;
+class ClickableImage;
+class ClickableText;
+class Layout;
+
+namespace DontUse {
+struct Key {
+    std::uint32_t index{std::numeric_limits<std::uint32_t>::max()};
+    std::uint32_t generation{};
+
+    bool operator==(const Key&) const = default;
+};
+
+enum class Kind : char{
+    Rectangle,
+    Image,
+    Text,
+    ClickableRect,
+    ClickableImage,
+    ClickableText,
+    Layout,
+};
+
+template <typename T> constexpr Kind kind() {
+    if constexpr (std::same_as<T, Rectangle>)
+        return Kind::Rectangle;
+    else if constexpr (std::same_as<T, Image>)
+        return Kind::Image;
+    else if constexpr (std::same_as<T, Text>)
+        return Kind::Text;
+    else if constexpr (std::same_as<T, ClickableRect>)
+        return Kind::ClickableRect;
+    else if constexpr (std::same_as<T, ClickableImage>)
+        return Kind::ClickableImage;
+    else if constexpr (std::same_as<T, ClickableText>)
+        return Kind::ClickableText;
+    else {
+        static_assert(std::same_as<T, Layout>);
+        return Kind::Layout;
+    }
+}
+
+void* resolve(Key key, Kind kind);
+
+struct SceneAccess;
+}
+
+// Store handles, not resolved pointers. get() borrows a pointer until deletion/clear.
+// Expired handles resolve to nullptr; checked operator-> throws on misuse.
+template <typename T>
+class Handle {
+    DontUse::Key key_{};
+
+    explicit Handle(DontUse::Key key) : key_(key) {
+    }
+
+    friend struct DontUse::SceneAccess;
+    template <typename> friend class Handle;
+
+public:
+    Handle() = default;
+
+    template <typename U> requires std::derived_from<U, T>
+    Handle(Handle<U> other) : key_(other.key_) {}
+
+    [[nodiscard]] T* get() const { return static_cast<T*>(DontUse::resolve(key_, DontUse::kind<T>())); }
+    explicit         operator bool() const { return get() != nullptr; }
+
+    T* operator->() const {
+        auto* value = get();
+        if (!value)
+            throw std::logic_error("Expired scene handle");
+        return value;
+    }
+
+    [[nodiscard]] DontUse::Key key() const { return key_; }
+
+    bool operator==(const Handle&) const = default;
+};
+
+static_assert(sizeof(Handle<Rectangle>) == 8);
+
+enum class SizeMode : unsigned char { Fixed, Content, Fill };
+
 namespace DontUse {
 struct SceneAccess;
+
+bool delete_element_impl(Key element);
 
 class ClickableItem {
 protected:
@@ -34,6 +125,10 @@ class Element {
     friend struct DontUse::SceneAccess;
 
 protected:
+    std::uint32_t scene_index{std::numeric_limits<std::uint32_t>::max()};
+
+    void geometry_changed();
+
     Desc                                     desc;
     std::vector<std::unique_ptr<Animation> > animations;
 
@@ -163,7 +258,7 @@ concept LayoutElement = std::same_as<T, Rectangle> || std::same_as<T, Image> ||
 }
 
 // Layouts and their members must be created by the scene's add_* factories.
-// Membership does not transfer ownership; all handles expire at Object::clear().
+// Membership does not transfer ownership; handles expire on deletion or Object::clear().
 // Each group preserves insertion order. Center stays centered on the whole frame;
 // sides take space first, losing equal inner portions if they collide. Drawing and
 // clicks are clipped to each group's region and every ancestor's region.
@@ -173,15 +268,18 @@ class Layout : public Element<LayoutDesc> {
     struct Item {
         std::uint32_t index;
         Align         align;
-        bool          auto_size;
+        SizeMode      size_mode;
     };
 
     std::vector<Item>    elements;
     std::array<float, 3> lengths{};
+    bool                 dirty{true};
 
-    bool add_element_impl(const void* element, Align align);
-    bool delete_element_impl(const void* element);
-    bool set_auto_size_impl(const void* element, bool enabled);
+    bool add_element_impl(DontUse::Key element, Align align, SizeMode size_mode);
+
+    bool remove_element_impl(DontUse::Key element);
+
+    bool set_size_mode_impl(DontUse::Key element, SizeMode size_mode);
 
 public:
     explicit Layout(const LayoutDesc& desc);
@@ -196,23 +294,25 @@ public:
 
     void set_cross_align(Align align);
 
-    // Existing members keep their insertion order when their group changes.
-    // EMPTY_FRAME enables content sizing for images/text, including clickable ones.
+    void set_fit_surface(bool enabled);
+
+    // Content measures image/text; Fill uses the layout's full width and height.
+    // Changing group or sizing preserves insertion order.
     template <DontUse::LayoutElement T>
-    bool add_element(T* element, Align align = Align::Left) {
-        return add_element_impl(element, align);
+    bool add_element(Handle<T> element, Align align = Align::Left, SizeMode size_mode = SizeMode::Fixed) {
+        return add_element_impl(element.key(), align, size_mode);
     }
 
     // Detaches without destroying the element or changing its last frame.
     template <DontUse::LayoutElement T>
-    bool delete_element(T* element) {
-        return delete_element_impl(element);
+    bool remove_element(Handle<T> element) {
+        return remove_element_impl(element.key());
     }
 
-    // Disable before manually setting or animating a member's width/height.
+    // Use Fixed before manually setting or animating a member's width/height.
     template <DontUse::LayoutElement T>
-    bool set_auto_size(T* element, bool enabled) {
-        return set_auto_size_impl(element, enabled);
+    bool set_size_mode(Handle<T> element, SizeMode mode) {
+        return set_size_mode_impl(element.key(), mode);
     }
 
     // Updates this subtree's sizes/positions; Object::update advances animations.
@@ -220,20 +320,20 @@ public:
     void update();
 };
 
-// Returned pointers remain valid until clear().
-Rectangle* add_rectangle(const RectDesc& desc);
+// Handles are invalidated immediately by deletion/clear, even inside callbacks.
+Handle<Rectangle> add_rectangle(const RectDesc& desc);
 
-Image* add_image(const ImageDesc& desc);
+Handle<Image> add_image(const ImageDesc& desc);
 
-Text* add_text(const TextDesc& desc);
+Handle<Text> add_text(const TextDesc& desc);
 
-ClickableRect* add_clickable_rect(const RectDesc& desc);
+Handle<ClickableRect> add_clickable_rect(const RectDesc& desc);
 
-ClickableImage* add_clickable_image(const ImageDesc& desc);
+Handle<ClickableImage> add_clickable_image(const ImageDesc& desc);
 
-ClickableText* add_clickable_text(const TextDesc& desc);
+Handle<ClickableText> add_clickable_text(const TextDesc& desc);
 
-Layout* add_layout(const LayoutDesc& desc);
+Handle<Layout> add_layout(const LayoutDesc& desc);
 
 void click(float x, float y, bool left);
 
@@ -242,6 +342,13 @@ void draw();
 void update();
 
 bool has_active_animations();
+
+// Destroys the element. Layout children are detached and remain in the scene.
+// Returns false for an empty or expired handle.
+template <DontUse::LayoutElement T>
+bool delete_element(Handle<T> element) {
+    return DontUse::delete_element_impl(element.key());
+}
 
 void clear();
 

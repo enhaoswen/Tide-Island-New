@@ -29,60 +29,69 @@ using SceneValue = variant<
     unique_ptr<Object::ClickableText>,
     unique_ptr<Object::Layout> >;
 
-struct SceneObject {
-    SceneValue      value;
-    Object::Layout* parent{};
-};
-
-// Append-only until clear(): indices survive vector reallocations.
-vector<SceneObject> objects;
 constexpr uint32_t no_object = numeric_limits<uint32_t>::max();
 
-uint32_t find_object(const void* pointer) {
-    if (!pointer) {
-        return no_object;
-    }
-    for (size_t i = 0; i < objects.size(); ++i) {
-        if (visit([pointer](const auto& item) {
-            using T = remove_reference_t<decltype(*item)>;
-            if constexpr (derived_from<T, Object::Rectangle>) {
-                return pointer == item.get() || pointer == static_cast<Object::Rectangle*>(item.get());
-            }
-            else if constexpr (derived_from<T, Object::Image>) {
-                return pointer == item.get() || pointer == static_cast<Object::Image*>(item.get());
-            }
-            else if constexpr (derived_from<T, Object::Text>) {
-                return pointer == item.get() || pointer == static_cast<Object::Text*>(item.get());
-            }
-            else {
-                return pointer == item.get();
-            }
-        }, objects[i].value)) {
-            return static_cast<uint32_t>(i);
-        }
-    }
-    return no_object;
+struct SceneObject {
+    SceneValue value;
+    uint32_t   generation{1};
+    uint32_t   parent{no_object};
+    uint32_t   previous{no_object};
+    uint32_t   next{no_object}; // Live order, free list, or deferred destruction list.
+    uint32_t   animation_position{no_object};
+    bool       live{};
+};
+
+vector<SceneObject> objects;
+vector<uint32_t>    animated_objects;
+uint32_t            first_object{no_object}, last_object{no_object};
+uint32_t            free_object{no_object},  pending_deletion{no_object};
+size_t              callback_depth{};
+bool                layouts_dirty{};
+
+bool valid(Object::DontUse::Key key) {
+    return key.index < objects.size() && objects[key.index].live &&
+        objects[key.index].generation == key.generation;
 }
 
-template <typename T, typename Desc>
-T* add_object(const Desc& desc) {
-    // Compact membership indices are sufficient for up to 2^32 - 1 objects.
-    if (objects.size() >= no_object) {
-        Log::fatal("Scene object limit reached");
-    }
-    auto object = make_unique<T>(desc);
-    auto* handle = object.get();
-    objects.emplace_back(std::move(object));
-    Island::request_redraw(true);
-    return handle;
+void remove_animation_entry(uint32_t index) {
+    auto& entry = objects[index];
+    if (entry.animation_position == no_object)
+        return;
+    const auto moved                           = animated_objects.back();
+    animated_objects[entry.animation_position] = moved;
+    objects[moved].animation_position          = entry.animation_position;
+    animated_objects.pop_back();
+    entry.animation_position = no_object;
 }
+
+void flush_deletions() {
+    while (pending_deletion != no_object) {
+        const auto index     = pending_deletion;
+        pending_deletion     = objects[index].next;
+        // Destruct outside the slot: captured resources may modify the scene.
+        SceneValue destroyed = std::move(objects[index].value);
+        if (objects[index].generation != numeric_limits<uint32_t>::max()) {
+            objects[index].next = free_object;
+            free_object         = index;
+        }
+    }
+}
+
+struct CallbackScope {
+    CallbackScope() { ++callback_depth; }
+
+    ~CallbackScope() {
+        if (--callback_depth == 0)
+            flush_deletions();
+    }
+};
 
 bool valid_align(Align align) {
     return align == Align::Left || align == Align::Center || align == Align::Right;
 }
 
 bool valid_frame(const Frame& frame) {
-    return frame != EMPTY_FRAME && isfinite(frame.x) && isfinite(frame.y) &&
+    return isfinite(frame.x) && isfinite(frame.y) &&
         isfinite(frame.width) && isfinite(frame.height) && frame.width >= 0 && frame.height >= 0;
 }
 
@@ -94,7 +103,7 @@ Frame intersection(const Frame& a, const Frame& b) {
     const float x = max(a.x, b.x);
     const float y = max(a.y, b.y);
     return {x, y, max(0.0f, min(a.x + a.width, b.x + b.width) - x),
-        max(0.0f, min(a.y + a.height, b.y + b.height) - y)};
+            max(0.0f, min(a.y + a.height, b.y + b.height) - y)};
 }
 
 Frame surface_frame() {
@@ -119,6 +128,7 @@ bool click_object(const Frame& frame, float radius, const ClickCallback& callbac
     if (dx * dx + dy * dy > corner_radius * corner_radius || !callback) {
         return false;
     }
+    CallbackScope scope;
     callback();
     return true;
 }
@@ -199,7 +209,7 @@ void add_animation(
 
 void update(vector<unique_ptr<Animation> >& animations) {
     const auto  now   = chrono::steady_clock::now();
-    const float scale = Island::state().animation_scale;
+    const float scale = Island::get_island().animation_scale;
 
     erase_if(animations, [now, scale](const unique_ptr<Animation>& animation) {
         const float elapsed =
@@ -229,6 +239,96 @@ void update(vector<unique_ptr<Animation> >& animations) {
 
 // Scene-only access keeps layout bookkeeping out of individual elements.
 struct Object::DontUse::SceneAccess {
+    template <typename T, typename Desc>
+    static Handle<T> add(const Desc& desc) {
+        auto     object = make_unique<T>(desc);
+        uint32_t index;
+        if (free_object != no_object) {
+            index       = free_object;
+            free_object = objects[index].next;
+        }
+        else {
+            if (objects.size() >= no_object)
+                Log::fatal("Scene object limit reached");
+            index = static_cast<uint32_t>(objects.size());
+            objects.emplace_back();
+        }
+        object->scene_index      = index;
+        auto& entry              = objects[index];
+        entry.value              = std::move(object);
+        entry.live               = true;
+        entry.parent             = no_object;
+        entry.previous           = last_object;
+        entry.next               = no_object;
+        entry.animation_position = no_object;
+        if (last_object != no_object)
+            objects[last_object].next = index;
+        else
+            first_object = index;
+        last_object = index;
+        mark_dirty(index);
+        Island::request_redraw(true);
+        return Handle<T>({index, entry.generation});
+    }
+
+    static void mark_dirty(uint32_t index) {
+        while (index != no_object) {
+            auto& entry = objects[index];
+            if (auto* layout = get_if<unique_ptr<Layout> >(&entry.value)) {
+                (*layout)->dirty = true;
+                layouts_dirty    = true;
+            }
+            index = entry.parent;
+        }
+    }
+
+    static void retire(uint32_t index) {
+        auto& entry = objects[index];
+        if (entry.previous != no_object)
+            objects[entry.previous].next = entry.next;
+        else
+            first_object = entry.next;
+        if (entry.next != no_object)
+            objects[entry.next].previous = entry.previous;
+        else
+            last_object = entry.previous;
+        remove_animation_entry(index);
+        visit([](auto& object) { object->scene_index = no_object; }, entry.value);
+        entry.live = false;
+        // Retire saturated slots permanently, so an ancient handle never revives.
+        if (entry.generation != numeric_limits<uint32_t>::max())
+            ++entry.generation;
+        entry.parent     = no_object;
+        entry.next       = pending_deletion;
+        pending_deletion = index;
+    }
+
+    static bool delete_element(Key key) {
+        if (!valid(key))
+            return false;
+        auto& entry = objects[key.index];
+        if (entry.parent != no_object) {
+            auto& parent = *get<unique_ptr<Layout> >(objects[entry.parent].value);
+            parent.remove_element_impl(key);
+        }
+        if (auto* layout = get_if<unique_ptr<Layout> >(&entry.value)) {
+            for (const auto& item : (*layout)->elements) {
+                objects[item.index].parent = no_object;
+                mark_dirty(item.index);
+            }
+        }
+        retire(key.index);
+        if (!callback_depth)
+            flush_deletions();
+        Island::request_redraw(true);
+        return true;
+    }
+
+    static void fit_surface(Layout& layout, const array<int, 2>& surface) {
+        if (layout.desc.fit_surface)
+            layout.set_frame({0, 0, static_cast<float>(surface[0]), static_cast<float>(surface[1])});
+    }
+
     static bool supports_auto_size(size_t index) {
         return visit([](const auto& object) {
             using T = remove_reference_t<decltype(*object)>;
@@ -241,18 +341,15 @@ struct Object::DontUse::SceneAccess {
             using T = remove_reference_t<decltype(*object)>;
             if constexpr (derived_from<T, Image> || derived_from<T, Text>) {
                 object->prepare();
-                Frame frame = object->desc.frame;
-                if (frame == EMPTY_FRAME) {
-                    frame = {};
-                }
-                frame.width = static_cast<float>(object->texture.width());
+                Frame frame  = object->desc.frame;
+                frame.width  = static_cast<float>(object->texture.width());
                 frame.height = static_cast<float>(object->texture.height());
                 if constexpr (derived_from<T, Text>) {
                     // Match draw_text, including fractional-scale buffer rounding.
                     const auto surface = Wayland::get_surface_size();
-                    const auto buffer = Wayland::get_buffer_size();
-                    frame.width /= static_cast<float>(buffer[0]) / surface[0];
-                    frame.height /= static_cast<float>(buffer[1]) / surface[1];
+                    const auto buffer  = Wayland::get_buffer_size();
+                    frame.width        /= static_cast<float>(buffer[0]) / surface[0];
+                    frame.height       /= static_cast<float>(buffer[1]) / surface[1];
                 }
                 if (frame != object->desc.frame) {
                     object->desc.frame = frame;
@@ -264,24 +361,39 @@ struct Object::DontUse::SceneAccess {
     }
 
     static bool update_layout(Layout& layout) {
-        bool changed = false;
+        if (!layout.dirty)
+            return false;
+        layout.dirty             = false;
+        bool             changed = false;
         array<size_t, 3> counts{};
         layout.lengths = {};
         for (const auto& item : layout.elements) {
-            if (item.auto_size) {
+            if (item.size_mode == SizeMode::Content) {
                 changed = fit_content(item.index) || changed;
             }
+            else if (item.size_mode == SizeMode::Fill) {
+                visit([&](const auto& object) {
+                    auto& frame = object->desc.frame;
+                    if (frame.width != layout.desc.frame.width || frame.height != layout.desc.frame.height) {
+                        frame.width  = layout.desc.frame.width;
+                        frame.height = layout.desc.frame.height;
+                        if constexpr (same_as<remove_reference_t<decltype(*object)>, Layout>)
+                            object->dirty = true;
+                        changed = true;
+                    }
+                }, objects[item.index].value);
+            }
             const Frame frame = visit([](const auto& object) { return object->get_frame(); }, objects[item.index].value);
-            const auto group = static_cast<size_t>(item.align);
+            const auto  group = static_cast<size_t>(item.align);
             if (counts[group]++) {
                 layout.lengths[group] += layout.desc.spacing;
             }
             layout.lengths[group] += max(0.0f, layout.desc.vertical ? frame.height : frame.width);
         }
 
-        const auto& desc = layout.desc;
-        const float start = desc.vertical ? desc.frame.y : desc.frame.x;
-        const float length = desc.vertical ? desc.frame.height : desc.frame.width;
+        const auto&     desc   = layout.desc;
+        const float     start  = desc.vertical ? desc.frame.y : desc.frame.x;
+        const float     length = desc.vertical ? desc.frame.height : desc.frame.width;
         array<float, 3> cursor{
             start,
             start + (length - layout.lengths[1]) / 2,
@@ -289,22 +401,24 @@ struct Object::DontUse::SceneAccess {
         };
         for (const auto& item : layout.elements) {
             visit([&](const auto& object) {
-                Frame frame = object->desc.frame;
-                const auto group = static_cast<size_t>(item.align);
+                Frame       frame        = object->desc.frame;
+                const auto  group        = static_cast<size_t>(item.align);
                 const float cross_length = desc.vertical ? desc.frame.width : desc.frame.height;
-                const float cross_size = desc.vertical ? frame.width : frame.height;
-                float cross = desc.vertical ? desc.frame.x : desc.frame.y;
+                const float cross_size   = desc.vertical ? frame.width : frame.height;
+                float       cross        = desc.vertical ? desc.frame.x : desc.frame.y;
                 if (desc.cross_align == Align::Center) {
                     cross += (cross_length - cross_size) / 2;
                 }
                 else if (desc.cross_align == Align::Right) {
                     cross += cross_length - cross_size;
                 }
-                frame.x = desc.vertical ? cross : cursor[group];
-                frame.y = desc.vertical ? cursor[group] : cross;
+                frame.x       = desc.vertical ? cross : cursor[group];
+                frame.y       = desc.vertical ? cursor[group] : cross;
                 cursor[group] += max(0.0f, desc.vertical ? frame.height : frame.width) + desc.spacing;
                 if (frame != object->desc.frame) {
                     object->desc.frame = frame;
+                    if constexpr (same_as<remove_reference_t<decltype(*object)>, Layout>)
+                        object->dirty = true;
                     changed = true;
                 }
                 if constexpr (same_as<remove_reference_t<decltype(*object)>, Layout>) {
@@ -316,23 +430,23 @@ struct Object::DontUse::SceneAccess {
     }
 
     static array<Frame, 3> group_clips(const Layout& layout, const Frame& inherited) {
-        const auto& frame = layout.desc.frame;
-        const float length = max(0.0f, layout.desc.vertical ? frame.height : frame.width);
-        float left = min(layout.lengths[0], length);
-        float right = min(layout.lengths[2], length);
+        const auto& frame   = layout.desc.frame;
+        const float length  = max(0.0f, layout.desc.vertical ? frame.height : frame.width);
+        float       left    = min(layout.lengths[0], length);
+        float       right   = min(layout.lengths[2], length);
         const float overlap = max(0.0f, left + right - length) / 2;
-        left -= overlap;
-        right -= overlap;
+        left                -= overlap;
+        right               -= overlap;
         const array<float, 4> edges{0, left, length - right, length};
-        array<Frame, 3> clips;
+        array<Frame, 3>       clips;
         for (size_t i = 0; i < clips.size(); ++i) {
             Frame clip = frame;
             if (layout.desc.vertical) {
-                clip.y += edges[i];
+                clip.y      += edges[i];
                 clip.height = edges[i + 1] - edges[i];
             }
             else {
-                clip.x += edges[i];
+                clip.x     += edges[i];
                 clip.width = edges[i + 1] - edges[i];
             }
             clips[i] = intersection(inherited, clip);
@@ -387,6 +501,9 @@ template <typename Desc>
 void Object::Element<Desc>::replace_desc(const Desc& arg_desc) {
     desc = arg_desc;
     animations.clear();
+    if (scene_index != no_object)
+        remove_animation_entry(scene_index);
+    geometry_changed();
     Island::request_redraw(true);
 }
 
@@ -396,6 +513,7 @@ void Object::Element<Desc>::set_frame(const Frame& frame) {
         return;
     }
     desc.frame = frame;
+    geometry_changed();
     Island::request_redraw(true);
 }
 
@@ -414,12 +532,27 @@ void Object::Element<Desc>::add_animation(AnimationDesc anim_desc, source_locati
         return;
     }
     ::add_animation(animations, target_ptr, anim_desc);
+    if (scene_index != no_object && objects[scene_index].animation_position == no_object) {
+        objects[scene_index].animation_position = static_cast<uint32_t>(animated_objects.size());
+        animated_objects.push_back(scene_index);
+    }
     Island::request_redraw(true);
 }
 
 template <typename Desc>
 void Object::Element<Desc>::update() {
+    const Frame previous = desc.frame;
     ::update(animations);
+    if (desc.frame != previous)
+        geometry_changed();
+    if (animations.empty() && scene_index != no_object)
+        remove_animation_entry(scene_index);
+}
+
+template <typename Desc>
+void Object::Element<Desc>::geometry_changed() {
+    if (scene_index != no_object)
+        DontUse::SceneAccess::mark_dirty(scene_index);
 }
 
 template <typename Desc>
@@ -482,6 +615,7 @@ void Object::Image::set_path(string_view path) {
 
 void Object::Image::reload() {
     texture_dirty = true;
+    geometry_changed();
     Island::request_redraw(true);
 }
 
@@ -518,6 +652,7 @@ void Object::Text::set_text(string_view text) {
     }
     desc.text     = text;
     texture_dirty = true;
+    geometry_changed();
     Island::request_redraw(true);
 }
 
@@ -527,6 +662,7 @@ void Object::Text::set_font(FontHandle font) {
     }
     desc.font     = font;
     texture_dirty = true;
+    geometry_changed();
     Island::request_redraw(true);
 }
 
@@ -586,6 +722,7 @@ void Object::Layout::set_spacing(float spacing) {
     }
     if (desc.spacing != spacing) {
         desc.spacing = spacing;
+        geometry_changed();
         Island::request_redraw(true);
     }
 }
@@ -593,6 +730,7 @@ void Object::Layout::set_spacing(float spacing) {
 void Object::Layout::set_vertical(bool vertical) {
     if (desc.vertical != vertical) {
         desc.vertical = vertical;
+        geometry_changed();
         Island::request_redraw(true);
     }
 }
@@ -604,83 +742,74 @@ void Object::Layout::set_cross_align(Align align) {
     }
     if (desc.cross_align != align) {
         desc.cross_align = align;
+        geometry_changed();
         Island::request_redraw(true);
     }
 }
 
-bool Object::Layout::add_element_impl(const void* element, Align align) {
-    const auto index = find_object(element);
-    if (find_object(this) == no_object || index == no_object || !valid_align(align)) {
-        Log::logger(Log::Error, "Layout and element must be registered in the scene, with a valid alignment");
-        return false;
-    }
-    auto& entry = objects[index];
-    if (entry.parent && entry.parent != this) {
-        Log::logger(Log::Error, "Element already belongs to another layout");
-        return false;
-    }
-    if (const auto* child = get_if<unique_ptr<Layout>>(&entry.value)) {
-        for (auto* ancestor = this; ancestor; ancestor = objects[find_object(ancestor)].parent) {
-            if (ancestor == child->get()) {
-                Log::logger(Log::Error, "Layout membership would create a cycle");
-                return false;
-            }
-        }
-    }
+void Object::Layout::set_fit_surface(bool enabled) {
+    if (desc.fit_surface == enabled)
+        return;
+    desc.fit_surface = enabled;
+    geometry_changed();
+    Island::request_redraw(true);
+}
 
+bool Object::Layout::add_element_impl(DontUse::Key element, Align align, SizeMode mode) {
+    if (scene_index == no_object || !valid(element) || !valid_align(align))
+        return false;
+    const auto index = element.index;
+    auto&      entry = objects[index];
+    if (entry.parent != no_object && entry.parent != scene_index)
+        return false;
+    for (auto ancestor = scene_index; ancestor != no_object; ancestor = objects[ancestor].parent) {
+        if (ancestor == index)
+            return false;
+    }
+    if (mode != SizeMode::Fixed && mode != SizeMode::Content && mode != SizeMode::Fill)
+        return false;
+    if (mode == SizeMode::Content && !DontUse::SceneAccess::supports_auto_size(index))
+        return false;
     const Frame frame = visit([](const auto& object) { return object->get_frame(); }, entry.value);
-    const bool auto_size = frame == EMPTY_FRAME;
-    if (auto_size ? !DontUse::SceneAccess::supports_auto_size(index) : !valid_frame(frame)) {
-        Log::logger(Log::Error, "Layout element needs a valid frame; only images and text support EMPTY_FRAME");
+    if (!valid_frame(frame))
         return false;
-    }
-
     auto existing = ranges::find(elements, index, &Item::index);
     if (existing != elements.end()) {
-        if (existing->align == align && !auto_size) {
+        if (existing->align == align && existing->size_mode == mode)
             return true;
-        }
-        existing->align = align;
-        existing->auto_size = existing->auto_size || auto_size;
+        existing->align     = align;
+        existing->size_mode = mode;
     }
     else {
-        elements.push_back({index, align, auto_size});
-        entry.parent = this;
+        elements.push_back({index, align, mode});
+        entry.parent = scene_index;
     }
-    if (auto_size) {
-        DontUse::SceneAccess::fit_content(index);
-    }
+    geometry_changed();
     Island::request_redraw(true);
     return true;
 }
 
-bool Object::Layout::delete_element_impl(const void* element) {
-    const auto index = find_object(element);
-    const auto existing = ranges::find(elements, index, &Item::index);
-    if (existing == elements.end()) {
+bool Object::Layout::remove_element_impl(DontUse::Key element) {
+    if (!valid(element))
         return false;
-    }
-    objects[index].parent = nullptr;
+    const auto existing = ranges::find(elements, element.index, &Item::index);
+    if (existing == elements.end())
+        return false;
+    objects[element.index].parent = no_object;
     elements.erase(existing);
+    DontUse::SceneAccess::mark_dirty(element.index);
+    geometry_changed();
     Island::request_redraw(true);
     return true;
 }
 
-bool Object::Layout::set_auto_size_impl(const void* element, bool enabled) {
-    const auto index = find_object(element);
-    const auto existing = ranges::find(elements, index, &Item::index);
-    if (existing == elements.end() || !DontUse::SceneAccess::supports_auto_size(index)) {
+bool Object::Layout::set_size_mode_impl(DontUse::Key element, SizeMode mode) {
+    if (!valid(element))
         return false;
-    }
-    bool changed = existing->auto_size != enabled;
-    existing->auto_size = enabled;
-    if (enabled) {
-        changed = DontUse::SceneAccess::fit_content(index) || changed;
-    }
-    if (changed) {
-        Island::request_redraw(true);
-    }
-    return true;
+    const auto existing = ranges::find(elements, element.index, &Item::index);
+    if (existing == elements.end())
+        return false;
+    return add_element_impl(element, existing->align, mode);
 }
 
 void Object::Layout::update() {
@@ -689,80 +818,132 @@ void Object::Layout::update() {
     }
 }
 
-Object::Rectangle* Object::add_rectangle(const RectDesc& desc) {
-    return add_object<Rectangle>(desc);
+Object::Handle<Object::Rectangle> Object::add_rectangle(const RectDesc& desc) {
+    return DontUse::SceneAccess::add<Rectangle>(desc);
 }
 
-Object::Image* Object::add_image(const ImageDesc& desc) {
-    return add_object<Image>(desc);
+Object::Handle<Object::Image> Object::add_image(const ImageDesc& desc) {
+    return DontUse::SceneAccess::add<Image>(desc);
 }
 
-Object::Text* Object::add_text(const TextDesc& desc) {
-    return add_object<Text>(desc);
+Object::Handle<Object::Text> Object::add_text(const TextDesc& desc) {
+    return DontUse::SceneAccess::add<Text>(desc);
 }
 
-Object::ClickableRect* Object::add_clickable_rect(const RectDesc& desc) {
-    return add_object<ClickableRect>(desc);
+Object::Handle<Object::ClickableRect> Object::add_clickable_rect(const RectDesc& desc) {
+    return DontUse::SceneAccess::add<ClickableRect>(desc);
 }
 
-Object::ClickableImage* Object::add_clickable_image(const ImageDesc& desc) {
-    return add_object<ClickableImage>(desc);
+Object::Handle<Object::ClickableImage> Object::add_clickable_image(const ImageDesc& desc) {
+    return DontUse::SceneAccess::add<ClickableImage>(desc);
 }
 
-Object::ClickableText* Object::add_clickable_text(const TextDesc& desc) {
-    return add_object<ClickableText>(desc);
+Object::Handle<Object::ClickableText> Object::add_clickable_text(const TextDesc& desc) {
+    return DontUse::SceneAccess::add<ClickableText>(desc);
 }
 
-Object::Layout* Object::add_layout(const LayoutDesc& desc) {
-    return add_object<Layout>(desc);
+Object::Handle<Object::Layout> Object::add_layout(const LayoutDesc& desc) {
+    return DontUse::SceneAccess::add<Layout>(desc);
 }
 
 void Object::click(float x, float y, bool left) {
-    const Frame clip = surface_frame();
-    for (size_t i = objects.size(); i-- > 0;) {
-        if (!objects[i].parent && DontUse::SceneAccess::click(i, clip, x, y, left)) {
+    CallbackScope scope;
+    const Frame   clip = surface_frame();
+    for (auto i = last_object; i != no_object; i = objects[i].previous) {
+        if (objects[i].parent == no_object && DontUse::SceneAccess::click(i, clip, x, y, left))
             return;
-        }
     }
 }
 
 void Object::draw() {
     const Frame clip = surface_frame();
-    for (size_t i = 0; i < objects.size(); ++i) {
-        if (!objects[i].parent) {
+    for (auto i = first_object; i != no_object; i = objects[i].next) {
+        if (objects[i].parent == no_object)
             DontUse::SceneAccess::draw(i, clip);
-        }
     }
     Renderer::set_clip(clip);
 }
 
 void Object::update() {
-    for (auto& object : objects) {
+    // Swap removal makes finishing an animation O(1); only active objects are visited.
+    for (size_t i = 0; i < animated_objects.size();) {
+        const auto index = animated_objects[i];
         visit([](const auto& item) {
-            if constexpr (same_as<remove_reference_t<decltype(*item)>, Layout>) {
+            if constexpr (same_as<remove_reference_t<decltype(*item)>, Layout>)
                 item->Element<LayoutDesc>::update();
-            }
-            else {
+            else
                 item->update();
-            }
-        }, object.value);
+        }, objects[index].value);
+        if (i < animated_objects.size() && animated_objects[i] == index)
+            ++i;
     }
-    for (auto& object : objects) {
-        if (!object.parent) {
-            if (const auto* layout = get_if<unique_ptr<Layout>>(&object.value)) {
-                DontUse::SceneAccess::update_layout(**layout);
+    const auto           surface = Wayland::get_surface_size();
+    const auto           buffer  = Wayland::get_buffer_size();
+    const auto           scale   = Wayland::get_scale();
+    static array<int, 2> last_surface{}, last_buffer{};
+    static float         last_scale{};
+    const bool           resized  = surface != last_surface;
+    const bool           rescaled = buffer != last_buffer || scale != last_scale;
+    if (resized || rescaled || layouts_dirty) {
+        for (auto i = first_object; i != no_object; i = objects[i].next) {
+            if (resized || rescaled)
+                DontUse::SceneAccess::mark_dirty(i);
+            if (objects[i].parent == no_object) {
+                if (auto* layout = get_if<unique_ptr<Layout> >(&objects[i].value)) {
+                    DontUse::SceneAccess::fit_surface(**layout, surface);
+                }
             }
         }
+        for (auto i = first_object; i != no_object; i = objects[i].next) {
+            if (objects[i].parent == no_object) {
+                if (auto* layout = get_if<unique_ptr<Layout> >(&objects[i].value))
+                    DontUse::SceneAccess::update_layout(**layout);
+            }
+        }
+        layouts_dirty = false;
     }
+    last_surface = surface;
+    last_buffer  = buffer;
+    last_scale   = scale;
 }
 
 bool Object::has_active_animations() {
-    return ranges::any_of(objects, [](const auto& object) {
-        return visit([](const auto& item) { return item->has_active_animations(); }, object.value);
-    });
+    return !animated_objects.empty();
+}
+
+bool Object::DontUse::delete_element_impl(Key element) {
+    return SceneAccess::delete_element(element);
+}
+
+void* Object::DontUse::resolve(Key key, Kind kind) {
+    if (!valid(key))
+        return nullptr;
+    return visit([kind](const auto& object) -> void* {
+        using T = remove_reference_t<decltype(*object)>;
+        if (kind == DontUse::kind<T>())
+            return object.get();
+        if constexpr (derived_from<T, Rectangle>) {
+            if (kind == Kind::Rectangle)
+                return static_cast<Rectangle*>(object.get());
+        }
+        if constexpr (derived_from<T, Image>) {
+            if (kind == Kind::Image)
+                return static_cast<Image*>(object.get());
+        }
+        if constexpr (derived_from<T, Text>) {
+            if (kind == Kind::Text)
+                return static_cast<Text*>(object.get());
+        }
+        return nullptr;
+    }, objects[key.index].value);
 }
 
 void Object::clear() {
-    objects.clear();
+    // Invalidate all handles before any destructor runs, without walking memberships.
+    while (first_object != no_object)
+        DontUse::SceneAccess::retire(first_object);
+    layouts_dirty = false;
+    if (!callback_depth)
+        flush_deletions();
     Island::request_redraw(true);
 }

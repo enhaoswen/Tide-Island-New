@@ -47,7 +47,7 @@ path get_conf_path() {
 // [Public API Implementation]
 // ============================================================================
 
-const IslandConf& Island::state() {
+const IslandConf& Island::get_island() {
     return island;
 }
 
@@ -167,4 +167,12 @@ void Island::request_redraw(bool redraw) {
 
 void Island::set_animation_scale(float scale) {
     island.animation_scale = scale;
+}
+
+StateType Island::get_state() {
+    return island.state;
+}
+
+void Island::set_state(StateType state) {
+    island.state = state;
 }

@@ -29,14 +29,6 @@ struct Frame {
     bool operator==(const Frame&) const = default;
 };
 
-// we use it if we want to show that the frame is ignored.
-constexpr Frame EMPTY_FRAME = {
-    .x      = std::numeric_limits<float>::max(),
-    .y      = std::numeric_limits<float>::max(),
-    .width  = std::numeric_limits<float>::max(),
-    .height = std::numeric_limits<float>::max(),
-};
-
 enum struct Align : char {
     Left,
     Center,
@@ -48,6 +40,7 @@ struct LayoutDesc {
     float spacing{}; // Between adjacent members of the same group.
     bool  vertical{}; // Left/Center/Right become top/center/bottom.
     Align cross_align{Align::Center};
+    bool fit_surface{}; // Root layout follows the Wayland surface.
 };
 
 enum struct AnimationTarget : char {
@@ -107,18 +100,10 @@ struct TextDesc {
     Align       vertical_align;
 };
 
-// About Priority
-// Priority used to implement the right callback when 2 events are triggered at the same time.
-// We always implement the callback with the highest priority, and ignore the other one.
-
-// Clock, Lyrics, Custom Page: 0
-
-struct Event {
-    std::chrono::steady_clock::time_point deadline;
-
-    void (*callback)(){};
-
-    float priority{};
+enum struct StateType : char {
+    Clock,
+    Lyrics,
+    MusicPLayer,
 };
 
 struct IslandConf {
@@ -132,6 +117,7 @@ struct IslandConf {
     Color color;
     bool  need_redraw{true};
     bool  is_running{true};
+    StateType state{StateType::Clock};
 };
 
 struct Font {
