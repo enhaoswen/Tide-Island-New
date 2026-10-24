@@ -8,6 +8,7 @@
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 #include "graphics/text.hpp"
+#include "backend/egl_vendor.hpp"
 
 using namespace std;
 
@@ -99,4 +100,8 @@ void API::shutdown() {
     Text::shutdown();
     Renderer::shutdown();
     Wayland::shutdown();
+}
+
+void API::select_for_wayland() {
+    EglVendor::select_for_wayland();
 }

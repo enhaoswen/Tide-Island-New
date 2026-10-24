@@ -29,22 +29,22 @@ using SceneValue = variant<
     unique_ptr<Object::ClickableText>,
     unique_ptr<Object::Layout> >;
 
-constexpr uint32_t no_object = numeric_limits<uint32_t>::max();
+constexpr uint16_t no_object = numeric_limits<uint16_t>::max();
 
 struct SceneObject {
     SceneValue value;
     uint32_t   generation{1};
-    uint32_t   parent{no_object};
-    uint32_t   previous{no_object};
-    uint32_t   next{no_object}; // Live order, free list, or deferred destruction list.
-    uint32_t   animation_position{no_object};
+    uint16_t   parent{no_object};
+    uint16_t   previous{no_object};
+    uint16_t   next{no_object};
+    uint16_t   animation_position{no_object};
     bool       live{};
 };
 
 vector<SceneObject> objects;
-vector<uint32_t>    animated_objects;
-uint32_t            first_object{no_object}, last_object{no_object};
-uint32_t            free_object{no_object},  pending_deletion{no_object};
+vector<uint16_t>    animated_objects;
+uint16_t            first_object{no_object}, last_object{no_object};
+uint16_t            free_object{no_object},  pending_deletion{no_object};
 size_t              callback_depth{};
 bool                layouts_dirty{};
 
@@ -53,7 +53,7 @@ bool valid(Object::DontUse::Key key) {
         objects[key.index].generation == key.generation;
 }
 
-void remove_animation_entry(uint32_t index) {
+void remove_animation_entry(uint16_t index) {
     auto& entry = objects[index];
     if (entry.animation_position == no_object)
         return;
@@ -242,7 +242,7 @@ struct Object::DontUse::SceneAccess {
     template <typename T, typename Desc>
     static Handle<T> add(const Desc& desc) {
         auto     object = make_unique<T>(desc);
-        uint32_t index;
+        uint16_t index;
         if (free_object != no_object) {
             index       = free_object;
             free_object = objects[index].next;
@@ -250,7 +250,7 @@ struct Object::DontUse::SceneAccess {
         else {
             if (objects.size() >= no_object)
                 Log::fatal("Scene object limit reached");
-            index = static_cast<uint32_t>(objects.size());
+            index = static_cast<uint16_t>(objects.size());
             objects.emplace_back();
         }
         object->scene_index      = index;
@@ -271,7 +271,7 @@ struct Object::DontUse::SceneAccess {
         return Handle<T>({index, entry.generation});
     }
 
-    static void mark_dirty(uint32_t index) {
+    static void mark_dirty(uint16_t index) {
         while (index != no_object) {
             auto& entry = objects[index];
             if (auto* layout = get_if<unique_ptr<Layout> >(&entry.value)) {
@@ -282,7 +282,7 @@ struct Object::DontUse::SceneAccess {
         }
     }
 
-    static void retire(uint32_t index) {
+    static void retire(uint16_t index) {
         auto& entry = objects[index];
         if (entry.previous != no_object)
             objects[entry.previous].next = entry.next;
@@ -329,14 +329,14 @@ struct Object::DontUse::SceneAccess {
             layout.set_frame({0, 0, static_cast<float>(surface[0]), static_cast<float>(surface[1])});
     }
 
-    static bool supports_auto_size(size_t index) {
+    static bool supports_auto_size(uint16_t index) {
         return visit([](const auto& object) {
             using T = remove_reference_t<decltype(*object)>;
             return derived_from<T, Image> || derived_from<T, Text>;
         }, objects[index].value);
     }
 
-    static bool fit_content(size_t index) {
+    static bool fit_content(uint16_t index) {
         return visit([](const auto& object) {
             using T = remove_reference_t<decltype(*object)>;
             if constexpr (derived_from<T, Image> || derived_from<T, Text>) {
@@ -454,7 +454,7 @@ struct Object::DontUse::SceneAccess {
         return clips;
     }
 
-    static void draw(size_t index, const Frame& clip) {
+    static void draw(uint16_t index, const Frame& clip) {
         if (clip.width <= 0 || clip.height <= 0) {
             return;
         }
@@ -472,7 +472,7 @@ struct Object::DontUse::SceneAccess {
         }, objects[index].value);
     }
 
-    static bool click(size_t index, const Frame& clip, float x, float y, bool left) {
+    static bool click(uint16_t index, const Frame& clip, float x, float y, bool left) {
         if (!contains(clip, x, y)) {
             return false;
         }
@@ -533,7 +533,7 @@ void Object::Element<Desc>::add_animation(AnimationDesc anim_desc, source_locati
     }
     ::add_animation(animations, target_ptr, anim_desc);
     if (scene_index != no_object && objects[scene_index].animation_position == no_object) {
-        objects[scene_index].animation_position = static_cast<uint32_t>(animated_objects.size());
+        objects[scene_index].animation_position = static_cast<uint16_t>(animated_objects.size());
         animated_objects.push_back(scene_index);
     }
     Island::request_redraw(true);

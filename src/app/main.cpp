@@ -1,7 +1,4 @@
-#include <systemd/sd-json.h>
-
 #include "app/API.hpp"
-#include "backend/egl_vendor.hpp"
 #include "scene/object.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
@@ -50,7 +47,8 @@ int main() {
         "Performance may be reduced and additional debug output may appear."
         );
 
-    EglVendor::select_for_wayland();
+    API::select_for_wayland();
+
 
     API::init();
 

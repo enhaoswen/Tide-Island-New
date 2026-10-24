@@ -5,6 +5,7 @@
 
 #include <array>
 #include <concepts>
+#include <cstdint>
 #include <memory>
 #include <source_location>
 #include <string_view>
@@ -24,7 +25,7 @@ class Layout;
 
 namespace DontUse {
 struct Key {
-    std::uint32_t index{std::numeric_limits<std::uint32_t>::max()};
+    std::uint16_t index{std::numeric_limits<std::uint16_t>::max()};
     std::uint32_t generation{};
 
     bool operator==(const Key&) const = default;
@@ -125,7 +126,7 @@ class Element {
     friend struct DontUse::SceneAccess;
 
 protected:
-    std::uint32_t scene_index{std::numeric_limits<std::uint32_t>::max()};
+    std::uint16_t scene_index{std::numeric_limits<std::uint16_t>::max()};
 
     void geometry_changed();
 
@@ -266,7 +267,7 @@ class Layout : public Element<LayoutDesc> {
     friend struct DontUse::SceneAccess;
 
     struct Item {
-        std::uint32_t index;
+        std::uint16_t index;
         Align         align;
         SizeMode      size_mode;
     };

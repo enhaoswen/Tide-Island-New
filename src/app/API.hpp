@@ -17,6 +17,7 @@ Timer::EventHandle push_event(std::chrono::microseconds duration, void (*callbac
 bool cancel_event(Timer::EventHandle event);
 void clear_status();
 void run();
+void select_for_wayland();
 
 void shutdown();
 }
