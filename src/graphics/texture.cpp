@@ -8,9 +8,9 @@ using namespace std;
 
 struct Texture::Impl {
     sg_image image{};
-    sg_view view{};
-    int width{};
-    int height{};
+    sg_view  view{};
+    int      width{};
+    int      height{};
 
     void reset() {
         if (view.id)
@@ -18,7 +18,7 @@ struct Texture::Impl {
         if (image.id)
             sg_destroy_image(image);
 
-        view = {};
+        view  = {};
         image = {};
         width = height = 0;
     }
@@ -43,12 +43,12 @@ void Texture::reset() {
 }
 
 void Texture::upload(int width, int height, Format format,
-    span<const uint8_t> pixels) {
+    span<const uint8_t>  pixels) {
     if (width <= 0 || height <= 0) {
         Log::fatal("Invalid texture dimensions: {}*{}", width, height);
     }
 
-    size_t channels{};
+    size_t          channels{};
     sg_pixel_format pixel_format{};
     switch (format) {
     case Format::R8:
@@ -64,11 +64,12 @@ void Texture::upload(int width, int height, Format format,
         return;
     }
 
-    if (static_cast<size_t>(width) >
-        numeric_limits<size_t>::max() / height / channels) {
+    const auto pixel_width = static_cast<size_t>(width);
+    const auto pixel_height = static_cast<size_t>(height);
+    if (pixel_width > numeric_limits<size_t>::max() / pixel_height / channels) {
         Log::fatal("Texture dimensions are too large");
     }
-    const auto required = static_cast<size_t>(width) * height * channels;
+    const auto required = pixel_width * pixel_height * channels;
     if (pixels.size() != required) {
         Log::fatal("Texture pixel data size mismatch: expected={}, actual={}",
             required, pixels.size());
@@ -83,12 +84,12 @@ void Texture::upload(int width, int height, Format format,
     reset();
 
     sg_image_desc desc{};
-    desc.width = width;
-    desc.height = height;
-    desc.usage.immutable = true;
-    desc.pixel_format = pixel_format;
+    desc.width              = width;
+    desc.height             = height;
+    desc.usage.immutable    = true;
+    desc.pixel_format       = pixel_format;
     desc.data.mip_levels[0] = {pixels.data(), pixels.size()};
-    impl->image = sg_make_image(&desc);
+    impl->image             = sg_make_image(&desc);
     if (sg_query_image_state(impl->image) != SG_RESOURCESTATE_VALID) {
         reset();
         Log::fatal("Failed to create texture");
@@ -96,13 +97,13 @@ void Texture::upload(int width, int height, Format format,
 
     sg_view_desc view_desc{};
     view_desc.texture.image = impl->image;
-    impl->view = sg_make_view(&view_desc);
+    impl->view              = sg_make_view(&view_desc);
     if (sg_query_view_state(impl->view) != SG_RESOURCESTATE_VALID) {
         reset();
         Log::fatal("Failed to create texture view");
     }
 
-    impl->width = width;
+    impl->width  = width;
     impl->height = height;
 }
 

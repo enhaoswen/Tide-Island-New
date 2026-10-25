@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <cstdint>
 #include <format>
 #include <print>
 #include <string>
@@ -32,7 +33,7 @@ class Color;
 
 namespace Log {
 
-enum LogLevel : char {
+enum LogLevel : std::uint8_t {
     Error,
     Warning,
     Debug,
@@ -45,9 +46,9 @@ enum LogLevel : char {
 // ============================================================================
 
 #if defined(_DEBUG) || !defined(NDEBUG)
-inline constexpr bool is_debug_mode = true;
+inline constexpr bool is_debug_mode{true};
 #else
-inline constexpr bool is_debug_mode = false;
+inline constexpr bool is_debug_mode{};
 #endif
 
 // ============================================================================
@@ -99,10 +100,10 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     if constexpr (sizeof...(Args) == 0)
         return;
 
-    std::array<std::string_view, sizeof...(Args)> raw_msgs{
+    const std::array<std::string_view, sizeof...(Args)> raw_msgs{
         std::string_view{std::forward<Args>(args)}...};
 
-    std::vector<std::string_view> msgs;
+    std::vector<std::string_view> msgs{};
     for (auto s : raw_msgs) {
         do {
             const auto pos = s.find('\n');
@@ -113,38 +114,38 @@ inline void frame_logger(LogLevel level, Args&&... args) {
         } while (!s.empty());
     }
 
-    size_t msg_len     = 0;
-    size_t total_lines = 0;
+    size_t msg_len{};
+    size_t total_lines{};
     for (const auto& s : msgs) {
         msg_len = std::max(s.size(), msg_len);
         total_lines += s.empty() ? 1 : (s.size() + 79) / 80;
     }
     msg_len = std::min<size_t>(msg_len, 80);
 
-    size_t border_bytes  = 3 + (msg_len + 2) * 3 + 4;
-    size_t content_bytes = total_lines * (4 + msg_len + 5);
+    const size_t border_bytes{3 + (msg_len + 2) * 3 + 4};
+    const size_t content_bytes{total_lines * (4 + msg_len + 5)};
 
-    std::string out_msg;
+    std::string out_msg{};
     out_msg.reserve(border_bytes * 2 + content_bytes);
 
     out_msg += "┌";
-    for (size_t i = 0; i < msg_len + 2; ++i)
+    for (size_t i{}; i < msg_len + 2; ++i)
         out_msg += "─";
     out_msg += "┐\n";
 
-    for (std::string_view s : msgs) {
-        size_t handled_char = 0;
+    for (std::string_view const s : msgs) {
+        size_t handled_char{};
         while (s.size() - handled_char > 80) {
-            std::string_view line = s.substr(handled_char, 80);
+            std::string_view line{s.substr(handled_char, 80)};
             out_msg               += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
             handled_char          += 80;
         }
-        std::string_view line = s.substr(handled_char);
+        std::string_view line{s.substr(handled_char)};
         out_msg               += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
     }
 
     out_msg += "└";
-    for (size_t i = 0; i < msg_len + 2; ++i)
+    for (size_t i{}; i < msg_len + 2; ++i)
         out_msg += "─";
     out_msg += "┘\n";
 

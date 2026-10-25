@@ -12,9 +12,9 @@ namespace {
 
 template<typename T, size_t N>
 string array_to_string(const array<T, N>& arr) {
-    string result;
+    string result{};
 
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i{}; i < N; ++i) {
         if (i)
             result += ',';
 
@@ -31,16 +31,16 @@ expected<RGBA, string_view> hex_to_rgba(string_view str) {
     if (str[0] != '#')
         return unexpected("Color must start with '#'");
 
-    auto hex = [](char c) -> int {
+    constexpr auto hex = [](char c) -> int {
         if (c >= '0' && c <= '9') return c - '0';
         if (c >= 'a' && c <= 'f') return c - 'a' + 10;
         if (c >= 'A' && c <= 'F') return c - 'A' + 10;
         return -1;
     };
 
-    auto byte = [&](size_t pos) -> int {
-        int high = hex(str[pos]);
-        int low  = hex(str[pos + 1]);
+    const auto byte = [&](size_t pos) -> int {
+        const int high{hex(str[pos])};
+        const int low{hex(str[pos + 1])};
 
         if (high < 0 || low < 0)
             return -1;
@@ -48,71 +48,50 @@ expected<RGBA, string_view> hex_to_rgba(string_view str) {
         return high * 16 + low;
     };
 
-    int r = byte(1);
-    int g = byte(3);
-    int b = byte(5);
-    int a = str.size() == 9 ? byte(7) : 255;
+    const int r{byte(1)};
+    const int g{byte(3)};
+    const int b{byte(5)};
+    const int a{str.size() == 9 ? byte(7) : 255};
 
     if (r < 0 || g < 0 || b < 0 || a < 0)
         return unexpected("Color contains invalid hexadecimal digits");
 
     return RGBA{
-        r / 255.0f,
-        g / 255.0f,
-        b / 255.0f,
-        a / 255.0f
+        static_cast<float>(r) / 255.0f,
+        static_cast<float>(g) / 255.0f,
+        static_cast<float>(b) / 255.0f,
+        static_cast<float>(a) / 255.0f
     };
 }
 
 } // namespace
 
-Color::Color() {
-    color = Black.to_rgba();
-}
-
 Color::Color(string_view arg_color, source_location l) {
-    auto parsed = hex_to_rgba(arg_color);
+    const auto parsed = hex_to_rgba(arg_color);
     if (parsed) {
         color = *parsed;
     }
     else {
         Log::logger(Log::Error, R"@({}:{}: {}, value="{}")@",
                     l.file_name(), l.line(), parsed.error(), arg_color);
-        color = Black.to_rgba();
     }
 }
 
 expected<Color, string_view> Color::parse(string_view input) {
-    auto parsed = hex_to_rgba(input);
+    const auto parsed = hex_to_rgba(input);
     if (!parsed)
         return unexpected(parsed.error());
-    Color result;
+    Color result{};
     result.color = *parsed;
     return result;
 }
 
-Color::Color(array<float, 3> arg_color, source_location l) {
-
-    for (float f : arg_color) {
-        if (f > 1 || f < 0) {
-            Log::logger(
-                Log::Error,
-                R"@({}:{}: Unsupported color type, value="{}")@",
-                l.file_name(),
-                l.line(),
-                array_to_string(arg_color)
-            );
-            color = Black.to_rgba();
-            return;
-        }
-    }
-
-    color = {arg_color[0], arg_color[1], arg_color[2], 1};
-}
+Color::Color(array<float, 3> arg_color, source_location l)
+    : Color(array<float, 4>{arg_color[0], arg_color[1], arg_color[2], 1}, l) {}
 
 Color::Color(array<float, 4> arg_color, source_location l) {
-    for (float f : arg_color) {
-        if (f > 1 || f < 0) {
+    for (const float f : arg_color) {
+        if (!isfinite(f) || f > 1 || f < 0) {
             Log::logger(
                 Log::Error,
                 R"@({}:{}: Unsupported color type, value="{}")@",
@@ -120,13 +99,11 @@ Color::Color(array<float, 4> arg_color, source_location l) {
                 l.line(),
                 array_to_string(arg_color)
             );
-            color = Black.to_rgba();
             return;
         }
     }
 
     color = arg_color;
-
 }
 
 Color::Color(
@@ -145,7 +122,8 @@ Color::Color(
 ) : Color(array<float, 4>{r, g, b, a}, l) {}
 
 string Color::to_string() const {
-    auto byte = [](float value) {
+    const auto byte = [](float value) {
+        if (!isfinite(value)) return 0;
         return static_cast<int>(
             round(std::clamp(value, 0.0f, 1.0f) * 255.0f)
         );

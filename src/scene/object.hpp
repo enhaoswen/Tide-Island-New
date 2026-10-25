@@ -31,7 +31,7 @@ struct Key {
     bool operator==(const Key&) const = default;
 };
 
-enum class Kind : char{
+enum class Kind : std::uint8_t {
     Rectangle,
     Image,
     Text,
@@ -81,13 +81,14 @@ public:
     Handle() = default;
 
     template <typename U> requires std::derived_from<U, T>
-    Handle(Handle<U> other) : key_(other.key_) {}
+    Handle(Handle<U> other) : key_(other.key_) {
+    }
 
     [[nodiscard]] T* get() const { return static_cast<T*>(DontUse::resolve(key_, DontUse::kind<T>())); }
     explicit         operator bool() const { return get() != nullptr; }
 
     T* operator->() const {
-        auto* value = get();
+        auto* const value = get();
         if (!value)
             throw std::logic_error("Expired scene handle");
         return value;
@@ -100,7 +101,7 @@ public:
 
 static_assert(sizeof(Handle<Rectangle>) == 8);
 
-enum class SizeMode : unsigned char { Fixed, Content, Fill };
+enum class SizeMode : std::uint8_t { Fixed, Content, Fill };
 
 namespace DontUse {
 struct SceneAccess;
@@ -109,8 +110,8 @@ bool delete_element_impl(Key element);
 
 class ClickableItem {
 protected:
-    ClickCallback callback_left;
-    ClickCallback callback_right;
+    ClickCallback callback_left{};
+    ClickCallback callback_right{};
 
 public:
     void set_callback_left(ClickCallback left);
@@ -130,8 +131,8 @@ protected:
 
     void geometry_changed();
 
-    Desc                                     desc;
-    std::vector<std::unique_ptr<Animation> > animations;
+    Desc                                     desc{};
+    std::vector<std::unique_ptr<Animation> > animations{};
 
     ~Element() = default;
 
@@ -175,7 +176,7 @@ public:
 
     void set_color(const Color& color);
 
-    void draw();
+    void draw() const;
 };
 
 class Image : public Element<ImageDesc> {
@@ -184,7 +185,7 @@ class Image : public Element<ImageDesc> {
     void prepare();
 
 protected:
-    Texture texture;
+    Texture texture{};
     bool    texture_dirty{false};
 
 public:
@@ -207,7 +208,7 @@ class Text : public Element<TextDesc> {
     void prepare();
 
 protected:
-    Texture texture;
+    Texture texture{};
     bool    texture_dirty{false};
     float   texture_scale{1.0f};
 
@@ -267,12 +268,12 @@ class Layout : public Element<LayoutDesc> {
     friend struct DontUse::SceneAccess;
 
     struct Item {
-        std::uint16_t index;
-        Align         align;
-        SizeMode      size_mode;
+        std::uint16_t index{};
+        Align         align{};
+        SizeMode      size_mode{};
     };
 
-    std::vector<Item>    elements;
+    std::vector<Item>    elements{};
     std::array<float, 3> lengths{};
     bool                 dirty{true};
 
@@ -294,8 +295,6 @@ public:
     void set_vertical(bool vertical);
 
     void set_cross_align(Align align);
-
-    void set_fit_surface(bool enabled);
 
     // Content measures image/text; Fill uses the layout's full width and height.
     // Changing group or sizing preserves insertion order.

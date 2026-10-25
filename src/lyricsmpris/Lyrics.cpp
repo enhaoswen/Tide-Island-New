@@ -15,11 +15,11 @@ optional<int64_t> timestamp(string_view tag) {
     const auto colon = tag.find(':');
     if (colon == tag.npos || colon == 0 || colon > 6) return {};
     const auto minutes = detail::number<int64_t>(tag.substr(0, colon));
-    auto rest = tag.substr(colon + 1);
+    const auto rest = tag.substr(colon + 1);
     const auto dot = rest.find_first_of(".:");
     const auto seconds = detail::number<unsigned>(rest.substr(0, dot));
     if (!minutes || *minutes < 0 || !seconds || *seconds >= 60) return {};
-    int64_t fraction = 0;
+    int64_t fraction{};
     if (dot != rest.npos) {
         const auto digits = rest.substr(dot + 1);
         if (digits.empty() || digits.size() > 3 || digits.find_first_not_of("0123456789") != digits.npos) return {};
@@ -62,13 +62,13 @@ expected<Lyrics, ParseError> parse_lyrics(string_view text, string_view provider
         return unexpected(ParseError::TooLarge);
     if (!detail::valid_utf8(text)) return unexpected(ParseError::InvalidUtf8);
     if (text.starts_with("\xef\xbb\xbf")) text.remove_prefix(3);
-    Lyrics result;
+    Lyrics result{};
     result.provider_ = provider;
     result.text_.reserve(text.size());
     result.lines_.reserve(min({limits.max_lines, text.size() / 24 + 1, size_t{512}}));
-    vector<Lyrics::Entry> plain;
-    vector<int64_t> times;
-    int64_t offset_ms = 0;
+    vector<Lyrics::Entry> plain{};
+    vector<int64_t> times{};
+    int64_t offset_ms{};
     while (!text.empty()) {
         const auto end = text.find_first_of("\r\n");
         auto row = detail::trim(text.substr(0, end));
@@ -76,7 +76,7 @@ expected<Lyrics, ParseError> parse_lyrics(string_view text, string_view provider
         else { text.remove_prefix(end + 1); if (!text.empty() && text.front() == '\n') text.remove_prefix(1); }
         if (row.empty()) continue;
         times.clear();
-        bool metadata = false;
+        bool metadata{};
         while (row.starts_with('[')) {
             const auto close = row.find(']');
             if (close == row.npos) break;

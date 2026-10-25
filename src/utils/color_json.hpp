@@ -9,7 +9,7 @@ template <>
 struct glz::meta<Color> {
     static constexpr auto read_color = [](Color& color, const std::string& input,
                                           glz::context& ctx) {
-        auto parsed = Color::parse(input);
+        const auto parsed = Color::parse(input);
         if (!parsed) {
             ctx.error = glz::error_code::syntax_error;
             ctx.custom_error_message = parsed.error();

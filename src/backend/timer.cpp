@@ -22,7 +22,7 @@ namespace {
 int timer_fd{-1};
 int wayland_fd{-1};
 
-Timer::Detail::EventQueue timer_queue;
+Timer::Detail::EventQueue timer_queue{};
 
 void set_timer_at(steady_clock::time_point deadline) {
     const duration since_epoch      = deadline.time_since_epoch();
@@ -70,7 +70,7 @@ Timer::EventHandle Timer::push(microseconds duration, void (*callback)(), float 
 
 bool Timer::cancel(EventHandle event) {
     const auto previous = timer_queue.next_deadline();
-    const bool removed = timer_queue.cancel(event);
+    const bool removed{timer_queue.cancel(event)};
     if (removed && timer_queue.next_deadline() != previous) arm_next();
     return removed;
 }
@@ -111,7 +111,7 @@ void Timer::handle_events(std::source_location) {
 
     uint64_t expiration_count{};
 
-    ssize_t result;
+    ssize_t result{};
     do {
         result = read(timer_fd, &expiration_count, sizeof(expiration_count));
     } while (result == -1 && errno == EINTR);
@@ -126,7 +126,7 @@ void Timer::handle_events(std::source_location) {
 }
 
 bool Timer::wait() {
-    short wayland_events = Wayland::prepare_events();
+    const short wayland_events = Wayland::prepare_events();
 
     pollfd fds[] = {
         {
@@ -148,7 +148,7 @@ bool Timer::wait() {
 
     int result{};
     // Keep frames advancing while animations run; sleep indefinitely when idle.
-    const int timeout_ms = Object::has_active_animations() ? 16 : -1;
+    const int timeout_ms{Object::has_active_animations() ? 16 : -1};
 
     do {
         result = poll(fds, 3, timeout_ms);
@@ -174,11 +174,11 @@ bool Timer::wait() {
     }
 
     if (fds[2].revents & POLLIN) {
-        string cmd;
+        string cmd{};
         getline(cin, cmd);
         Command::handle_command(cmd);
     }
 
-    const bool wayland_redraw = Wayland::get_wayland_redraw();
+    const bool wayland_redraw{Wayland::get_wayland_redraw()};
     return result == 0 || wayland_redraw || Object::has_active_animations();
 }

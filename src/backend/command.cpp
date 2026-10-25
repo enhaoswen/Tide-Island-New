@@ -5,22 +5,23 @@
 #include <vector>
 #include <optional>
 #include <ranges>
+#include <span>
 
 using namespace std;
 
 namespace {
 
 vector<string_view> split(string_view str, char delimiter = ' ') {
-    vector<string_view> result;
+    vector<string_view> result{};
 
-    size_t start = 0;
+    size_t start{};
 
     while (start < str.size()) {
         start = str.find_first_not_of(delimiter, start);
         if (start == string_view::npos)
             break;
 
-        size_t end = str.find(delimiter, start);
+        const size_t end{str.find(delimiter, start)};
 
         if (end == string_view::npos) {
             result.push_back(str.substr(start));
@@ -35,9 +36,9 @@ vector<string_view> split(string_view str, char delimiter = ' ') {
 }
 
 optional<float> to_float(string_view str) {
-    float value;
+    float value{};
 
-    auto [ptr, ec] = from_chars(
+    const auto [ptr, ec] = from_chars(
         str.data(),
         str.data() + str.size(),
         value
@@ -50,14 +51,14 @@ optional<float> to_float(string_view str) {
     return value;
 }
 
-void handle_animation(vector<string_view> args) {
+void handle_animation(span<const string_view> args) {
     if (args[1] == "speed") {
-        auto value = to_float(args[2]);
+        const auto value = to_float(args[2]);
 
         if (!value) {
 
             // c++ is a amazing language
-            auto cmd = args
+            const auto cmd = args
                 | views::join_with(' ')
                 | ranges::to<string>();
 
@@ -71,7 +72,7 @@ void handle_animation(vector<string_view> args) {
     }
 
     else {
-        auto cmd = args
+        const auto cmd = args
             | views::join_with(' ')
             | ranges::to<string>();
 
@@ -95,13 +96,17 @@ void Command::handle_command(string_view cmd) {
     }
 
     if (result[0] == "animation") {
+        if (result.size() <= 2) {
+            Log::logger(Log::Error, R"@(Command "animation" requires more args. {})@", cmd);
+            return;
+        }
         handle_animation(result);
         return;
     }
 
     if (result[0] == "help") {
 
-        string help = R"(TIDE ISLAND HELP
+        string const help = R"(TIDE ISLAND HELP
 
 Commands:
   quit            Exit Tide Island.

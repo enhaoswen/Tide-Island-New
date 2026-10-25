@@ -31,18 +31,18 @@ struct GlyphBitmap {
     int top{};
     unsigned width{};
     unsigned height{};
-    vector<uint8_t> pixels;
+    vector<uint8_t> pixels{};
     bool failed{};
 
     static GlyphBitmap failure() {
-        GlyphBitmap glyph;
+        GlyphBitmap glyph{};
         glyph.failed = true;
         return glyph;
     }
 };
 
 struct FaceState {
-    string path;
+    string path{};
     int face_index{};
     FT_Face face{};
     hb_font_t* hb_font{};
@@ -50,15 +50,15 @@ struct FaceState {
 };
 
 struct LoadedFont {
-    string family;
+    string family{};
     unsigned pixel_size{};
     unsigned raster_size{};
-    vector<FaceState> faces;
-    unordered_map<uint64_t, GlyphBitmap> glyph_cache;
-    unordered_set<uint32_t> unsupported_codepoints;
+    vector<FaceState> faces{};
+    unordered_map<uint64_t, GlyphBitmap> glyph_cache{};
+    unordered_set<uint32_t> unsupported_codepoints{};
 
     ~LoadedFont() {
-        for (auto& state : faces) {
+        for (const auto& state : faces) {
             if (state.hb_font) hb_font_destroy(state.hb_font);
             if (state.face) FT_Done_Face(state.face);
         }
@@ -136,7 +136,7 @@ struct PositionedGlyph {
 };
 
 FT_Library ft_library{};
-unordered_map<uint64_t, unique_ptr<LoadedFont>> loaded_fonts;
+unordered_map<uint64_t, unique_ptr<LoadedFont>> loaded_fonts{};
 uint64_t next_font_id{1};
 
 bool cacheable_codepoint(uint32_t cp) {
@@ -155,11 +155,11 @@ bool cacheable_codepoint(uint32_t cp) {
 }
 
 vector<Codepoint> decode_utf8(string_view text) {
-    vector<Codepoint> result;
+    vector<Codepoint> result{};
     result.reserve(text.size());
 
-    for (size_t i = 0; i < text.size();) {
-        auto first = static_cast<uint8_t>(text[i]);
+    for (size_t i{}; i < text.size();) {
+        const auto first = static_cast<uint8_t>(text[i]);
         if (first < 0x80) {
             // This API produces one line. Treat line breaks and tabs as spaces.
             result.push_back({first == '\n' || first == '\r' || first == '\t' ?
@@ -168,14 +168,14 @@ vector<Codepoint> decode_utf8(string_view text) {
             continue;
         }
 
-        unsigned length = first >= 0xf0 && first <= 0xf4 ? 4 :
+        const unsigned length = first >= 0xf0 && first <= 0xf4 ? 4 :
                           first >= 0xe0 && first <= 0xef ? 3 :
                           first >= 0xc2 && first <= 0xdf ? 2 : 0;
-        uint32_t cp = first & (length == 4 ? 0x07u : length == 3 ? 0x0fu : 0x1fu);
-        bool valid = length != 0 && i + length <= text.size();
+        uint32_t cp{first & (length == 4 ? 0x07u : length == 3 ? 0x0fu : 0x1fu)};
+        bool valid{length != 0 && i + length <= text.size()};
         if (valid) {
-            for (unsigned j = 1; j < length; ++j) {
-                auto byte = static_cast<uint8_t>(text[i + j]);
+            for (unsigned j{1}; j < length; ++j) {
+                const auto byte = static_cast<uint8_t>(text[i + j]);
                 if ((byte & 0xc0) != 0x80) {
                     valid = false;
                     break;
@@ -212,8 +212,8 @@ bool ignorable_for_coverage(uint32_t cp) {
 
 unsigned choose_face(const LoadedFont& font, const vector<Codepoint>& cps,
                      unsigned begin, unsigned end) {
-    auto cluster = ranges::subrange(cps.begin() + begin, cps.begin() + end);
-    for (unsigned i = 0; i < font.faces.size(); ++i) {
+    const auto cluster = ranges::subrange(cps.begin() + begin, cps.begin() + end);
+    for (unsigned i{}; i < font.faces.size(); ++i) {
         if (ranges::all_of(cluster, [&](const Codepoint& cp) {
                 return ignorable_for_coverage(cp.value) ||
                        FT_Get_Char_Index(font.faces[i].face, cp.value) != 0;
@@ -224,7 +224,7 @@ unsigned choose_face(const LoadedFont& font, const vector<Codepoint>& cps,
 
 optional<FaceState> font_source(FcPattern* pattern) {
     FcChar8* path{};
-    int index = 0;
+    int index{};
     if (FcPatternGetString(pattern, FC_FILE, 0, &path) != FcResultMatch || !path) {
         Log::logger(Log::Error, "Matched font has no file");
         return nullopt;
@@ -274,7 +274,7 @@ bool prepare_raster_size(LoadedFont& font, float scale) {
         Log::logger(Log::Error, "Invalid text scale {}", scale);
         return false;
     }
-    const float size = max(1.0f, round(font.pixel_size * scale));
+    const float size{max(1.0f, round(static_cast<float>(font.pixel_size) * scale))};
     if (!isfinite(size) || size >= static_cast<float>(numeric_limits<unsigned>::max())) {
         Log::logger(Log::Error, "Text raster size is too large");
         return false;
@@ -285,7 +285,7 @@ bool prepare_raster_size(LoadedFont& font, float scale) {
         font.glyph_cache.clear();
         font.raster_size = raster_size;
     }
-    for (unsigned index = 0; index < font.faces.size(); ++index) {
+    for (unsigned index{}; index < font.faces.size(); ++index) {
         if (!get_face(font, index)) return false;
     }
     return true;
@@ -296,24 +296,24 @@ bool pattern_covers(FcPattern* pattern, const vector<Codepoint>& cps,
     FcCharSet* charset{};
     if (FcPatternGetCharSet(pattern, FC_CHARSET, 0, &charset) != FcResultMatch)
         return false;
-    auto cluster = ranges::subrange(cps.begin() + begin, cps.begin() + end);
+    const auto cluster = ranges::subrange(cps.begin() + begin, cps.begin() + end);
     return ranges::all_of(cluster, [&](const Codepoint& cp) {
         return ignorable_for_coverage(cp.value) || FcCharSetHasChar(charset, cp.value);
     });
 }
 
 void resolve_missing_faces(LoadedFont& font, const vector<Codepoint>& cps) {
-    struct MissingCluster { unsigned begin; unsigned end; };
-    vector<MissingCluster> missing;
+    struct MissingCluster { unsigned begin{}; unsigned end{}; };
+    vector<MissingCluster> missing{};
 
-    for (unsigned begin = 0; begin < cps.size();) {
-        unsigned end = begin + 1;
+    for (unsigned begin{}; begin < cps.size();) {
+        unsigned end{begin + 1};
         while (end < cps.size() && extends_cluster(cps[end].value, cps[end - 1].value))
             ++end;
 
         if (choose_face(font, cps, begin, end) == font.faces.size()) {
-            auto cluster = ranges::subrange(cps.begin() + begin, cps.begin() + end);
-            bool already_unsupported = ranges::any_of(cluster, [&](const Codepoint& cp) {
+            const auto cluster = ranges::subrange(cps.begin() + begin, cps.begin() + end);
+            const bool already_unsupported = ranges::any_of(cluster, [&](const Codepoint& cp) {
                 return font.unsupported_codepoints.contains(cp.value);
             });
             if (!already_unsupported) missing.push_back({begin, end});
@@ -324,15 +324,15 @@ void resolve_missing_faces(LoadedFont& font, const vector<Codepoint>& cps) {
 
     // One short-lived Fontconfig lookup handles every missing cluster in this
     // line. Only copied paths and face indices remain after this function.
-    FontQuery query(font.family, font.raster_size);
+    const FontQuery query(font.family, font.raster_size);
     if (!query.matches) return;
     for (const auto& cluster : missing) {
         if (choose_face(font, cps, cluster.begin, cluster.end) != font.faces.size())
             continue;
 
-        bool resolved = false;
-        bool failed_candidate = false;
-        for (int i = 0; i < query.matches->nfont; ++i) {
+        bool resolved{};
+        bool failed_candidate{};
+        for (int i{}; i < query.matches->nfont; ++i) {
             FcPattern* pattern = query.matches->fonts[i];
             if (!pattern_covers(pattern, cps, cluster.begin, cluster.end)) continue;
 
@@ -341,13 +341,13 @@ void resolve_missing_faces(LoadedFont& font, const vector<Codepoint>& cps) {
                 failed_candidate = true;
                 continue;
             }
-            bool loaded = ranges::any_of(font.faces, [&](const FaceState& face) {
+            const bool loaded = ranges::any_of(font.faces, [&](const FaceState& face) {
                 return face.path == source->path && face.face_index == source->face_index;
             });
             if (loaded) continue;
 
             font.faces.push_back(std::move(*source));
-            unsigned index = static_cast<unsigned>(font.faces.size() - 1);
+            const unsigned index{static_cast<unsigned>(font.faces.size() - 1)};
             if (!get_face(font, index)) {
                 font.faces.pop_back();
                 failed_candidate = true;
@@ -368,17 +368,17 @@ void resolve_missing_faces(LoadedFont& font, const vector<Codepoint>& cps) {
 }
 
 vector<Run> make_runs(const LoadedFont& font, const vector<Codepoint>& cps) {
-    vector<Run> runs;
-    for (unsigned begin = 0; begin < cps.size();) {
-        unsigned end = begin + 1;
+    vector<Run> runs{};
+    for (unsigned begin{}; begin < cps.size();) {
+        unsigned end{begin + 1};
         while (end < cps.size() && extends_cluster(cps[end].value, cps[end - 1].value))
             ++end;
 
-        unsigned face_index = choose_face(font, cps, begin, end);
+        unsigned face_index{choose_face(font, cps, begin, end)};
         if (face_index == font.faces.size()) face_index = 0; // .notdef glyph
         hb_script_t script = HB_SCRIPT_COMMON;
         for (unsigned j = begin; j < end; ++j) {
-            auto candidate = hb_unicode_script(hb_unicode_funcs_get_default(), cps[j].value);
+            const auto candidate = hb_unicode_script(hb_unicode_funcs_get_default(), cps[j].value);
             if (candidate != HB_SCRIPT_COMMON && candidate != HB_SCRIPT_INHERITED) {
                 script = candidate;
                 break;
@@ -409,7 +409,7 @@ GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id) 
     }
 
     const FT_Bitmap& bitmap = face->glyph->bitmap;
-    GlyphBitmap result;
+    GlyphBitmap result{};
     result.left = face->glyph->bitmap_left;
     result.top = face->glyph->bitmap_top;
     result.width = bitmap.width;
@@ -427,10 +427,10 @@ GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id) 
     }
 
     const auto pitch = static_cast<size_t>(abs(bitmap.pitch));
-    for (unsigned y = 0; y < result.height; ++y) {
-        const unsigned source_y = bitmap.pitch < 0 ? result.height - 1 - y : y;
+    for (unsigned y{}; y < result.height; ++y) {
+        const unsigned source_y{bitmap.pitch < 0 ? result.height - 1 - y : y};
         const auto* row = bitmap.buffer + static_cast<size_t>(source_y) * pitch;
-        for (unsigned x = 0; x < result.width; ++x) {
+        for (unsigned x{}; x < result.width; ++x) {
             uint8_t alpha{};
             switch (bitmap.pixel_mode) {
                 case FT_PIXEL_MODE_GRAY:
@@ -456,9 +456,9 @@ GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id) 
 
 const GlyphBitmap& get_glyph(LoadedFont& font, const PositionedGlyph& placement,
                              unordered_map<uint64_t, GlyphBitmap>& scratch) {
-    auto key = glyph_key(placement.face_index, placement.glyph_id);
+    const auto key = glyph_key(placement.face_index, placement.glyph_id);
     if (placement.cacheable) {
-        auto cached = font.glyph_cache.find(key);
+        const auto cached = font.glyph_cache.find(key);
         if (cached != font.glyph_cache.end()) return cached->second;
     }
 
@@ -473,7 +473,7 @@ const GlyphBitmap& get_glyph(LoadedFont& font, const PositionedGlyph& placement,
 }
 
 LoadedFont* require_font(FontHandle handle) {
-    auto it = loaded_fonts.find(handle.id);
+    const auto it = loaded_fonts.find(handle.id);
     if (it == loaded_fonts.end()) {
         Log::logger(Log::Error, "Invalid text font handle {}", handle.id);
         return nullptr;
@@ -508,9 +508,9 @@ FontHandle Text::load_font(string_view family, unsigned pixel_size) {
     font->pixel_size = pixel_size;
     font->raster_size = pixel_size;
     {
-        FontQuery query(font->family, pixel_size);
+        const FontQuery query(font->family, pixel_size);
         if (!query.has_matches()) return {};
-        for (int i = 0; i < query.matches->nfont; ++i) {
+        for (int i{}; i < query.matches->nfont; ++i) {
             auto source = font_source(query.matches->fonts[i]);
             if (!source) continue;
             font->faces.push_back(std::move(*source));
@@ -538,33 +538,33 @@ void Text::unload_font(FontHandle font) {
 }
 
 Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale) {
-    LoadedFont* font = require_font(handle);
-    Bitmap bitmap;
+    LoadedFont* const font = require_font(handle);
+    Bitmap bitmap{};
     if (!font || text.empty()) return bitmap;
     if (!prepare_raster_size(*font, scale)) return bitmap;
 
-    auto cps = decode_utf8(text);
+    const auto cps = decode_utf8(text);
     if (cps.size() > static_cast<size_t>(numeric_limits<int>::max())) {
         Log::logger(Log::Error, "Text is too long to shape");
         return {};
     }
     resolve_missing_faces(*font, cps);
-    auto runs = make_runs(*font, cps);
-    vector<uint32_t> values;
+    const auto runs = make_runs(*font, cps);
+    vector<uint32_t> values{};
     values.reserve(cps.size());
     for (const auto& cp : cps) values.push_back(cp.value);
 
-    vector<PositionedGlyph> placements;
-    int64_t pen_x = 0;
-    int64_t pen_y = 0;
+    vector<PositionedGlyph> placements{};
+    int64_t pen_x{};
+    int64_t pen_y{};
     for (const auto& run : runs) {
-        hb_buffer_t* buffer = hb_buffer_create();
+        hb_buffer_t* const buffer = hb_buffer_create();
         if (!buffer) {
             Log::logger(Log::Error, "Failed to create HarfBuzz buffer");
             return {};
         }
         hb_buffer_add_codepoints(buffer, values.data(), static_cast<int>(values.size()),
-                                 run.begin, run.end - run.begin);
+                                 run.begin, static_cast<int>(run.end - run.begin));
         hb_buffer_set_direction(buffer, HB_DIRECTION_LTR);
         if (run.script != HB_SCRIPT_UNKNOWN && run.script != HB_SCRIPT_COMMON)
             hb_buffer_set_script(buffer, run.script);
@@ -574,17 +574,17 @@ Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale) {
         unsigned count{};
         const auto* infos = hb_buffer_get_glyph_infos(buffer, &count);
         const auto* positions = hb_buffer_get_glyph_positions(buffer, &count);
-        vector<unsigned> clusters;
+        vector<unsigned> clusters{};
         clusters.reserve(count);
-        for (unsigned i = 0; i < count; ++i) clusters.push_back(infos[i].cluster);
+        for (unsigned i{}; i < count; ++i) clusters.push_back(infos[i].cluster);
         sort(clusters.begin(), clusters.end());
         clusters.erase(unique(clusters.begin(), clusters.end()), clusters.end());
 
-        for (unsigned i = 0; i < count; ++i) {
-            unsigned cluster_begin = infos[i].cluster;
-            auto next = upper_bound(clusters.begin(), clusters.end(), cluster_begin);
-            unsigned cluster_end = next == clusters.end() ? run.end : *next;
-            bool cacheable = cluster_begin < cluster_end && cluster_end <= values.size();
+        for (unsigned i{}; i < count; ++i) {
+            const unsigned cluster_begin{infos[i].cluster};
+            const auto next = upper_bound(clusters.begin(), clusters.end(), cluster_begin);
+            const unsigned cluster_end{next == clusters.end() ? run.end : *next};
+            bool cacheable{cluster_begin < cluster_end && cluster_end <= values.size()};
             for (unsigned j = cluster_begin; cacheable && j < cluster_end; ++j)
                 cacheable = cacheable_codepoint(values[j]);
 
@@ -598,12 +598,12 @@ Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale) {
     }
 
     bitmap.advance_x = static_cast<float>(pen_x) / 64.0f;
-    unordered_map<uint64_t, GlyphBitmap> scratch;
-    int64_t min_x = min<int64_t>(0, static_cast<int64_t>(floor(bitmap.advance_x)));
-    int64_t max_x = max<int64_t>(0, static_cast<int64_t>(ceil(bitmap.advance_x)));
-    int64_t min_y = 0;
-    int64_t max_y = 0;
-    bool has_pixels = false;
+    unordered_map<uint64_t, GlyphBitmap> scratch{};
+    int64_t min_x{min<int64_t>(0, static_cast<int64_t>(floor(bitmap.advance_x)))};
+    int64_t max_x{max<int64_t>(0, static_cast<int64_t>(ceil(bitmap.advance_x)))};
+    int64_t min_y{};
+    int64_t max_y{};
+    bool has_pixels{};
 
     for (const auto& placement : placements) {
         const auto& glyph = get_glyph(*font, placement, scratch);
@@ -650,10 +650,10 @@ Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale) {
             static_cast<double>(placement.x_26_6) / 64.0)) + glyph.left - min_x;
         const auto y = -static_cast<int64_t>(lround(
             static_cast<double>(placement.y_26_6) / 64.0)) - glyph.top - min_y;
-        for (unsigned row = 0; row < glyph.height; ++row) {
-            for (unsigned col = 0; col < glyph.width; ++col) {
-                auto source = glyph.pixels[static_cast<size_t>(row) * glyph.width + col];
-                auto& target = bitmap.pixels[static_cast<size_t>(y + row) * bitmap.stride + x + col];
+        for (unsigned row{}; row < glyph.height; ++row) {
+            for (unsigned col{}; col < glyph.width; ++col) {
+                const auto source = glyph.pixels[static_cast<size_t>(row) * glyph.width + col];
+                auto& target = bitmap.pixels[static_cast<size_t>(y + row) * bitmap.stride + static_cast<size_t>(x) + col];
                 target = static_cast<uint8_t>(source +
                     (static_cast<unsigned>(target) * (255u - source) + 127u) / 255u);
             }

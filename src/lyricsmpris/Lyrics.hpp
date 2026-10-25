@@ -15,15 +15,15 @@ using Milliseconds = std::chrono::milliseconds;
 
 struct LyricLine {
     // Missing for unsynchronized plain text. Empty text is a timed blank line.
-    std::optional<Milliseconds> start_time;
-    std::string_view text;
+    std::optional<Milliseconds> start_time{};
+    std::string_view text{};
 };
 
-enum class ParseError { TooLarge, TooManyLines, InvalidUtf8 };
+enum class ParseError : std::uint8_t { TooLarge, TooManyLines, InvalidUtf8 };
 
 struct ParseLimits {
-    std::size_t max_bytes = 1024 * 1024;
-    std::size_t max_lines = 10000;
+    std::size_t max_bytes{1024 * 1024};
+    std::size_t max_lines{10000};
 };
 
 // One text buffer and compact line indexes. Offsets keep moves/copies safe,
@@ -41,15 +41,15 @@ public:
 
 private:
     struct Entry {
-        std::int64_t time_ms;
-        std::uint32_t offset;
-        std::uint32_t length;
+        std::int64_t time_ms{};
+        std::uint32_t offset{};
+        std::uint32_t length{};
     };
-    std::string text_;
-    std::vector<Entry> lines_;
-    std::string provider_;
-    bool synced_ = false;
-    bool instrumental_ = false;
+    std::string text_{};
+    std::vector<Entry> lines_{};
+    std::string provider_{};
+    bool synced_{};
+    bool instrumental_{};
 
     friend std::expected<Lyrics, ParseError> parse_lyrics(
         std::string_view, std::string_view, ParseLimits);

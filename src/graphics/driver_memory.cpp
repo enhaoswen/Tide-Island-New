@@ -22,7 +22,7 @@ struct Mapping {
     std::uintptr_t begin{}, end{};
     std::array<char, 5> permissions{};
     bool compiler{};
-    std::optional<std::size_t> anonymous, private_dirty, shared_dirty, swap, locked, rss;
+    std::optional<std::size_t> anonymous{}, private_dirty{}, shared_dirty{}, swap{}, locked{}, rss{};
 
     bool eligible() const {
         const std::string_view access{permissions.data()};
@@ -75,9 +75,9 @@ void DriverMemory::release_idle_compiler_pages() {
         Log::logger(Log::Debug, "Skipping NVIDIA compiler page reclamation: smaps unavailable");
         return;
     }
-    std::vector<Mapping> selected;
-    Mapping current;
-    std::string line;
+    std::vector<Mapping> selected{};
+    Mapping current{};
+    std::string line{};
     while (std::getline(stream, line)) {
         std::uintptr_t begin{}, end{};
         std::array<char, 5> permissions{};
@@ -91,7 +91,7 @@ void DriverMemory::release_idle_compiler_pages() {
             current.begin = begin;
             current.end = end;
             current.permissions = permissions;
-            current.compiler = compiler_file(std::string_view(line).substr(path_offset));
+            current.compiler = compiler_file(std::string_view(line).substr(static_cast<std::size_t>(path_offset)));
         }
         else {
             std::size_t value{};
@@ -120,13 +120,13 @@ void DriverMemory::release_idle_compiler_pages() {
 
     std::size_t advised_ranges{}, previous_rss_kib{};
     for (const auto& mapping : selected) {
-        auto* address = reinterpret_cast<void*>(mapping.begin);
+        auto* const address = reinterpret_cast<void*>(mapping.begin);
         const auto size = mapping.end - mapping.begin;
         // Keep file huge pages from immediately repopulating large ranges.
         // Preserve the virtual mapping; future compiler accesses fault back in.
         if (madvise(address, size, MADV_NOHUGEPAGE) != 0 ||
             madvise(address, size, MADV_DONTNEED) != 0) {
-            const int error = errno;
+            const int error{errno};
             Log::logger(Log::Debug, "Skipping NVIDIA compiler page range: errno={}", error);
             continue;
         }

@@ -30,7 +30,7 @@ public:
     std::optional<Error> take_error();
 
 private:
-    struct Job { Stage stage; Candidate metadata; };
+    struct Job { Stage stage{}; Candidate metadata{}; };
     explicit Resolver(const Options& options) : options_(options) {}
     void schedule(Stage stage, Candidate candidate = {});
     void next_provider();
@@ -42,22 +42,22 @@ private:
     void receive(HttpResponse response);
 
     const Options& options_;
-    std::unique_ptr<Http> http_;
-    TrackQuery query_;
+    std::unique_ptr<Http> http_{};
+    TrackQuery query_{};
     Lyrics document_, best_synced_;
-    int best_synced_score_ = -1;
-    int best_plain_score_ = -1;
-    std::unordered_map<std::uint64_t, Job> jobs_;
-    std::uint64_t next_id_ = 0;
-    std::uint64_t document_revision_ = 0;
-    std::size_t provider_index_ = 0;
-    std::optional<Stage> followup_;
-    std::optional<Clock::time_point> retry_at_;
-    unsigned attempts_ = 0;
-    SearchState state_ = SearchState::Idle;
-    bool successful_response_ = false;
-    bool had_error_ = false;
-    std::optional<Error> error_;
+    int best_synced_score_{-1};
+    int best_plain_score_{-1};
+    std::unordered_map<std::uint64_t, Job> jobs_{};
+    std::uint64_t next_id_{};
+    std::uint64_t document_revision_{};
+    std::size_t provider_index_{};
+    std::optional<Stage> followup_{};
+    std::optional<Clock::time_point> retry_at_{};
+    unsigned attempts_{};
+    SearchState state_{SearchState::Idle};
+    bool successful_response_{};
+    bool had_error_{};
+    std::optional<Error> error_{};
 };
 
 } // namespace lyricsmpris::detail

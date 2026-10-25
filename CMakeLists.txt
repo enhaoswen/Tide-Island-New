@@ -40,6 +40,8 @@ set(SRC
         third_party/wayland/viewporter-protocol.c
         src/backend/command.cpp
         src/app/state_manager.cpp
+        src/backend/config.cpp
+        src/backend/config.hpp
 )
 
 add_executable(Tide-island ${SRC})

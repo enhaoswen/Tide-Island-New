@@ -13,7 +13,7 @@ private:
     struct Impl;
     Impl* impl{};
 public:
-    enum class Format : char{
+    enum class Format : std::uint8_t {
         R8,
         RGBA8,
     };

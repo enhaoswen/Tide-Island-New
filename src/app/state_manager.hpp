@@ -4,6 +4,7 @@
 
 namespace StateManager {
 
+void init();
 void switch_state(StateType state);
 
 }

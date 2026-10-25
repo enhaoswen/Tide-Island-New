@@ -20,7 +20,7 @@ struct Bitmap {
     std::int32_t offset_x{};
     std::int32_t offset_y{};
     float advance_x{};
-    std::vector<std::uint8_t> pixels;
+    std::vector<std::uint8_t> pixels{};
 
     Bitmap() = default;
     Bitmap(const Bitmap&) = delete;

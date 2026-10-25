@@ -42,7 +42,7 @@ bool capabilities_equal(const Capabilities& a, const Capabilities& b) {
 }
 
 detail::TrackQuery query_for(const State& state) {
-    detail::TrackQuery query;
+    detail::TrackQuery query{};
     query.title = state.title; query.album = state.album; query.duration = state.duration;
     for (const auto& artist : state.artists) {
         if (!query.artist.empty()) query.artist += ", ";
@@ -54,26 +54,26 @@ detail::TrackQuery query_for(const State& state) {
 } // namespace
 
 struct Client::Impl {
-    Options options;
-    unique_ptr<detail::Mpris> mpris;
-    unique_ptr<detail::Resolver> resolver;
-    State state;
-    vector<pollfd> fds;
-    uint64_t bus_revision = numeric_limits<uint64_t>::max();
-    uint64_t document_revision = 0;
-    uint64_t player_instance = 0;
-    size_t inline_hash = 0;
-    bool selection_dirty = true;
-    bool retry_requested = false;
-    bool offset_dirty = false;
-    optional<Clock::time_point> resync_at;
-    optional<Error> poll_error;
+    Options options{};
+    unique_ptr<detail::Mpris> mpris{};
+    unique_ptr<detail::Resolver> resolver{};
+    State state{};
+    vector<pollfd> fds{};
+    uint64_t bus_revision{numeric_limits<uint64_t>::max()};
+    uint64_t document_revision{};
+    uint64_t player_instance{};
+    size_t inline_hash{};
+    bool selection_dirty{true};
+    bool retry_requested{};
+    bool offset_dirty{};
+    optional<Clock::time_point> resync_at{};
+    optional<Error> poll_error{};
 
     explicit Impl(Options value) : options(move(value)) {}
 
     const detail::Player* choose() const {
         const auto players = mpris->players();
-        const detail::Player* current = nullptr;
+        const detail::Player* current{};
         for (const auto& player : players) {
             if (!player.valid) continue;
             if (!options.preferred_service.empty() && player.state.service == options.preferred_service) return &player;
@@ -82,8 +82,8 @@ struct Client::Impl {
         // Keep an already selected playing player stable; choose the most
         // recently started player when the selected one stops/pauses/disappears.
         if (current && current->state.playback == Playback::Playing) return current;
-        const detail::Player* best = nullptr;
-        auto rank = [](const detail::Player& player) {
+        const detail::Player* best{};
+        constexpr auto rank = [](const detail::Player& player) {
             return player.state.playback == Playback::Playing ? 2 : player.state.playback == Playback::Paused ? 1 : 0;
         };
         for (const auto& player : players) {
@@ -112,14 +112,14 @@ struct Client::Impl {
             return;
         }
         const auto& incoming = player->state;
-        const bool new_player = player_instance != player->instance || state.service != incoming.service;
+        const bool new_player{player_instance != player->instance || state.service != incoming.service};
         const bool new_track = new_player || state.track_id != incoming.track_id || state.title != incoming.title
             || state.artists != incoming.artists;
-        const bool changed_query = state.album != incoming.album || state.duration != incoming.duration;
-        const bool late_url = state.media_url != incoming.media_url && !incoming.media_url.empty();
+        const bool changed_query{state.album != incoming.album || state.duration != incoming.duration};
+        const bool late_url{state.media_url != incoming.media_url && !incoming.media_url.empty()};
         const auto hash = player->lyrics_hash;
-        const bool late_lyrics = hash != inline_hash && !player->inline_lyrics.empty();
-        const bool changed_playback = state.playback != incoming.playback || state.playback_rate != incoming.playback_rate;
+        const bool late_lyrics{hash != inline_hash && !player->inline_lyrics.empty()};
+        const bool changed_playback{state.playback != incoming.playback || state.playback_rate != incoming.playback_rate};
         if (new_player) mark(changes, Changes::Player);
         if (!metadata_equal(state, incoming)) mark(changes, Changes::Track);
         if (changed_playback) mark(changes, Changes::Playback);
@@ -136,7 +136,7 @@ struct Client::Impl {
         state.last_error = move(error);
         player_instance = player->instance;
         inline_hash = hash;
-        const bool restart_query = changed_query && !resolver->document().synced();
+        const bool restart_query{changed_query && !resolver->document().synced()};
         if (new_track || force_retry || late_lyrics || restart_query || (!resolver->document().synced() && late_url)) {
             state.last_error.reset();
             resolver->start(query_for(state), player->inline_lyrics, state.media_url, new_track || restart_query);
@@ -150,8 +150,8 @@ struct Client::Impl {
         const auto* player = choose();
         if (!player) return unexpected(Error{ErrorCode::NoPlayer, 0, "No active MPRIS player"});
         const auto& capabilities = player->state.capabilities;
-        bool supported = capabilities.control;
-        const string_view operation = method;
+        bool supported{capabilities.control};
+        const string_view operation{method};
         if (operation == "Play") supported &= capabilities.play;
         else if (operation == "Pause") supported &= capabilities.pause;
         else if (operation == "Next") supported &= capabilities.next;
@@ -170,8 +170,8 @@ Client& Client::operator=(Client&&) noexcept = default;
 expected<Client, Error> Client::create(Options options) {
     if (!valid_options(options)) return unexpected(Error{ErrorCode::InvalidOptions, 0, "Invalid lyricsmpris options or resource limits"});
     // Duplicate providers do not trigger repeated requests.
-    vector<Provider> providers;
-    for (auto provider : options.providers)
+    vector<Provider> providers{};
+    for (const auto provider : options.providers)
         if (find(providers.begin(), providers.end(), provider) == providers.end()) providers.push_back(provider);
     options.providers = move(providers);
     auto impl = make_unique<Impl>(move(options));
@@ -210,7 +210,7 @@ optional<Clock::time_point> Client::next_deadline() const noexcept {
     const auto now = Clock::now();
     if (impl_->selection_dirty || impl_->retry_requested || impl_->offset_dirty || impl_->poll_error) return now;
     auto deadline = impl_->mpris->deadline();
-    auto include = [&](optional<Clock::time_point> value) {
+    const auto include = [&](optional<Clock::time_point> value) {
         if (value && (!deadline || *value < *deadline)) deadline = value;
     };
     include(impl_->resolver->deadline());
@@ -223,7 +223,7 @@ optional<Clock::time_point> Client::next_deadline() const noexcept {
         && !(state.playback_rate < 0 && progress <= Milliseconds{})) {
         const auto lyric_position = progress - impl_->options.lyric_offset;
         const auto current = document.line_at(lyric_position);
-        optional<Milliseconds> boundary;
+        optional<Milliseconds> boundary{};
         if (state.playback_rate > 0) {
             const auto next = current ? *current + 1 : 0;
             if (next < document.size()) boundary = document.line(next).start_time;
@@ -245,9 +245,9 @@ optional<Clock::time_point> Client::next_deadline() const noexcept {
 expected<Changes, Error> Client::process(span<const pollfd> ready, Clock::time_point now) {
     auto& self = *impl_;
     if (self.poll_error) return unexpected(*self.poll_error);
-    Changes changes = Changes::None;
+    Changes changes{Changes::None};
     if (auto result = self.mpris->process(); !result) return unexpected(move(result.error()));
-    const bool retry = self.retry_requested || self.resolver->retry_due(now);
+    const bool retry{self.retry_requested || self.resolver->retry_due(now)};
     if (self.retry_requested) self.resolver->reset_attempts();
     if (self.selection_dirty || retry || self.bus_revision != self.mpris->revision()) {
         self.refresh(changes, retry);
@@ -268,7 +268,7 @@ expected<Changes, Error> Client::process(span<const pollfd> ready, Clock::time_p
         self.state.lyrics_search = self.resolver->state();
         mark(changes, Changes::Search);
     }
-    auto next_line = lyrics().line_at(position(now) - self.options.lyric_offset);
+    const auto next_line = lyrics().line_at(position(now) - self.options.lyric_offset);
     if (next_line != self.state.current_line || self.offset_dirty) {
         self.state.current_line = next_line;
         self.offset_dirty = false;

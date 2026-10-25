@@ -69,8 +69,8 @@ uint32_t current_width{};
 uint32_t current_height{};
 uint32_t requested_width{};
 uint32_t requested_height{};
-int      buffer_width{};
-int      buffer_height{};
+uint32_t buffer_width{};
+uint32_t buffer_height{};
 bool     surface_configured{false};
 float    surface_scale{1.0f};
 
@@ -166,7 +166,7 @@ void pointer_axis_stop(void*, wl_pointer*, uint32_t, uint32_t) {
 void pointer_axis_discrete(void*, wl_pointer*, uint32_t, int32_t) {
 }
 
-const wl_pointer_listener pointer_listener{
+constexpr wl_pointer_listener pointer_listener{
     .enter                   = pointer_enter,
     .leave                   = pointer_leave,
     .motion                  = pointer_motion,
@@ -185,8 +185,7 @@ void seat_capabilities(
     wl_seat* current_seat,
     uint32_t capabilities
     ) {
-    const bool has_pointer =
-        capabilities & WL_SEAT_CAPABILITY_POINTER;
+    const bool has_pointer{(capabilities & WL_SEAT_CAPABILITY_POINTER) != 0};
 
     if (has_pointer && !pointer) {
         pointer.reset(wl_seat_get_pointer(current_seat));
@@ -215,7 +214,7 @@ void seat_name(
     ) {
 }
 
-wl_seat_listener seat_listener = {
+constexpr wl_seat_listener seat_listener{
     .capabilities = seat_capabilities,
     .name         = seat_name,
 };
@@ -227,7 +226,7 @@ void registry_global(
     const char*  interface,
     uint32_t     version
     ) {
-    string_view interface_name{interface};
+    const string_view interface_name{interface};
 
     if (interface_name == wl_compositor_interface.name) {
         compositor.reset(static_cast<wl_compositor*>(
@@ -307,7 +306,7 @@ void registry_remove(void*, wl_registry*, uint32_t id) {
     logger(Log::Error, "Wayland global resource removed (id: {})", id);
 }
 
-wl_registry_listener registry_listener = {
+constexpr wl_registry_listener registry_listener{
     .global        = registry_global,
     .global_remove = registry_remove,
 };
@@ -315,24 +314,29 @@ wl_registry_listener registry_listener = {
 // --- Fractional Scale Listener ---
 
 void update_buffer_size() {
+    if (current_width == 0 || current_height == 0 ||
+        current_width > static_cast<uint32_t>(numeric_limits<int32_t>::max()) ||
+        current_height > static_cast<uint32_t>(numeric_limits<int32_t>::max())) {
+        Log::fatal("Invalid logical surface size: {}*{}", current_width, current_height);
+    }
     // A viewport maps the pixel buffer back to the logical surface size.
-    const float scale  = viewport && fractional_scale ? surface_scale : 1.0f;
-    const float width  = round(current_width * scale);
-    const float height = round(current_height * scale);
+    const float scale{viewport && fractional_scale ? surface_scale : 1.0f};
+    const float width{round(static_cast<float>(current_width) * scale)};
+    const float height{round(static_cast<float>(current_height) * scale)};
     if (width < 1 || height < 1 ||
         width >= static_cast<float>(numeric_limits<int>::max()) ||
         height >= static_cast<float>(numeric_limits<int>::max())) {
         Log::fatal("Invalid EGL buffer size: {}*{}", width, height);
     }
-    buffer_width  = static_cast<int>(width);
-    buffer_height = static_cast<int>(height);
+    buffer_width  = static_cast<uint32_t>(width);
+    buffer_height = static_cast<uint32_t>(height);
 
     if (viewport) {
         wl_surface_set_buffer_scale(surface.get(), 1);
-        wp_viewport_set_destination(viewport.get(), current_width, current_height);
+        wp_viewport_set_destination(viewport.get(), static_cast<int>(current_width), static_cast<int>(current_height));
     }
     if (egl_window) {
-        wl_egl_window_resize(egl_window.get(), buffer_width, buffer_height, 0, 0);
+        wl_egl_window_resize(egl_window.get(), static_cast<int>(buffer_width), static_cast<int>(buffer_height), 0, 0);
     }
     wayland_needs_redraw = true;
     Log::logger(Log::Debug, "Surface scale: {:.3f}", surface_scale);
@@ -347,7 +351,7 @@ void preferred_scale(void*, wp_fractional_scale_v1*, uint32_t scale) {
     }
 }
 
-const wp_fractional_scale_v1_listener fractional_scale_listener{
+constexpr wp_fractional_scale_v1_listener fractional_scale_listener{
     .preferred_scale = preferred_scale,
 };
 
@@ -378,7 +382,7 @@ void layer_surface_closed(void*, zwlr_layer_surface_v1*) {
     Log::fatal("Layer surface was closed by compositor. Exiting...");
 }
 
-zwlr_layer_surface_v1_listener layer_surface_listener = {
+constexpr zwlr_layer_surface_v1_listener layer_surface_listener{
     .configure = layer_surface_configure,
     .closed    = layer_surface_closed,
 };
@@ -389,18 +393,17 @@ zwlr_layer_surface_v1_listener layer_surface_listener = {
 // [Public API Implementation]
 // ============================================================================
 
-void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int32_t margin_top) {
-    if (width == 0 || height == 0 ||
-        width > static_cast<uint32_t>(numeric_limits<int>::max()) ||
-        height > static_cast<uint32_t>(numeric_limits<int>::max())) {
-        Log::fatal("Invalid island size: {}*{}", width, height);
+void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int32_t exclusive_zone, int32_t margin_top) {
+    if (island_width == 0 || island_height == 0) {
+        Log::fatal("Invalid island size: {}*{}", island_width, island_height);
     }
 
     // Hyprland Error
     // see more info in Hyprland Discussion #12878
     // we add 1 pixel to avoid the issue
-    ++width;
-    ++height;
+    // Widen before adding so a configured size of 65535 does not wrap to zero.
+    const uint32_t width{static_cast<uint32_t>(island_width) + 1};
+    const uint32_t height{static_cast<uint32_t>(island_height) + 1};
 
     requested_width    = width;
     requested_height   = height;
@@ -512,14 +515,14 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
     // 3. Setup EGL Window & Display
     egl_window.reset(wl_egl_window_create(
         surface.get(),
-        buffer_width,
-        buffer_height
+        static_cast<int>(buffer_width),
+        static_cast<int>(buffer_height)
         ));
     if (!egl_window) {
         Log::fatal("Failed to create wl_egl_window");
     }
 
-    egl_display = eglGetDisplay((EGLNativeDisplayType)display.get());
+    egl_display = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(display.get()));
     if (egl_display == EGL_NO_DISPLAY) {
         Log::fatal("eglGetDisplay failed");
     }
@@ -570,7 +573,7 @@ void Wayland::init(uint32_t width, uint32_t height, int32_t exclusive_zone, int3
     egl_surface = eglCreateWindowSurface(
         egl_display,
         egl_config,
-        (EGLNativeWindowType)egl_window.get(),
+        reinterpret_cast<EGLNativeWindowType>(egl_window.get()),
         nullptr
         );
 
@@ -606,15 +609,15 @@ void Wayland::swap_buffer() {
 }
 
 void Wayland::request_resize(
-    uint32_t width,
-    uint32_t height
+    std::uint16_t width,
+    std::uint16_t height
     ) {
     if (!layer_surface) {
         Log::fatal("request_resize called before layer_surface creation");
     }
 
-    if (width <= 0 || height <= 0) {
-        Log::fatal("Island size should not be neagative");
+    if (width == 0 || height == 0) {
+        Log::fatal("Island width and height must be positive");
     }
 
     if (!egl_window) {
@@ -628,11 +631,11 @@ void Wayland::request_resize(
 
 }
 
-array<int, 2> Wayland::get_surface_size() {
-    return {static_cast<int>(current_width), static_cast<int>(current_height)};
+array<uint32_t, 2> Wayland::get_surface_size() {
+    return {current_width, current_height};
 }
 
-array<int, 2> Wayland::get_buffer_size() {
+array<uint32_t, 2> Wayland::get_buffer_size() {
     return {buffer_width, buffer_height};
 }
 
@@ -641,11 +644,14 @@ float Wayland::get_scale() {
 }
 
 void Wayland::apply_config(
-    uint32_t width,
-    uint32_t height,
+    std::uint16_t width,
+    std::uint16_t height,
     int32_t  exclusive_zone,
     int32_t  margin_top
     ) {
+    if (width == 0 || height == 0) {
+        Log::fatal("Island width and height must be positive");
+    }
     requested_width  = width;
     requested_height = height;
     zwlr_layer_surface_v1_set_size(

@@ -8,15 +8,15 @@
 namespace lyricsmpris::detail {
 
 struct HttpRequest {
-    std::uint64_t id;
-    std::string url;
-    std::string referer;
+    std::uint64_t id{};
+    std::string url{};
+    std::string referer{};
 };
 struct HttpResponse {
-    std::uint64_t id;
-    std::string body;
-    CURLcode error;
-    long status;
+    std::uint64_t id{};
+    std::string body{};
+    CURLcode error{};
+    long status{};
 };
 
 class Http {
@@ -38,16 +38,16 @@ private:
     static int timer_callback(CURLM*, long, void*) noexcept;
     static std::size_t write_callback(char*, std::size_t, std::size_t, void*) noexcept;
 
-    CURLM* multi_ = nullptr;
-    std::vector<std::unique_ptr<Transfer>> active_;
-    std::deque<HttpRequest> queue_;
-    std::vector<pollfd> sockets_;
-    std::vector<HttpResponse> failures_;
-    std::optional<Clock::time_point> deadline_;
-    std::size_t max_bytes_;
-    unsigned max_connections_;
-    long timeout_ms_;
-    bool callback_failed_ = false;
+    CURLM* multi_{};
+    std::vector<std::unique_ptr<Transfer>> active_{};
+    std::deque<HttpRequest> queue_{};
+    std::vector<pollfd> sockets_{};
+    std::vector<HttpResponse> failures_{};
+    std::optional<Clock::time_point> deadline_{};
+    std::size_t max_bytes_{};
+    unsigned max_connections_{};
+    long timeout_ms_{};
+    bool callback_failed_{};
 };
 
 } // namespace lyricsmpris::detail

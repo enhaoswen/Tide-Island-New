@@ -1,4 +1,5 @@
 #include "app/views/clock_view.hpp"
+#include "utils/log.hpp"
 #include "app/API.hpp"
 #include "backend/timer.hpp"
 
@@ -7,14 +8,11 @@
 
 using namespace std;
 
-namespace ClockView {
 namespace {
 
-Object::Handle<Object::Layout> root;
-Object::Handle<Object::Text> time_text;
-Timer::EventHandle next_tick;
-FontHandle font;
-bool running{};
+Object::Handle<Object::Text> time_text{};
+Timer::EventHandle           next_tick{};
+bool                         running{};
 
 void update() {
     const auto now = chrono::system_clock::now();
@@ -27,61 +25,59 @@ void schedule_next_tick();
 
 void on_tick() {
     next_tick = {};
-    if (!running) return;
-    if (!root || !time_text) {
-        stop();
+    if (!running)
         return;
-    }
     update();
     schedule_next_tick();
 }
 
 void schedule_next_tick() {
-    if (Timer::is_pending(next_tick)) return;
+    if (Timer::is_pending(next_tick))
+        return;
+
     using namespace chrono;
-    const auto now = system_clock::now();
+    const auto now  = system_clock::now();
     const auto next = floor<minutes>(now) + minutes{1};
-    next_tick = API::push_event(duration_cast<microseconds>(next - now), on_tick, 0);
+    next_tick       = API::push_event(duration_cast<microseconds>(next - now), on_tick, 0);
 }
 
 } // namespace
 
-void start(source_location) {
-    if (running && root && time_text) {
-        // Also repairs scheduling after the event queue has been cleared.
-        schedule_next_tick();
+void ClockView::start(ClockDesc clock_desc, source_location l) {
+    if (!clock_desc.font.id) {
+        Log::logger(Log::Error, "{}:{}: Invalid font id", l.file_name(), l.line());
         return;
     }
+
+    if (!clock_desc.root) {
+        Log::logger(Log::Error, "{}:{}: Invalid root", l.file_name(), l.line());
+        return;
+    }
+
     stop();
-    if (!font.id) font = API::load_font("Sans Serif", 18);
-    root = Object::add_layout({.fit_surface = true});
+
     time_text = Object::add_text(TextDesc{
-        .text = "",
-        .font = font,
-        .color = Color::White,
+        .text             = "",
+        .font             = clock_desc.font,
+        .color            = Color::White,
         .horizontal_align = Align::Center,
-        .vertical_align = Align::Center,
+        .vertical_align   = Align::Center,
     });
-    root->add_element(time_text, Align::Center, Object::SizeMode::Fill);
+
+    clock_desc.root->add_element(time_text, Align::Center, Object::SizeMode::Fill);
     running = true;
     update();
     schedule_next_tick();
 }
 
-void stop() {
+void ClockView::stop() {
     running = false;
     API::cancel_event(next_tick);
     next_tick = {};
     Object::delete_element(time_text);
-    Object::delete_element(root);
     time_text = {};
-    root = {};
 }
 
-void shutdown() {
-    stop();
-    if (font.id) API::unload_font(font);
-    font = {};
+void ClockView::shutdown() {
+    ClockView::stop();
 }
-
-} // namespace ClockView

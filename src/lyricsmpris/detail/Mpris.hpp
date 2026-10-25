@@ -7,17 +7,17 @@
 namespace lyricsmpris::detail {
 
 struct Player {
-    State state;
-    std::string owner;
-    std::string inline_lyrics;
-    std::size_t lyrics_hash = 0;
-    std::uint64_t instance = 0;
-    std::uint64_t properties_revision = 0;
-    std::uint64_t track_revision = 0;
-    std::uint64_t last_active = 0;
-    bool valid = false;
-    bool properties_pending = false;
-    bool position_pending = false;
+    State state{};
+    std::string owner{};
+    std::string inline_lyrics{};
+    std::size_t lyrics_hash{};
+    std::uint64_t instance{};
+    std::uint64_t properties_revision{};
+    std::uint64_t track_revision{};
+    std::uint64_t last_active{};
+    bool valid{};
+    bool properties_pending{};
+    bool position_pending{};
 };
 
 Milliseconds estimated_position(const State& state, Clock::time_point now) noexcept;
@@ -36,7 +36,7 @@ public:
     void request_position(std::string_view service);
 
 private:
-    enum class Call { List, Owner, Properties, Position, Control };
+    enum class Call : std::uint8_t { List, Owner, Properties, Position, Control };
     struct Pending;
     explicit Mpris(const Options& options);
     Player* find(std::string_view service);
@@ -54,17 +54,17 @@ private:
     static int signal_callback(sd_bus_message*, void*, sd_bus_error*) noexcept;
     static int install_callback(sd_bus_message*, void*, sd_bus_error*) noexcept;
 
-    sd_bus* bus_ = nullptr;
-    std::vector<sd_bus_slot*> matches_;
-    std::vector<std::unique_ptr<Pending>> pending_;
-    std::vector<Player> players_;
-    std::vector<std::string> blocked_;
-    std::size_t max_lyrics_bytes_;
-    std::uint64_t next_instance_ = 0;
-    std::uint64_t activity_ = 0;
-    std::uint64_t revision_ = 0;
-    std::optional<Error> error_;
-    bool work_remaining_ = false;
+    sd_bus* bus_{};
+    std::vector<sd_bus_slot*> matches_{};
+    std::vector<std::unique_ptr<Pending>> pending_{};
+    std::vector<Player> players_{};
+    std::vector<std::string> blocked_{};
+    std::size_t max_lyrics_bytes_{};
+    std::uint64_t next_instance_{};
+    std::uint64_t activity_{};
+    std::uint64_t revision_{};
+    std::optional<Error> error_{};
+    bool work_remaining_{};
 };
 
 } // namespace lyricsmpris::detail

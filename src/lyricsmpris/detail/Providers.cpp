@@ -12,12 +12,12 @@ namespace lyricsmpris::detail {
 namespace {
 
 struct JsonOptions : glz::opts {
-    bool validate_trailing_whitespace = true;
-    bool validate_skipped = true;
+    bool validate_trailing_whitespace{true};
+    bool validate_skipped{true};
 };
 
 constexpr auto json_options = [] {
-    JsonOptions options;
+    JsonOptions options{};
     options.null_terminated = false;
     options.error_on_unknown_keys = false;
     return options;
@@ -59,16 +59,16 @@ optional<Milliseconds> duration(double value, double multiplier = 1) {
 
 string first(initializer_list<const responses::Scalar*> fields) {
     for (const auto* field : fields) {
-        auto text = scalar_string(*field);
+        const auto text = scalar_string(*field);
         if (!trim(text).empty()) return text;
     }
     return {};
 }
 
 string artists(const responses::Array<responses::Artist>& field) {
-    string result;
+    string result{};
     for (const auto& element : value<vector<responses::Object<responses::Artist>>>(field)) {
-        auto name = holds_alternative<string>(element)
+        const auto name = holds_alternative<string>(element)
             ? get<string>(element) : scalar_string(value<responses::Artist>(element).name);
         if (name.empty()) continue;
         if (!result.empty()) result += ", ";
@@ -83,8 +83,8 @@ expected<vector<Candidate>, string> response(
     Response document{};
     if (const auto error = glz::read<json_options>(document, payload))
         return unexpected(glz::format_error(error, payload));
-    vector<Candidate> result;
-    auto append = [&](Candidate candidate) {
+    vector<Candidate> result{};
+    const auto append = [&](Candidate candidate) {
         if (candidate.synced.empty() && candidate.plain.empty()
             && candidate.resource_id.empty() && !candidate.instrumental) return;
         candidate.provider = provider;
@@ -97,7 +97,7 @@ expected<vector<Candidate>, string> response(
 template<class Row, class Convert, class Append>
 void rows(const vector<responses::Object<Row>>& documents, Convert convert, Append append) {
     // Retain at most 64 search results regardless of payload size.
-    for (size_t i = 0; i < min(documents.size(), size_t{64}); ++i)
+    for (size_t i{}; i < min(documents.size(), size_t{64}); ++i)
         if (const auto* row = get_if<Row>(&documents[i])) append(convert(*row));
 }
 
@@ -118,9 +118,10 @@ void rows(const responses::Array<Row>& documents, Convert convert, Append append
 
 string encode(string_view value) {
     constexpr char hex[] = "0123456789ABCDEF";
-    string result;
+    string result{};
     result.reserve(value.size());
-    for (const unsigned char byte : value) {
+    for (const char raw : value) {
+        const auto byte = static_cast<unsigned char>(raw);
         if ((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
             || (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '.' || byte == '~')
             result += static_cast<char>(byte);
@@ -137,11 +138,11 @@ void parameter(string& url, string_view key, string_view value) {
 }
 
 optional<int64_t> ttml_time(string_view value) {
-    double multiplier = 1000;
+    double multiplier{1000};
     if (value.ends_with("ms")) { value.remove_suffix(2); multiplier = 1; }
     else if (value.ends_with('s')) value.remove_suffix(1);
-    double total = 0;
-    unsigned parts = 0;
+    double total{};
+    unsigned parts{};
     while (true) {
         if (++parts > 3) return {};
         const auto colon = value.find(':');
@@ -157,7 +158,7 @@ optional<int64_t> ttml_time(string_view value) {
 }
 
 string ttml_to_lrc(string_view xml) {
-    string result;
+    string result{};
     while (!xml.empty()) {
         const auto start = xml.find("<p");
         if (start == xml.npos) break;
@@ -173,7 +174,7 @@ string ttml_to_lrc(string_view xml) {
             const auto quote = header[begin + 6];
             const auto finish = header.find(quote, begin + 7);
             if ((quote == '\'' || quote == '"') && finish != header.npos) {
-                if (auto time = ttml_time(header.substr(begin + 7, finish - begin - 7))) {
+                if (const auto time = ttml_time(header.substr(begin + 7, finish - begin - 7))) {
                     const auto milliseconds = *time % 1000;
                     result += '[' + to_string(*time / 60000) + ':';
                     if ((*time / 1000) % 60 < 10) result += '0';
@@ -192,7 +193,7 @@ string ttml_to_lrc(string_view xml) {
 }
 
 TrackQuery metadata(string_view text) {
-    TrackQuery result;
+    TrackQuery result{};
     while (!text.empty()) {
         const auto end = text.find('\n');
         auto row = trim(text.substr(0, end));
@@ -222,7 +223,7 @@ string_view provider_name(Provider provider) noexcept {
 }
 
 Evaluation evaluate(const TrackQuery& query, const Candidate& candidate) {
-    Evaluation result;
+    Evaluation result{};
     if (normalize(query.title, true).empty()) return result;
     const auto query_flags = version_flags(query.title + ' ' + query.album);
     // A provider's instrumental flag means this recording has no vocals;
@@ -232,8 +233,8 @@ Evaluation evaluate(const TrackQuery& query, const Candidate& candidate) {
     if ((candidate_flags & ~query_flags) != 0) return result;
     auto evidence = metadata(candidate.synced);
     if (evidence.title.empty() && evidence.artist.empty()) evidence = metadata(candidate.plain);
-    double title = 0, artist = 0, album = 0;
-    bool has_title = false;
+    double title{}, artist{}, album{};
+    bool has_title{};
     for (const auto value : {candidate.trusted ? string_view(candidate.title) : string_view{}, string_view(evidence.title)}) {
         if (trim(value).empty()) continue;
         const auto score = similarity(query.title, value, true);
@@ -246,7 +247,7 @@ Evaluation evaluate(const TrackQuery& query, const Candidate& candidate) {
         for (const auto value : {candidate.trusted ? string_view(candidate.artist) : string_view{}, string_view(evidence.artist)}) {
             if (trim(value).empty()) continue;
             auto score = similarity(query.artist, value, false);
-            const bool listed = contains_tokens(query.artist, value);
+            const bool listed{contains_tokens(query.artist, value)};
             if (score < 0.60 && !listed && comparable_script(query.artist, value)) return result;
             if (listed) score = max(score, 0.92);
             artist = max(artist, score);
@@ -261,9 +262,9 @@ Evaluation evaluate(const TrackQuery& query, const Candidate& candidate) {
     if (query.duration) {
         if (candidate.duration) {
             const auto delta = abs((*query.duration - *candidate.duration).count());
-            const bool versioned = (query_flags | candidate_flags) != 0;
+            const bool versioned{(query_flags | candidate_flags) != 0};
             const auto tolerance = max<int64_t>(versioned ? 30000 : 15000,
-                static_cast<int64_t>(query.duration->count() * (versioned ? 0.15 : 0.08)));
+                static_cast<int64_t>(static_cast<double>(query.duration->count()) * (versioned ? 0.15 : 0.08)));
             if (delta > tolerance) return {};
             result.score += delta <= 2000 ? 20 : delta <= 5000 ? 15 : delta <= 10000 ? 10 : 5;
         } else if (*query.duration < Milliseconds{90000}) return {};
@@ -278,15 +279,16 @@ Evaluation evaluate(const TrackQuery& query, const Candidate& candidate) {
 }
 
 string decode_base64(string_view encoded) {
-    string output;
+    string output{};
     output.reserve(encoded.size() / 4 * 3);
-    unsigned bits = 0, count = 0;
-    bool padding = false;
-    for (unsigned char c : encoded) {
+    unsigned bits{}, count{};
+    bool padding{};
+    for (const char raw : encoded) {
+        const auto c = static_cast<unsigned char>(raw);
         if (c == ' ' || c == '\r' || c == '\n' || c == '\t') continue;
         if (c == '=') { padding = true; continue; }
         if (padding) return {};
-        unsigned value;
+        unsigned value{};
         if (c >= 'A' && c <= 'Z') value = c - 'A';
         else if (c >= 'a' && c <= 'z') value = c - 'a' + 26;
         else if (c >= '0' && c <= '9') value = c - '0' + 52;
@@ -302,9 +304,9 @@ string decode_base64(string_view encoded) {
 }
 
 expected<vector<Candidate>, string> parse_candidates(string_view payload, Provider provider, Stage stage) {
-    vector<Candidate> result;
+    vector<Candidate> result{};
     if (stage == Stage::LrcxText) {
-        Candidate candidate;
+        Candidate candidate{};
         candidate.provider = provider;
         candidate.synced = payload;
         candidate.trusted = false;
@@ -317,7 +319,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
     case Stage::LrclibGet:
     case Stage::LrclibSearch:
         return direct_response<Lrclib>(payload, provider, [](const auto& row) {
-            Candidate candidate;
+            Candidate candidate{};
             candidate.title = first({&row.trackName, &row.name});
             candidate.artist = first({&row.artistName, &row.artist});
             candidate.album = first({&row.albumName, &row.album});
@@ -329,7 +331,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         });
     case Stage::LrcxJson:
         return direct_response<Lrcx>(payload, provider, [](const auto& row) {
-            Candidate candidate;
+            Candidate candidate{};
             candidate.title = first({&row.title, &row.trackName, &row.name});
             candidate.artist = first({&row.artist, &row.artistName});
             candidate.album = first({&row.album, &row.albumName});
@@ -344,7 +346,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         return response<Object<NeteaseSearch>>(payload, provider, [](const auto& document, auto append) {
             const auto& songs = value<NeteaseResult>(value<NeteaseSearch>(document).result).songs;
             rows(songs, [](const auto& row) {
-                Candidate candidate;
+                Candidate candidate{};
                 candidate.title = scalar_string(row.name);
                 candidate.artist = artists(row.artists);
                 if (candidate.artist.empty()) candidate.artist = artists(row.ar);
@@ -358,7 +360,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         });
     case Stage::NeteaseLyric:
         return direct_response<NeteaseLyric>(payload, provider, [](const auto& row) {
-            Candidate candidate;
+            Candidate candidate{};
             candidate.synced = scalar_string(value<Lyric>(row.lrc).lyric);
             candidate.plain = scalar_string(value<Lyric>(row.tlyric).lyric);
             return candidate;
@@ -367,7 +369,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         return response<Object<QqSearch>>(payload, provider, [](const auto& document, auto append) {
             const auto& songs = value<QqSongs>(value<QqData>(value<QqSearch>(document).data).song).list;
             rows(songs, [](const auto& row) {
-                Candidate candidate;
+                Candidate candidate{};
                 candidate.title = first({&row.songname, &row.title});
                 candidate.artist = artists(row.singer);
                 candidate.album = scalar_string(row.albumname);
@@ -378,7 +380,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         });
     case Stage::QqLyric:
         return direct_response<QqLyric>(payload, provider, [](const auto& row) {
-            Candidate candidate;
+            Candidate candidate{};
             candidate.synced = scalar_string(row.lyric);
             if (candidate.synced.find('[') == candidate.synced.npos) {
                 if (auto decoded = decode_base64(candidate.synced); !decoded.empty() && valid_utf8(decoded))
@@ -390,7 +392,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         return response<Object<KugouSearch>>(payload, provider, [](const auto& document, auto append) {
             const auto& songs = value<KugouData>(value<KugouSearch>(document).data).lists;
             rows(songs, [](const auto& row) {
-                Candidate candidate;
+                Candidate candidate{};
                 candidate.title = clean_text(first({&row.SongName, &row.FileName}));
                 candidate.artist = clean_text(scalar_string(row.SingerName));
                 candidate.album = clean_text(scalar_string(row.AlbumName));
@@ -403,7 +405,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         return response<Object<KugouLyricSearch>>(payload, provider, [](const auto& document, auto append) {
             rows(value<KugouLyricSearch>(document).candidates,
                 [](const auto& row) {
-                    Candidate candidate;
+                    Candidate candidate{};
                     candidate.resource_id = scalar_string(row.id);
                     candidate.access_key = scalar_string(row.accesskey);
                     return candidate;
@@ -411,7 +413,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         });
     case Stage::KugouDownload:
         return direct_response<KugouDownload>(payload, provider, [](const auto& row) {
-            Candidate candidate;
+            Candidate candidate{};
             candidate.synced = scalar_string(row.content);
             if (auto decoded = decode_base64(candidate.synced); !decoded.empty()) candidate.synced = move(decoded);
             return candidate;
@@ -420,7 +422,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
     case Stage::MusixmatchPlain:
         return direct_response<Musixmatch>(payload, provider, [](const auto& row) {
             const auto& body = value<MusixmatchBody>(value<MusixmatchMessage>(row.message).body);
-            Candidate candidate;
+            Candidate candidate{};
             candidate.synced = scalar_string(value<Subtitle>(body.subtitle).subtitle_body);
             candidate.plain = scalar_string(value<PlainLyrics>(body.lyrics).lyrics_body);
             return candidate;
@@ -433,7 +435,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
 HttpRequest provider_request(uint64_t id, Stage stage, const TrackQuery& query, const Candidate& candidate, string_view api_key) {
     HttpRequest request{id, {}, {}};
     auto& url = request.url;
-    auto add = [&](auto key, string_view value) { parameter(url, key, value); };
+    const auto add = [&](string_view key, string_view value) { parameter(url, key, value); };
     const auto seconds = query.duration ? to_string(max<int64_t>(1, query.duration->count() / 1000)) : "";
     switch (stage) {
     case Stage::LrclibGet:

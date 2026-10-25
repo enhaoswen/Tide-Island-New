@@ -4,31 +4,31 @@
 
 namespace lyricsmpris::detail {
 
-enum class Stage {
+enum class Stage : std::uint8_t {
     LrclibGet, LrclibSearch, LrcxJson, LrcxText, NeteaseSearch, NeteaseLyric,
     QqSearch, QqLyric, KugouSearch, KugouLyricSearch, KugouDownload,
     MusixmatchSubtitle, MusixmatchPlain
 };
 
 struct TrackQuery {
-    std::string title, artist, album;
-    std::optional<Milliseconds> duration;
+    std::string title{}, artist{}, album{};
+    std::optional<Milliseconds> duration{};
 };
 
 struct Candidate {
-    Provider provider = Provider::Lrclib;
-    std::string title, artist, album;
-    std::optional<Milliseconds> duration;
-    std::string synced, plain;
-    std::string resource_id, access_key;
-    bool instrumental = false;
-    bool trusted = true;
+    Provider provider{Provider::Lrclib};
+    std::string title{}, artist{}, album{};
+    std::optional<Milliseconds> duration{};
+    std::string synced{}, plain{};
+    std::string resource_id{}, access_key{};
+    bool instrumental{};
+    bool trusted{true};
 };
 
 struct Evaluation {
-    int score = 0;
-    bool accepted = false;
-    bool high_confidence = false;
+    int score{};
+    bool accepted{};
+    bool high_confidence{};
 };
 
 std::string_view provider_name(Provider provider) noexcept;

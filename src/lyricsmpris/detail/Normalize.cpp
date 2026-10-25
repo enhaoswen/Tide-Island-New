@@ -12,7 +12,7 @@ using namespace std;
 namespace lyricsmpris::detail {
 namespace {
 
-struct Pair { utf8proc_int32_t traditional, simplified; };
+struct Pair { utf8proc_int32_t traditional{}, simplified{}; };
 constexpr Pair pairs[] = {
 #include "CjkPairs.inc"
 };
@@ -23,7 +23,7 @@ bool cjk(utf8proc_int32_t code) noexcept {
 }
 
 void append(string& output, utf8proc_int32_t code) {
-    utf8proc_uint8_t buffer[4];
+    utf8proc_uint8_t buffer[4]{};
     const auto count = utf8proc_encode_char(code, buffer);
     if (count > 0) output.append(reinterpret_cast<char*>(buffer), static_cast<size_t>(count));
 }
@@ -35,13 +35,13 @@ bool space(utf8proc_int32_t code) noexcept {
 }
 
 string fold(string_view value) {
-    utf8proc_uint8_t* mapped = nullptr;
+    utf8proc_uint8_t* mapped{};
     const auto count = utf8proc_map(reinterpret_cast<const utf8proc_uint8_t*>(value.data()),
         static_cast<utf8proc_ssize_t>(value.size()), &mapped,
         static_cast<utf8proc_option_t>(UTF8PROC_STABLE | UTF8PROC_COMPAT | UTF8PROC_COMPOSE | UTF8PROC_CASEFOLD));
-    unique_ptr<utf8proc_uint8_t, decltype(&free)> owner(mapped, &free);
+    const unique_ptr<utf8proc_uint8_t, decltype(&free)> owner(mapped, &free);
     if (count < 0) return {};
-    string result;
+    string result{};
     result.reserve(static_cast<size_t>(count));
     for (utf8proc_ssize_t offset = 0; offset < count;) {
         utf8proc_int32_t code{};
@@ -56,7 +56,7 @@ string fold(string_view value) {
 }
 
 bool word_at(string_view value, size_t at, size_t length) {
-    auto letter = [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'); };
+    constexpr auto letter = [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'); };
     return (at == 0 || !letter(value[at - 1]))
         && (at + length == value.size() || !letter(value[at + length]));
 }
@@ -68,11 +68,11 @@ bool word(string_view value, string_view term) {
 }
 
 bool noise(string_view value) {
-    for (auto term : {"feat", "ft", "featuring", "with", "remaster", "remastered", "live",
+    for (const auto term : {"feat", "ft", "featuring", "with", "remaster", "remastered", "live",
                       "mono", "stereo", "explicit", "clean", "radio", "edit", "version",
                       "official", "audio", "video", "lyric", "lyrics", "mv", "hd", "cover", "remix"})
         if (word(value, term)) return true;
-    for (auto term : {"伴奏", "钢琴", "纯音乐", "翻唱", "原唱", "加速", "降速", "混音", "现场", "演唱会", "版"})
+    for (const auto term : {"伴奏", "钢琴", "纯音乐", "翻唱", "原唱", "加速", "降速", "混音", "现场", "演唱会", "版"})
         if (value.find(term) != value.npos) return true;
     return false;
 }
@@ -91,9 +91,9 @@ bool valid_utf8(string_view value) noexcept {
 }
 
 string clean_text(string_view text) {
-    string result;
+    string result{};
     result.reserve(text.size());
-    bool pending_space = false;
+    bool pending_space{};
     while (!text.empty()) {
         if (text.front() == '<') {
             const auto end = text.find('>');
@@ -115,7 +115,7 @@ string clean_text(string_view text) {
             }
         }
         utf8proc_int32_t code{};
-        size_t count = 0;
+        size_t count{};
         if (text.front() == '&') {
             const auto end = text.find(';');
             if (end != text.npos && end <= 12) {
@@ -128,7 +128,7 @@ string clean_text(string_view text) {
                 else if (entity == "gt") code = '>';
                 else if (entity.starts_with('#')) {
                     auto digits = entity.substr(1);
-                    int base = 10;
+                    int base{10};
                     if (digits.starts_with('x') || digits.starts_with('X')) { base = 16; digits.remove_prefix(1); }
                     const auto [last, error] = from_chars(digits.data(), digits.data() + digits.size(), code, base);
                     if (error != errc{} || last != digits.data() + digits.size() || code <= 0
@@ -152,10 +152,10 @@ string clean_text(string_view text) {
 }
 
 string normalize(string_view text, bool title) {
-    string value = fold(clean_text(text));
+    string value{fold(clean_text(text))};
     // NFKC converts full-width brackets, but not the CJK lenticular brackets.
     for (const auto& [open, close] : {pair{"(", ")"}, {"[", "]"}, {"{", "}"}, {"【", "】"}}) {
-        size_t at = 0;
+        size_t at{};
         while ((at = value.find(open, at)) != value.npos) {
             const auto end = value.find(close, at + string_view(open).size());
             if (end == value.npos) break;
@@ -171,17 +171,17 @@ string normalize(string_view text, bool title) {
         if (digits > 0 && digits <= 3 && digits < value.size() && string_view(".-_)").find(value[digits]) != string_view::npos)
             value.erase(0, digits + 1);
     }
-    for (auto term : {"feat", "ft", "featuring", "with"}) {
+    for (const auto term : {"feat", "ft", "featuring", "with"}) {
         for (auto at = value.find(term); at != value.npos; at = value.find(term, at + 1)) {
             if (word_at(value, at, string_view(term).size()) && (at == 0 || value[at - 1] == ' ')) {
                 value.resize(at); break;
             }
         }
     }
-    string result;
+    string result{};
     result.reserve(value.size());
-    bool separator = false;
-    string_view remaining = value;
+    bool separator{};
+    string_view remaining{value};
     while (!remaining.empty()) {
         utf8proc_int32_t code{};
         const auto used = utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t*>(remaining.data()),
@@ -199,9 +199,9 @@ string normalize(string_view text, bool title) {
 }
 
 vector<string> tokens(string_view value) {
-    vector<string> result;
-    string run;
-    auto flush = [&] {
+    vector<string> result{};
+    string run{};
+    const auto flush = [&] {
         if (!run.empty() && run != "the" && run != "and" && run != "a" && run != "an") result.push_back(move(run));
         run.clear();
     };
@@ -228,7 +228,7 @@ double similarity(string_view left, string_view right, bool title) {
     if (a == b) return 1;
     const auto aa = tokens(a), bb = tokens(b);
     if (aa.empty() || bb.empty()) return 0;
-    size_t common = 0;
+    size_t common{};
     for (const auto& token : aa) common += binary_search(bb.begin(), bb.end(), token);
     return 2.0 * static_cast<double>(common) / static_cast<double>(aa.size() + bb.size());
 }
@@ -239,9 +239,9 @@ bool contains_tokens(string_view needle, string_view haystack) {
 }
 
 bool comparable_script(string_view left, string_view right) {
-    auto scripts = [](string value) {
-        unsigned flags = 0;
-        string_view view = value;
+    const auto scripts = [](string_view value) {
+        unsigned flags{};
+        string_view view{value};
         while (!view.empty()) {
             utf8proc_int32_t code{};
             const auto used = utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t*>(view.data()),
@@ -258,10 +258,10 @@ bool comparable_script(string_view left, string_view right) {
 
 unsigned version_flags(string_view value) {
     const auto text = fold(value);
-    auto any = [&](initializer_list<string_view> terms) {
+    const auto any = [&](initializer_list<string_view> terms) {
         return any_of(terms.begin(), terms.end(), [&](auto term) { return text.find(term) != text.npos; });
     };
-    unsigned flags = 0;
+    unsigned flags{};
     if (word(text, "live") || any({"演唱会", "现场", "巡回", "concert"})) flags |= 1;
     if (word(text, "cover") || any({"翻唱", "原唱"})) flags |= 2;
     if (any({"instrumental", "伴奏", "纯音乐", "钢琴", "piano", "karaoke"})) flags |= 4;

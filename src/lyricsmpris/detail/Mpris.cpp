@@ -47,14 +47,14 @@ Milliseconds estimated_position(const State& state, Clock::time_point now) noexc
 }
 
 struct Mpris::Pending {
-    Mpris* self;
-    Call kind;
-    string service;
-    uint64_t instance = 0;
-    uint64_t revision = 0;
-    uint64_t track = 0;
-    sd_bus_slot* slot = nullptr;
-    bool done = false;
+    Mpris* self{};
+    Call kind{};
+    string service{};
+    uint64_t instance{};
+    uint64_t revision{};
+    uint64_t track{};
+    sd_bus_slot* slot{};
+    bool done{};
     ~Pending() { sd_bus_slot_unref(slot); }
 };
 
@@ -66,7 +66,7 @@ Mpris::Mpris(const Options& options)
 
 expected<unique_ptr<Mpris>, Error> Mpris::create(const Options& options) {
     auto self = unique_ptr<Mpris>(new Mpris(options));
-    int result = sd_bus_open_user(&self->bus_);
+    int result{sd_bus_open_user(&self->bus_)};
     if (result < 0) return unexpected(bus_error(result));
     sd_bus_set_method_call_timeout(self->bus_, 1000000);
     for (const auto* match : {
@@ -74,7 +74,7 @@ expected<unique_ptr<Mpris>, Error> Mpris::create(const Options& options) {
         "type='signal',path='/org/mpris/MediaPlayer2',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'",
         "type='signal',path='/org/mpris/MediaPlayer2',interface='org.mpris.MediaPlayer2.Player',member='Seeked'"
     }) {
-        sd_bus_slot* slot = nullptr;
+        sd_bus_slot* slot{};
         result = sd_bus_add_match_async(self->bus_, &slot, match,
             &Mpris::signal_callback, &Mpris::install_callback, self.get());
         if (result < 0) return unexpected(bus_error(result));
@@ -116,7 +116,7 @@ int Mpris::async(Call kind, Player* player, const char* destination, const char*
         call->revision = player->properties_revision;
         call->track = player->track_revision;
     }
-    int result;
+    int result{};
     if (kind == Call::Position) {
         result = sd_bus_call_method_async(bus_, &call->slot, destination, path, interface, method,
             &Mpris::reply_callback, call.get(), "ss", player_interface, "Position");
@@ -176,18 +176,18 @@ int Mpris::read_metadata(sd_bus_message* message, Player& player) {
     state.track_id.clear(); state.title.clear(); state.artists.clear(); state.album.clear();
     state.artwork_url.clear(); state.media_url.clear(); state.duration.reset();
     player.inline_lyrics.clear();
-    string comment;
-    int result = sd_bus_message_enter_container(message, 'a', "{sv}");
+    string comment{};
+    int result{sd_bus_message_enter_container(message, 'a', "{sv}")};
     if (result < 0) return result;
     while ((result = sd_bus_message_enter_container(message, 'e', "sv")) > 0) {
-        const char* key = nullptr;
+        const char* key{};
         if ((result = sd_bus_message_read(message, "s", &key)) < 0) return result;
-        const char* signature = nullptr;
+        const char* signature{};
         if ((result = sd_bus_message_peek_type(message, nullptr, &signature)) < 0) return result;
         if ((result = sd_bus_message_enter_container(message, 'v', signature)) < 0) return result;
-        const string_view name = key;
+        const string_view name{key};
         if (strcmp(signature, "s") == 0 || strcmp(signature, "o") == 0) {
-            const char* text = nullptr;
+            const char* text{};
             if ((result = sd_bus_message_read(message, signature, &text)) < 0) return result;
             if (name == "mpris:trackid") state.track_id = bounded(text);
             else if (name == "xesam:title") state.title = bounded(text);
@@ -197,12 +197,12 @@ int Mpris::read_metadata(sd_bus_message* message, Player& player) {
             else if (name == "xesam:asText") player.inline_lyrics = bounded(text, max_lyrics_bytes_);
             else if (name == "xesam:comment") comment = bounded(text, max_lyrics_bytes_);
         } else if (name == "mpris:length" && strcmp(signature, "x") == 0) {
-            int64_t length = 0;
+            int64_t length{};
             if ((result = sd_bus_message_read(message, "x", &length)) < 0) return result;
             if (length > 0) state.duration = Milliseconds{length / 1000};
         } else if ((name == "xesam:artist" || name == "xesam:comment") && strcmp(signature, "as") == 0) {
             if ((result = sd_bus_message_enter_container(message, 'a', "s")) < 0) return result;
-            const char* item = nullptr;
+            const char* item{};
             while ((result = sd_bus_message_read(message, "s", &item)) > 0) {
                 if (name == "xesam:artist" && state.artists.size() < 32) state.artists.push_back(bounded(item));
                 else if (name == "xesam:comment") {
@@ -234,33 +234,33 @@ int Mpris::read_properties(sd_bus_message* message, Player& player) {
     const auto old_rate = state.playback_rate;
     state.position = estimated_position(state, now);
     state.sampled_at = now;
-    bool got_position = false;
-    int result = sd_bus_message_enter_container(message, 'a', "{sv}");
+    bool got_position{};
+    int result{sd_bus_message_enter_container(message, 'a', "{sv}")};
     if (result < 0) return result;
     while ((result = sd_bus_message_enter_container(message, 'e', "sv")) > 0) {
-        const char* key = nullptr;
+        const char* key{};
         if ((result = sd_bus_message_read(message, "s", &key)) < 0) return result;
-        const char* signature = nullptr;
+        const char* signature{};
         if ((result = sd_bus_message_peek_type(message, nullptr, &signature)) < 0) return result;
         if ((result = sd_bus_message_enter_container(message, 'v', signature)) < 0) return result;
-        const string_view name = key;
+        const string_view name{key};
         if (name == "Metadata" && strcmp(signature, "a{sv}") == 0) {
             if ((result = read_metadata(message, player)) < 0) return result;
         } else if (name == "PlaybackStatus" && strcmp(signature, "s") == 0) {
-            const char* value = nullptr;
+            const char* value{};
             if ((result = sd_bus_message_read(message, "s", &value)) < 0) return result;
             state.playback = playback(value);
         } else if (name == "Rate" && strcmp(signature, "d") == 0) {
-            double value = 1;
+            double value{1};
             if ((result = sd_bus_message_read(message, "d", &value)) < 0) return result;
             if (isfinite(value) && value != 0 && abs(value) <= 1000) state.playback_rate = value;
         } else if (name == "Position" && strcmp(signature, "x") == 0) {
-            int64_t position = 0;
+            int64_t position{};
             if ((result = sd_bus_message_read(message, "x", &position)) < 0) return result;
             state.position = Milliseconds{max<int64_t>(position / 1000, 0)};
             got_position = true;
         } else if (strcmp(signature, "b") == 0) {
-            int value = 0;
+            int value{};
             if ((result = sd_bus_message_read(message, "b", &value)) < 0) return result;
             if (name == "CanControl") state.capabilities.control = value;
             else if (name == "CanPlay") state.capabilities.play = value;
@@ -273,7 +273,7 @@ int Mpris::read_properties(sd_bus_message* message, Player& player) {
     }
     if (result < 0) return result;
     if ((result = sd_bus_message_exit_container(message)) < 0) return result;
-    const bool changed_track = old_track != state.track_id || old_title != state.title || old_url != state.media_url;
+    const bool changed_track{old_track != state.track_id || old_title != state.title || old_url != state.media_url};
     if (changed_track) {
         ++player.track_revision;
         if (!got_position) state.position = Milliseconds{};
@@ -302,14 +302,14 @@ void Mpris::reply(sd_bus_message* message, Pending& pending) {
         }
         return;
     }
-    int result = 0;
+    int result{};
     if (pending.kind == Call::List) {
         result = sd_bus_message_enter_container(message, 'a', "s");
         if (result < 0) { error_ = bus_error(result); return; }
-        const char* name = nullptr;
+        const char* name{};
         while ((result = sd_bus_message_read(message, "s", &name)) > 0) discover(name);
     } else if (pending.kind == Call::Owner) {
-        const char* owner = nullptr;
+        const char* owner{};
         result = sd_bus_message_read(message, "s", &owner);
         if (result > 0 && player->owner.empty()) { player->owner = owner; request_properties(*player); }
     } else if (pending.kind == Call::Properties) {
@@ -320,7 +320,7 @@ void Mpris::reply(sd_bus_message* message, Pending& pending) {
             request_position(player->state.service); return;
         }
         result = sd_bus_message_enter_container(message, 'v', "x");
-        int64_t value = 0;
+        int64_t value{};
         if (result >= 0) result = sd_bus_message_read(message, "x", &value);
         if (result >= 0) {
             player->state.position = Milliseconds{max<int64_t>(0, value / 1000)};
@@ -358,19 +358,19 @@ void Mpris::signal(sd_bus_message* message) {
 void Mpris::player_signal(sd_bus_message* message, Player& selected) {
     auto* player = &selected;
     if (sd_bus_message_is_signal(message, properties_interface, "PropertiesChanged")) {
-        const char* interface = nullptr;
-        int result = sd_bus_message_read(message, "s", &interface);
+        const char* interface{};
+        int result{sd_bus_message_read(message, "s", &interface)};
         if (result < 0) { error_ = bus_error(result); return; }
         if (strcmp(interface, player_interface) != 0) return;
         result = read_properties(message, *player);
         if (result < 0) { error_ = bus_error(result); return; }
         result = sd_bus_message_enter_container(message, 'a', "s");
-        const char* invalidated = nullptr;
-        bool refresh = false;
+        const char* invalidated{};
+        bool refresh{};
         while (result >= 0 && (result = sd_bus_message_read(message, "s", &invalidated)) > 0) refresh = true;
         if (refresh) request_properties(*player);
     } else if (sd_bus_message_is_signal(message, player_interface, "Seeked")) {
-        int64_t position = 0;
+        int64_t position{};
         const auto result = sd_bus_message_read(message, "x", &position);
         if (result < 0) { error_ = bus_error(result); return; }
         player->state.position = Milliseconds{max<int64_t>(0, position / 1000)};
@@ -404,7 +404,7 @@ int Mpris::install_callback(sd_bus_message* message, void* user, sd_bus_error*) 
 
 expected<void, Error> Mpris::process() {
     work_remaining_ = false;
-    for (unsigned i = 0; i < 256; ++i) {
+    for (unsigned i{}; i < 256; ++i) {
         const auto result = sd_bus_process(bus_, nullptr);
         if (result < 0) return unexpected(bus_error(result));
         if (result == 0) break;
@@ -424,11 +424,11 @@ expected<pollfd, Error> Mpris::poll_fd() const {
 
 optional<Clock::time_point> Mpris::deadline() const noexcept {
     if (work_remaining_) return Clock::now();
-    uint64_t timeout = 0;
+    uint64_t timeout{};
     if (sd_bus_get_timeout(bus_, &timeout) < 0 || timeout == numeric_limits<uint64_t>::max()) return {};
     timespec monotonic{};
     if (clock_gettime(CLOCK_MONOTONIC, &monotonic) != 0) return Clock::now();
-    const auto elapsed = static_cast<uint64_t>(monotonic.tv_sec) * 1000000 + monotonic.tv_nsec / 1000;
+    const auto elapsed = static_cast<uint64_t>(monotonic.tv_sec) * 1000000 + static_cast<uint64_t>(monotonic.tv_nsec) / 1000;
     if (timeout <= elapsed) return Clock::now();
     const auto delta = min<uint64_t>(timeout - elapsed, 86400000000ULL);
     return Clock::now() + chrono::microseconds{delta};

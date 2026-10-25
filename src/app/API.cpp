@@ -25,8 +25,8 @@ void API::init() {
     Log::logger(Log::Debug, "Island initialized successfully");
 
     Wayland::init(
-        static_cast<uint32_t>(island->island_width),
-        static_cast<uint32_t>(island->island_height),
+        island->island_width,
+        island->island_height,
         island->zone,
         island->anchor_top
     );
@@ -59,9 +59,9 @@ const IslandConf& API::get_island() {
 }
 
 // TODO: complete support for animation in the future.
-void API::resize(uint32_t width, uint32_t height) {
+void API::resize(std::uint16_t width, std::uint16_t height) {
     Wayland::request_resize(width, height);
-    Island::set_size(static_cast<int>(width), static_cast<int>(height));
+    Island::set_size(width, height);
 }
 
 Timer::EventHandle API::push_event(std::chrono::microseconds duration, void (*callback)(), float priority) {

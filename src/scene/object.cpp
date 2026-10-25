@@ -29,10 +29,10 @@ using SceneValue = variant<
     unique_ptr<Object::ClickableText>,
     unique_ptr<Object::Layout> >;
 
-constexpr uint16_t no_object = numeric_limits<uint16_t>::max();
+constexpr uint16_t no_object{numeric_limits<uint16_t>::max()};
 
 struct SceneObject {
-    SceneValue value;
+    SceneValue value{};
     uint32_t   generation{1};
     uint16_t   parent{no_object};
     uint16_t   previous{no_object};
@@ -41,8 +41,8 @@ struct SceneObject {
     bool       live{};
 };
 
-vector<SceneObject> objects;
-vector<uint16_t>    animated_objects;
+vector<SceneObject> objects{};
+vector<uint16_t>    animated_objects{};
 uint16_t            first_object{no_object}, last_object{no_object};
 uint16_t            free_object{no_object},  pending_deletion{no_object};
 size_t              callback_depth{};
@@ -69,7 +69,7 @@ void flush_deletions() {
         const auto index     = pending_deletion;
         pending_deletion     = objects[index].next;
         // Destruct outside the slot: captured resources may modify the scene.
-        SceneValue destroyed = std::move(objects[index].value);
+        const auto destroyed = std::move(objects[index].value);
         if (objects[index].generation != numeric_limits<uint32_t>::max()) {
             objects[index].next = free_object;
             free_object         = index;
@@ -100,8 +100,8 @@ bool valid_layout(const LayoutDesc& desc) {
 }
 
 Frame intersection(const Frame& a, const Frame& b) {
-    const float x = max(a.x, b.x);
-    const float y = max(a.y, b.y);
+    const float x{max(a.x, b.x)};
+    const float y{max(a.y, b.y)};
     return {x, y, max(0.0f, min(a.x + a.width, b.x + b.width) - x),
             max(0.0f, min(a.y + a.height, b.y + b.height) - y)};
 }
@@ -122,13 +122,13 @@ bool click_object(const Frame& frame, float radius, const ClickCallback& callbac
         y < frame.y || y > frame.y + frame.height) {
         return false;
     }
-    const float corner_radius = clamp(radius, 0.0f, max(0.0f, min(frame.width, frame.height) / 2));
-    const float dx            = x - clamp(x, frame.x + corner_radius, frame.x + frame.width - corner_radius);
-    const float dy            = y - clamp(y, frame.y + corner_radius, frame.y + frame.height - corner_radius);
+    const float corner_radius{clamp(radius, 0.0f, max(0.0f, min(frame.width, frame.height) / 2))};
+    const float dx{x - clamp(x, frame.x + corner_radius, frame.x + frame.width - corner_radius)};
+    const float dy{y - clamp(y, frame.y + corner_radius, frame.y + frame.height - corner_radius)};
     if (dx * dx + dy * dy > corner_radius * corner_radius || !callback) {
         return false;
     }
-    CallbackScope scope;
+    const CallbackScope scope{};
     callback();
     return true;
 }
@@ -172,7 +172,7 @@ float* animation_target(desc_type& type, AnimationTarget target) {
 
 void add_animation(
     vector<unique_ptr<Animation> >& animations, float* target_ptr, const AnimationDesc& anim_desc) {
-    auto existing = find_if(animations.begin(), animations.end(), [target_ptr](const auto& anim) {
+    const auto existing = find_if(animations.begin(), animations.end(), [target_ptr](const auto& anim) {
         return anim->target_ptr == target_ptr;
     });
 
@@ -183,7 +183,7 @@ void add_animation(
         if ((*existing)->priority == anim_desc.priority) {
             Log::logger(Log::Warning,
                 "Animation conflict: target={}, from={}, to={}",
-                static_cast<const void*>((*existing)->target_ptr),
+                static_cast<const void*>(target_ptr),
                 (*existing)->from,
                 (*existing)->to
                 );
@@ -209,7 +209,7 @@ void add_animation(
 
 void update(vector<unique_ptr<Animation> >& animations) {
     const auto  now   = chrono::steady_clock::now();
-    const float scale = Island::get_island().animation_scale;
+    const float scale{Island::get_island().animation_scale};
 
     erase_if(animations, [now, scale](const unique_ptr<Animation>& animation) {
         const float elapsed =
@@ -220,11 +220,11 @@ void update(vector<unique_ptr<Animation> >& animations) {
         const float progress = animation->duration == 0
             ? 1.0f
             : clamp(
-                elapsed * scale / animation->duration,
+                elapsed * scale / static_cast<float>(animation->duration),
                 0.0f, 1.0f
                 );
 
-        const bool finished = progress >= 1.0f;
+        const bool finished{progress >= 1.0f};
 
         *animation->target_ptr = finished
             ? animation->to
@@ -242,7 +242,7 @@ struct Object::DontUse::SceneAccess {
     template <typename T, typename Desc>
     static Handle<T> add(const Desc& desc) {
         auto     object = make_unique<T>(desc);
-        uint16_t index;
+        uint16_t index{};
         if (free_object != no_object) {
             index       = free_object;
             free_object = objects[index].next;
@@ -324,11 +324,6 @@ struct Object::DontUse::SceneAccess {
         return true;
     }
 
-    static void fit_surface(Layout& layout, const array<int, 2>& surface) {
-        if (layout.desc.fit_surface)
-            layout.set_frame({0, 0, static_cast<float>(surface[0]), static_cast<float>(surface[1])});
-    }
-
     static bool supports_auto_size(uint16_t index) {
         return visit([](const auto& object) {
             using T = remove_reference_t<decltype(*object)>;
@@ -341,15 +336,15 @@ struct Object::DontUse::SceneAccess {
             using T = remove_reference_t<decltype(*object)>;
             if constexpr (derived_from<T, Image> || derived_from<T, Text>) {
                 object->prepare();
-                Frame frame  = object->desc.frame;
+                Frame frame{object->desc.frame};
                 frame.width  = static_cast<float>(object->texture.width());
                 frame.height = static_cast<float>(object->texture.height());
                 if constexpr (derived_from<T, Text>) {
                     // Match draw_text, including fractional-scale buffer rounding.
                     const auto surface = Wayland::get_surface_size();
                     const auto buffer  = Wayland::get_buffer_size();
-                    frame.width        /= static_cast<float>(buffer[0]) / surface[0];
-                    frame.height       /= static_cast<float>(buffer[1]) / surface[1];
+                    frame.width        /= static_cast<float>(buffer[0]) / static_cast<float>(surface[0]);
+                    frame.height       /= static_cast<float>(buffer[1]) / static_cast<float>(surface[1]);
                 }
                 if (frame != object->desc.frame) {
                     object->desc.frame = frame;
@@ -364,7 +359,7 @@ struct Object::DontUse::SceneAccess {
         if (!layout.dirty)
             return false;
         layout.dirty             = false;
-        bool             changed = false;
+        bool             changed{};
         array<size_t, 3> counts{};
         layout.lengths = {};
         for (const auto& item : layout.elements) {
@@ -383,7 +378,7 @@ struct Object::DontUse::SceneAccess {
                     }
                 }, objects[item.index].value);
             }
-            const Frame frame = visit([](const auto& object) { return object->get_frame(); }, objects[item.index].value);
+            const Frame frame{visit([](const auto& object) { return object->get_frame(); }, objects[item.index].value)};
             const auto  group = static_cast<size_t>(item.align);
             if (counts[group]++) {
                 layout.lengths[group] += layout.desc.spacing;
@@ -392,8 +387,8 @@ struct Object::DontUse::SceneAccess {
         }
 
         const auto&     desc   = layout.desc;
-        const float     start  = desc.vertical ? desc.frame.y : desc.frame.x;
-        const float     length = desc.vertical ? desc.frame.height : desc.frame.width;
+        const float     start{desc.vertical ? desc.frame.y : desc.frame.x};
+        const float     length{desc.vertical ? desc.frame.height : desc.frame.width};
         array<float, 3> cursor{
             start,
             start + (length - layout.lengths[1]) / 2,
@@ -401,11 +396,11 @@ struct Object::DontUse::SceneAccess {
         };
         for (const auto& item : layout.elements) {
             visit([&](const auto& object) {
-                Frame       frame        = object->desc.frame;
+                Frame       frame{object->desc.frame};
                 const auto  group        = static_cast<size_t>(item.align);
-                const float cross_length = desc.vertical ? desc.frame.width : desc.frame.height;
-                const float cross_size   = desc.vertical ? frame.width : frame.height;
-                float       cross        = desc.vertical ? desc.frame.x : desc.frame.y;
+                const float cross_length{desc.vertical ? desc.frame.width : desc.frame.height};
+                const float cross_size{desc.vertical ? frame.width : frame.height};
+                float       cross{desc.vertical ? desc.frame.x : desc.frame.y};
                 if (desc.cross_align == Align::Center) {
                     cross += (cross_length - cross_size) / 2;
                 }
@@ -431,16 +426,16 @@ struct Object::DontUse::SceneAccess {
 
     static array<Frame, 3> group_clips(const Layout& layout, const Frame& inherited) {
         const auto& frame   = layout.desc.frame;
-        const float length  = max(0.0f, layout.desc.vertical ? frame.height : frame.width);
-        float       left    = min(layout.lengths[0], length);
-        float       right   = min(layout.lengths[2], length);
-        const float overlap = max(0.0f, left + right - length) / 2;
+        const float length{max(0.0f, layout.desc.vertical ? frame.height : frame.width)};
+        float       left{min(layout.lengths[0], length)};
+        float       right{min(layout.lengths[2], length)};
+        const float overlap{max(0.0f, left + right - length) / 2};
         left                -= overlap;
         right               -= overlap;
         const array<float, 4> edges{0, left, length - right, length};
-        array<Frame, 3>       clips;
-        for (size_t i = 0; i < clips.size(); ++i) {
-            Frame clip = frame;
+        array<Frame, 3>       clips{};
+        for (size_t i{}; i < clips.size(); ++i) {
+            Frame clip{frame};
             if (layout.desc.vertical) {
                 clip.y      += edges[i];
                 clip.height = edges[i + 1] - edges[i];
@@ -524,8 +519,8 @@ Frame Object::Element<Desc>::get_frame() const {
 
 template <typename Desc>
 void Object::Element<Desc>::add_animation(AnimationDesc anim_desc, source_location l) {
-    float* target_ptr = animation_target(desc, anim_desc.target);
-    if (target_ptr == nullptr) {
+    const auto target_ptr = animation_target(desc, anim_desc.target);
+    if (!target_ptr) {
         Log::logger(Log::Error,
             "{}:{}: Unsupported animation target, id = {}",
             l.file_name(), l.line(), static_cast<int>(anim_desc.target));
@@ -541,7 +536,7 @@ void Object::Element<Desc>::add_animation(AnimationDesc anim_desc, source_locati
 
 template <typename Desc>
 void Object::Element<Desc>::update() {
-    const Frame previous = desc.frame;
+    const Frame previous{desc.frame};
     ::update(animations);
     if (desc.frame != previous)
         geometry_changed();
@@ -587,7 +582,7 @@ void Object::Rectangle::set_color(const Color& color) {
     Island::request_redraw(true);
 }
 
-void Object::Rectangle::draw() {
+void Object::Rectangle::draw() const {
     Renderer::draw_rectangle(desc);
 }
 
@@ -667,7 +662,7 @@ void Object::Text::set_font(FontHandle font) {
 }
 
 void Object::Text::prepare() {
-    const float scale = Wayland::get_scale();
+    const float scale{Wayland::get_scale()};
     if (texture_dirty || texture_scale != scale) {
         Renderer::prepare_text(desc, texture);
         texture_dirty = false;
@@ -747,14 +742,6 @@ void Object::Layout::set_cross_align(Align align) {
     }
 }
 
-void Object::Layout::set_fit_surface(bool enabled) {
-    if (desc.fit_surface == enabled)
-        return;
-    desc.fit_surface = enabled;
-    geometry_changed();
-    Island::request_redraw(true);
-}
-
 bool Object::Layout::add_element_impl(DontUse::Key element, Align align, SizeMode mode) {
     if (scene_index == no_object || !valid(element) || !valid_align(align))
         return false;
@@ -770,10 +757,10 @@ bool Object::Layout::add_element_impl(DontUse::Key element, Align align, SizeMod
         return false;
     if (mode == SizeMode::Content && !DontUse::SceneAccess::supports_auto_size(index))
         return false;
-    const Frame frame = visit([](const auto& object) { return object->get_frame(); }, entry.value);
+    const Frame frame{visit([](const auto& object) { return object->get_frame(); }, entry.value)};
     if (!valid_frame(frame))
         return false;
-    auto existing = ranges::find(elements, index, &Item::index);
+    const auto existing = ranges::find(elements, index, &Item::index);
     if (existing != elements.end()) {
         if (existing->align == align && existing->size_mode == mode)
             return true;
@@ -847,8 +834,8 @@ Object::Handle<Object::Layout> Object::add_layout(const LayoutDesc& desc) {
 }
 
 void Object::click(float x, float y, bool left) {
-    CallbackScope scope;
-    const Frame   clip = surface_frame();
+    const CallbackScope scope{};
+    const Frame   clip{surface_frame()};
     for (auto i = last_object; i != no_object; i = objects[i].previous) {
         if (objects[i].parent == no_object && DontUse::SceneAccess::click(i, clip, x, y, left))
             return;
@@ -856,7 +843,7 @@ void Object::click(float x, float y, bool left) {
 }
 
 void Object::draw() {
-    const Frame clip = surface_frame();
+    const Frame clip{surface_frame()};
     for (auto i = first_object; i != no_object; i = objects[i].next) {
         if (objects[i].parent == no_object)
             DontUse::SceneAccess::draw(i, clip);
@@ -866,7 +853,7 @@ void Object::draw() {
 
 void Object::update() {
     // Swap removal makes finishing an animation O(1); only active objects are visited.
-    for (size_t i = 0; i < animated_objects.size();) {
+    for (size_t i{}; i < animated_objects.size();) {
         const auto index = animated_objects[i];
         visit([](const auto& item) {
             if constexpr (same_as<remove_reference_t<decltype(*item)>, Layout>)
@@ -880,19 +867,14 @@ void Object::update() {
     const auto           surface = Wayland::get_surface_size();
     const auto           buffer  = Wayland::get_buffer_size();
     const auto           scale   = Wayland::get_scale();
-    static array<int, 2> last_surface{}, last_buffer{};
+    static array<uint32_t, 2> last_surface{}, last_buffer{};
     static float         last_scale{};
-    const bool           resized  = surface != last_surface;
-    const bool           rescaled = buffer != last_buffer || scale != last_scale;
+    const bool           resized{surface != last_surface};
+    const bool           rescaled{buffer != last_buffer || scale != last_scale};
     if (resized || rescaled || layouts_dirty) {
-        for (auto i = first_object; i != no_object; i = objects[i].next) {
-            if (resized || rescaled)
+        if (resized || rescaled) {
+            for (auto i = first_object; i != no_object; i = objects[i].next)
                 DontUse::SceneAccess::mark_dirty(i);
-            if (objects[i].parent == no_object) {
-                if (auto* layout = get_if<unique_ptr<Layout> >(&objects[i].value)) {
-                    DontUse::SceneAccess::fit_surface(**layout, surface);
-                }
-            }
         }
         for (auto i = first_object; i != no_object; i = objects[i].next) {
             if (objects[i].parent == no_object) {

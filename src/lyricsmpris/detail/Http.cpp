@@ -20,10 +20,10 @@ Error multi_error(CURLMcode code) {
 } // namespace
 
 struct Http::Transfer {
-    HttpRequest request;
-    string body;
+    HttpRequest request{};
+    string body{};
     CURL* easy = curl_easy_init();
-    size_t max_bytes;
+    size_t max_bytes{};
     explicit Transfer(HttpRequest job, size_t limit) : request(move(job)), max_bytes(limit) {}
     ~Transfer() { if (easy) curl_easy_cleanup(easy); }
 };
@@ -33,7 +33,7 @@ Http::Http(const Options& options)
       timeout_ms_(static_cast<long>(options.request_timeout.count())) {}
 
 expected<unique_ptr<Http>, Error> Http::create(const Options& options) {
-    static CurlRuntime runtime;
+    static const CurlRuntime runtime{};
     if (runtime.result != CURLE_OK)
         return unexpected(Error{ErrorCode::Network, static_cast<int>(runtime.result), curl_easy_strerror(runtime.result)});
     const auto* version = curl_version_info(CURLVERSION_NOW);
@@ -42,10 +42,10 @@ expected<unique_ptr<Http>, Error> Http::create(const Options& options) {
     auto http = unique_ptr<Http>(new Http(options));
     http->multi_ = curl_multi_init();
     if (!http->multi_) return unexpected(Error{ErrorCode::Network, 0, "curl_multi_init failed"});
-    auto configure = [&](CURLMoption option, auto value) {
+    const auto configure = [&](CURLMoption option, auto value) {
         return curl_multi_setopt(http->multi_, option, value);
     };
-    for (auto code : {
+    for (const auto code : {
         configure(CURLMOPT_SOCKETFUNCTION, &Http::socket_callback),
         configure(CURLMOPT_SOCKETDATA, http.get()),
         configure(CURLMOPT_TIMERFUNCTION, &Http::timer_callback),
@@ -116,7 +116,7 @@ void Http::pump() {
             continue;
         }
         CURLcode configuration = CURLE_OK;
-        auto set = [&](CURLoption option, auto value) {
+        const auto set = [&](CURLoption option, auto value) {
             const auto code = curl_easy_setopt(transfer->easy, option, value);
             if (code != CURLE_OK) configuration = code;
         };
@@ -150,7 +150,7 @@ void Http::pump() {
 }
 
 expected<vector<HttpResponse>, Error> Http::process(span<const pollfd> ready, Clock::time_point now) {
-    int running = 0;
+    int running{};
     if (deadline_ && now >= *deadline_) {
         deadline_.reset();
         const auto code = curl_multi_socket_action(multi_, CURL_SOCKET_TIMEOUT, 0, &running);
@@ -159,7 +159,7 @@ expected<vector<HttpResponse>, Error> Http::process(span<const pollfd> ready, Cl
     for (const auto& fd : ready) {
         if (!fd.revents || none_of(sockets_.begin(), sockets_.end(),
             [&](const auto& interest) { return interest.fd == fd.fd; })) continue;
-        int events = 0;
+        int events{};
         if (fd.revents & POLLIN) events |= CURL_CSELECT_IN;
         if (fd.revents & POLLOUT) events |= CURL_CSELECT_OUT;
         if (fd.revents & (POLLERR | POLLHUP | POLLNVAL)) events |= CURL_CSELECT_ERR;
@@ -169,13 +169,13 @@ expected<vector<HttpResponse>, Error> Http::process(span<const pollfd> ready, Cl
     if (callback_failed_) return unexpected(Error{ErrorCode::Network, 0, "HTTP socket registration failed"});
     vector<HttpResponse> responses = move(failures_);
     failures_.clear();
-    int remaining = 0;
+    int remaining{};
     while (auto* message = curl_multi_info_read(multi_, &remaining)) {
         if (message->msg != CURLMSG_DONE) continue;
         const auto at = find_if(active_.begin(), active_.end(),
             [&](const auto& transfer) { return transfer->easy == message->easy_handle; });
         if (at == active_.end()) continue;
-        long status = 0;
+        long status{};
         curl_easy_getinfo(message->easy_handle, CURLINFO_RESPONSE_CODE, &status);
         responses.push_back({(*at)->request.id, move((*at)->body), message->data.result, status});
         curl_multi_remove_handle(multi_, message->easy_handle);
@@ -187,10 +187,10 @@ expected<vector<HttpResponse>, Error> Http::process(span<const pollfd> ready, Cl
 
 void Http::cancel() noexcept {
     queue_.clear();
-    if (multi_) for (auto& transfer : active_) curl_multi_remove_handle(multi_, transfer->easy);
+    if (multi_) for (const auto& transfer : active_) curl_multi_remove_handle(multi_, transfer->easy);
     active_.clear();
     if (multi_) {
-        int remaining = 0;
+        int remaining{};
         while (curl_multi_info_read(multi_, &remaining)) {}
     }
     failures_.clear();

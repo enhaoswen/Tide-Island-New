@@ -3,6 +3,7 @@
 #include "Lyrics.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <expected>
 #include <memory>
 #include <optional>
@@ -11,78 +12,79 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <utility>
 
 namespace lyricsmpris {
 
 using Clock = std::chrono::steady_clock;
 
-enum class Playback { Stopped, Paused, Playing };
-enum class SearchState { Idle, Searching, Retrying, Finished, NotFound, Failed };
-enum class Provider { Lrclib, Lrcx, Netease, Qq, Kugou, Musixmatch };
-enum class ErrorCode { Bus, Network, NoPlayer, Unsupported, InvalidOptions };
+enum class Playback : std::uint8_t { Stopped, Paused, Playing };
+enum class SearchState : std::uint8_t { Idle, Searching, Retrying, Finished, NotFound, Failed };
+enum class Provider : std::uint8_t { Lrclib, Lrcx, Netease, Qq, Kugou, Musixmatch };
+enum class ErrorCode : std::uint8_t { Bus, Network, NoPlayer, Unsupported, InvalidOptions };
 
 struct Error {
-    ErrorCode code;
-    int native_code = 0;
-    std::string message;
+    ErrorCode code{};
+    int native_code{};
+    std::string message{};
 };
 
 struct Capabilities {
-    bool control = false;
-    bool play = false;
-    bool pause = false;
-    bool next = false;
-    bool previous = false;
+    bool control{};
+    bool play{};
+    bool pause{};
+    bool next{};
+    bool previous{};
 };
 
 struct State {
-    bool has_player = false;
-    std::string service;
-    std::string track_id;
-    std::string title;
-    std::vector<std::string> artists;
-    std::string album;
+    bool has_player{};
+    std::string service{};
+    std::string track_id{};
+    std::string title{};
+    std::vector<std::string> artists{};
+    std::string album{};
     // MPRIS artwork URI: https://, file://, etc. Image decoding belongs to UI.
-    std::string artwork_url;
-    std::string media_url;
-    std::optional<Milliseconds> duration;
-    Playback playback = Playback::Stopped;
-    double playback_rate = 1.0;
-    Capabilities capabilities;
+    std::string artwork_url{};
+    std::string media_url{};
+    std::optional<Milliseconds> duration{};
+    Playback playback{Playback::Stopped};
+    double playback_rate{1.0};
+    Capabilities capabilities{};
     // Snapshot at sampled_at. Use Client::position() for current progress.
     Milliseconds position{};
     Clock::time_point sampled_at{};
-    SearchState lyrics_search = SearchState::Idle;
-    std::optional<std::size_t> current_line;
-    std::optional<Error> last_error;
-    std::uint64_t track_revision = 0;
+    SearchState lyrics_search{SearchState::Idle};
+    std::optional<std::size_t> current_line{};
+    std::optional<Error> last_error{};
+    std::uint64_t track_revision{};
 };
 
-enum class Changes : unsigned {
+enum class Changes : std::uint16_t {
     None = 0, Player = 1, Track = 2, Playback = 4, Position = 8,
     Lyrics = 16, Line = 32, Search = 64, Error = 128, Capabilities = 256
 };
 constexpr Changes operator|(Changes a, Changes b) noexcept {
-    return static_cast<Changes>(static_cast<unsigned>(a) | static_cast<unsigned>(b));
+    return static_cast<Changes>(std::to_underlying(a) | std::to_underlying(b));
 }
 constexpr bool contains(Changes changes, Changes flag) noexcept {
-    return (static_cast<unsigned>(changes) & static_cast<unsigned>(flag)) != 0;
+    return (std::to_underlying(changes) & std::to_underlying(flag)) != 0;
 }
 
 struct Options {
-    std::string preferred_service;
+    std::string preferred_service{};
     // Case-sensitive fragments of the MPRIS service name.
-    std::vector<std::string> blocked_services;
-    std::vector<Provider> providers = {
+    std::vector<std::string> blocked_services{};
+    std::vector<Provider> providers{
         Provider::Lrclib, Provider::Lrcx, Provider::Netease, Provider::Qq, Provider::Kugou
     };
-    std::string musixmatch_api_key;
-    bool local_lyrics = true;
-    std::size_t max_response_bytes = 1024 * 1024;
-    std::size_t max_lyric_lines = 10000;
-    unsigned max_connections = 2;
+    std::string musixmatch_api_key{};
+    bool local_lyrics{true};
+    std::size_t max_response_bytes{1024 * 1024};
+    std::size_t max_lyric_lines{10000};
+    unsigned max_connections{2};
     Milliseconds request_timeout{7000};
-    unsigned max_search_attempts = 3;
+    unsigned max_search_attempts{3};
     Milliseconds retry_delay{2500};
     Milliseconds lyric_offset{};
     // Optional compatibility resync. Zero disables periodic D-Bus reads.
@@ -124,7 +126,7 @@ public:
 
 private:
     struct Impl;
-    std::unique_ptr<Impl> impl_;
+    std::unique_ptr<Impl> impl_{};
     explicit Client(std::unique_ptr<Impl> impl) noexcept;
 };
 

@@ -28,8 +28,8 @@ private:
         std::uint32_t position{none}; // Heap position when live; next free slot otherwise.
         std::uint32_t generation{1};
     };
-    std::vector<Slot> slots;
-    std::vector<std::uint32_t> heap;
+    std::vector<Slot> slots{};
+    std::vector<std::uint32_t> heap{};
     std::uint32_t free_slot{none};
 
     bool earlier(std::uint32_t a, std::uint32_t b) const {
@@ -90,7 +90,7 @@ public:
     }
     EventHandle push(Clock::time_point deadline, Callback callback, float priority = 0) {
         if (!callback) return {};
-        std::uint32_t index;
+        std::uint32_t index{};
         if (free_slot != none) {
             index = free_slot;
             free_slot = slots[index].position;
@@ -117,13 +117,13 @@ public:
     Callback pop_ready(Clock::time_point now) {
         if (heap.empty() || slots[heap.front()].deadline > now) return nullptr;
         const auto index = heap.front();
-        auto callback = slots[index].callback;
+        const auto callback = slots[index].callback;
         erase(index); // Invalidate before invoking, allowing safe cancellation/rescheduling.
         return callback;
     }
     void clear() {
         // Linear rather than repeatedly repairing the heap.
-        for (auto index : heap) {
+        for (const auto index : heap) {
             auto& slot = slots[index];
             slot.callback = nullptr;
             if (slot.generation != none) ++slot.generation;

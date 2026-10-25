@@ -25,50 +25,50 @@ template<class T>
 using Rows = Array<T>;
 
 struct Lrclib {
-    Scalar trackName, name, artistName, artist, albumName, album;
-    Scalar duration, syncedLyrics, plainLyrics, instrumental;
+    Scalar trackName{}, name{}, artistName{}, artist{}, albumName{}, album{};
+    Scalar duration{}, syncedLyrics{}, plainLyrics{}, instrumental{};
 };
 
 struct Lrcx {
-    Scalar title, trackName, name, artist, artistName, album, albumName;
-    Scalar duration, lyrics, lyric, lrc, syncedLyrics, lrc_ttml, plainLyrics;
+    Scalar title{}, trackName{}, name{}, artist{}, artistName{}, album{}, albumName{};
+    Scalar duration{}, lyrics{}, lyric{}, lrc{}, syncedLyrics{}, lrc_ttml{}, plainLyrics{};
 };
 
-struct Artist { Scalar name; };
-struct Album { Scalar name; };
-struct Lyric { Scalar lyric; };
+struct Artist { Scalar name{}; };
+struct Album { Scalar name{}; };
+struct Lyric { Scalar lyric{}; };
 
 struct NeteaseSong {
-    Scalar name, duration, dt, id;
-    Array<Artist> artists, ar;
-    Object<Album> album, al;
+    Scalar name{}, duration{}, dt{}, id{};
+    Array<Artist> artists{}, ar{};
+    Object<Album> album{}, al{};
 };
-struct NeteaseResult { Array<NeteaseSong> songs; };
-struct NeteaseSearch { Object<NeteaseResult> result; };
-struct NeteaseLyric { Object<Lyric> lrc, tlyric; };
+struct NeteaseResult { Array<NeteaseSong> songs{}; };
+struct NeteaseSearch { Object<NeteaseResult> result{}; };
+struct NeteaseLyric { Object<Lyric> lrc{}, tlyric{}; };
 
 struct QqSong {
-    Scalar songname, title, albumname, interval, songmid, mid;
-    Array<Artist> singer;
+    Scalar songname{}, title{}, albumname{}, interval{}, songmid{}, mid{};
+    Array<Artist> singer{};
 };
-struct QqSongs { Array<QqSong> list; };
-struct QqData { Object<QqSongs> song; };
-struct QqSearch { Object<QqData> data; };
-struct QqLyric { Scalar lyric; };
+struct QqSongs { Array<QqSong> list{}; };
+struct QqData { Object<QqSongs> song{}; };
+struct QqSearch { Object<QqData> data{}; };
+struct QqLyric { Scalar lyric{}; };
 
 struct KugouSong {
-    Scalar SongName, FileName, SingerName, AlbumName, Duration, FileHash, Hash;
+    Scalar SongName{}, FileName{}, SingerName{}, AlbumName{}, Duration{}, FileHash{}, Hash{};
 };
-struct KugouData { Array<KugouSong> lists; };
-struct KugouSearch { Object<KugouData> data; };
-struct KugouCandidate { Scalar id, accesskey; };
-struct KugouLyricSearch { Array<KugouCandidate> candidates; };
-struct KugouDownload { Scalar content; };
+struct KugouData { Array<KugouSong> lists{}; };
+struct KugouSearch { Object<KugouData> data{}; };
+struct KugouCandidate { Scalar id{}, accesskey{}; };
+struct KugouLyricSearch { Array<KugouCandidate> candidates{}; };
+struct KugouDownload { Scalar content{}; };
 
-struct Subtitle { Scalar subtitle_body; };
-struct PlainLyrics { Scalar lyrics_body; };
-struct MusixmatchBody { Object<Subtitle> subtitle; Object<PlainLyrics> lyrics; };
-struct MusixmatchMessage { Object<MusixmatchBody> body; };
-struct Musixmatch { Object<MusixmatchMessage> message; };
+struct Subtitle { Scalar subtitle_body{}; };
+struct PlainLyrics { Scalar lyrics_body{}; };
+struct MusixmatchBody { Object<Subtitle> subtitle{}; Object<PlainLyrics> lyrics{}; };
+struct MusixmatchMessage { Object<MusixmatchBody> body{}; };
+struct Musixmatch { Object<MusixmatchMessage> message{}; };
 
 } // namespace lyricsmpris::detail::responses

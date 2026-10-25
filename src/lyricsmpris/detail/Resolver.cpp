@@ -21,12 +21,12 @@ string local_path(string_view url) {
         if (!url.starts_with('/')) return {};
         // A URI fragment/query is not part of a file's name. Encoded ?/# are.
         url = url.substr(0, url.find_first_of("?#"));
-        string result;
+        string result{};
         result.reserve(url.size());
         while (!url.empty()) {
             if (url.front() == '%') {
                 if (url.size() < 3) return {};
-                unsigned byte = 0;
+                unsigned byte{};
                 const auto [end, error] = from_chars(url.data() + 1, url.data() + 3, byte, 16);
                 if (error != errc{} || end != url.data() + 3 || byte == 0) return {};
                 result += static_cast<char>(byte);
@@ -40,15 +40,15 @@ string local_path(string_view url) {
 }
 
 string read_local(const filesystem::path& path, size_t limit) {
-    const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+    const int fd{open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK)};
     if (fd < 0) return {};
-    struct Close { int fd; ~Close() { close(fd); } } guard{fd};
+    struct Close { int fd{}; ~Close() { close(fd); } } guard{fd};
     struct stat stat{};
     if (fstat(fd, &stat) < 0 || !S_ISREG(stat.st_mode) || stat.st_size <= 0
         || static_cast<uint64_t>(stat.st_size) > limit) return {};
-    string result;
+    string result{};
     result.reserve(static_cast<size_t>(stat.st_size));
-    array<char, 4096> buffer;
+    array<char, 4096> buffer{};
     while (true) {
         const auto count = read(fd, buffer.data(), buffer.size());
         if (count < 0) { if (errno == EINTR) continue; return {}; }
@@ -101,7 +101,7 @@ bool Resolver::direct(string_view text, string_view provider) {
         state_ = SearchState::Finished;
         return true;
     }
-    const int score = provider == "mpris" ? 20000 : 10000;
+    const int score{provider == "mpris" ? 20000 : 10000};
     if (!document_.synced() && score >= best_plain_score_) {
         set_document(move(*document));
         best_plain_score_ = score;
@@ -117,7 +117,7 @@ void Resolver::local(string_view media_url) {
     const auto directory = media.parent_path();
     for (const auto& candidate : {directory / (base + ".lrc"), directory / (base + ".LRC"),
         filesystem::path(path + ".lrc"), directory / "lyrics" / (base + ".lrc")}) {
-        auto text = read_local(candidate, options_.max_response_bytes);
+        const auto text = read_local(candidate, options_.max_response_bytes);
         if (!text.empty() && direct(text, "local")) return;
     }
 }
@@ -156,7 +156,7 @@ void Resolver::schedule(Stage stage, Candidate candidate) {
 void Resolver::next_provider() {
     while (provider_index_ < options_.providers.size()) {
         const auto provider = options_.providers[provider_index_++];
-        Candidate metadata;
+        Candidate metadata{};
         metadata.provider = provider;
         followup_.reset();
         switch (provider) {
@@ -185,8 +185,8 @@ void Resolver::complete() {
         state_ = SearchState::Finished;
     } else if (!document_.empty()) state_ = SearchState::Finished;
     else if (attempts_ < options_.max_search_attempts) {
-        int64_t delay = options_.retry_delay.count();
-        for (unsigned i = 1; i < attempts_; ++i) delay = min<int64_t>(delay * 3, 86400000);
+        int64_t delay{options_.retry_delay.count()};
+        for (unsigned i{1}; i < attempts_; ++i) delay = min<int64_t>(delay * 3, 86400000);
         retry_at_ = Clock::now() + Milliseconds{delay};
         state_ = SearchState::Retrying;
     } else state_ = successful_response_ || !had_error_ ? SearchState::NotFound : SearchState::Failed;
@@ -241,16 +241,16 @@ void Resolver::receive(HttpResponse response) {
     }
     successful_response_ = true;
     if (search_stage(job.stage)) {
-        struct Rated { int score; size_t index; };
-        vector<Rated> rated;
-        for (size_t i = 0; i < candidates->size(); ++i) {
+        struct Rated { int score{}; size_t index{}; };
+        vector<Rated> rated{};
+        for (size_t i{}; i < candidates->size(); ++i) {
             const auto evaluation = evaluate(query_, (*candidates)[i]);
             if (evaluation.accepted) rated.push_back({evaluation.score, i});
         }
         stable_sort(rated.begin(), rated.end(), [](auto a, auto b) { return a.score > b.score; });
         const auto stage = job.stage == Stage::NeteaseSearch ? Stage::NeteaseLyric
             : job.stage == Stage::QqSearch ? Stage::QqLyric : Stage::KugouLyricSearch;
-        for (size_t i = 0; i < min(rated.size(), size_t{5}); ++i)
+        for (size_t i{}; i < min(rated.size(), size_t{5}); ++i)
             schedule(stage, move((*candidates)[rated[i].index]));
     } else if (job.stage == Stage::KugouLyricSearch) {
         if (!candidates->empty()) {
@@ -286,7 +286,7 @@ expected<void, Error> Resolver::process(span<const pollfd> ready, Clock::time_po
         if (followup_) {
             const auto stage = *followup_;
             followup_.reset();
-            Candidate candidate;
+            Candidate candidate{};
             candidate.provider = options_.providers[provider_index_ - 1];
             if (candidate.provider == Provider::Musixmatch) {
                 candidate.title = query_.title; candidate.artist = query_.artist;

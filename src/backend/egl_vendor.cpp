@@ -61,27 +61,27 @@ void registry_global(void* data, wl_registry* registry, uint32_t name,
 void registry_remove(void*, wl_registry*, uint32_t) {}
 
 std::optional<Identity> query_renderer() {
-    auto* display = wl_display_connect(nullptr);
+    auto* const display = wl_display_connect(nullptr);
     if (!display) {
         return std::nullopt;
     }
-    auto* registry = wl_display_get_registry(display);
-    wl_compositor* compositor = nullptr;
+    auto* const registry = wl_display_get_registry(display);
+    wl_compositor* compositor{};
     constexpr wl_registry_listener listener{registry_global, registry_remove};
     if (!registry || wl_registry_add_listener(registry, &listener, &compositor) < 0 ||
         wl_display_roundtrip(display) < 0 || !compositor) {
         return std::nullopt;
     }
-    auto* surface = wl_compositor_create_surface(compositor);
+    auto* const surface = wl_compositor_create_surface(compositor);
     if (!surface) {
         return std::nullopt;
     }
-    auto* window = wl_egl_window_create(surface, 1, 1);
+    auto* const window = wl_egl_window_create(surface, 1, 1);
     if (!window) {
         return std::nullopt;
     }
 
-    auto egl_display = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(display));
+    const auto egl_display = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(display));
     if (egl_display == EGL_NO_DISPLAY || !eglInitialize(egl_display, nullptr, nullptr) ||
         !eglBindAPI(EGL_OPENGL_ES_API)) {
         return std::nullopt;
@@ -98,18 +98,18 @@ std::optional<Identity> query_renderer() {
         return std::nullopt;
     }
     constexpr EGLint context_attributes[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-    auto context = eglCreateContext(egl_display, config, EGL_NO_CONTEXT, context_attributes);
+    const auto context = eglCreateContext(egl_display, config, EGL_NO_CONTEXT, context_attributes);
     if (context == EGL_NO_CONTEXT) {
         return std::nullopt;
     }
-    auto egl_surface = eglCreateWindowSurface(
+    const auto egl_surface = eglCreateWindowSurface(
         egl_display, config, reinterpret_cast<EGLNativeWindowType>(window), nullptr);
     if (egl_surface == EGL_NO_SURFACE ||
         !eglMakeCurrent(egl_display, egl_surface, egl_surface, context)) {
         return std::nullopt;
     }
 
-    Identity result;
+    Identity result{};
     if (!copy_string(result.egl_vendor, eglQueryString(egl_display, EGL_VENDOR)) ||
         !copy_string(result.gl_vendor, reinterpret_cast<const char*>(glGetString(GL_VENDOR))) ||
         !copy_string(result.renderer, reinterpret_cast<const char*>(glGetString(GL_RENDERER))) ||
@@ -125,7 +125,7 @@ std::optional<Identity> probe(const std::string& vendor_file, Clock::time_point 
     if (Clock::now() >= deadline) {
         return std::nullopt;
     }
-    int descriptors[2];
+    int descriptors[2]{};
     if (pipe2(descriptors, O_CLOEXEC | O_NONBLOCK) != 0) {
         return std::nullopt;
     }
@@ -146,7 +146,7 @@ std::optional<Identity> probe(const std::string& vendor_file, Clock::time_point 
         if (!identity) {
             _exit(1);
         }
-        ssize_t written;
+        ssize_t written{};
         do {
             written = write(descriptors[1], &*identity, sizeof(Identity));
         } while (written < 0 && errno == EINTR);
@@ -158,8 +158,8 @@ std::optional<Identity> probe(const std::string& vendor_file, Clock::time_point 
         return std::nullopt;
     }
 
-    Identity result;
-    size_t received = 0;
+    Identity result{};
+    size_t received{};
     while (received < sizeof(result)) {
         const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now());
         if (remaining.count() <= 0) {
@@ -186,7 +186,7 @@ std::optional<Identity> probe(const std::string& vendor_file, Clock::time_point 
     close(descriptors[0]);
 
     int status{};
-    pid_t reaped;
+    pid_t reaped{};
     do {
         reaped = waitpid(child, &status, WNOHANG);
         if (reaped == 0 && Clock::now() < deadline) {
@@ -207,12 +207,12 @@ std::optional<Identity> probe(const std::string& vendor_file, Clock::time_point 
 }
 
 std::vector<std::string> vendor_files() {
-    std::vector<std::string> result;
+    std::vector<std::string> result{};
     // GLVND's standard discovery directories. Custom discovery settings are
     // respected by skipping automatic selection altogether.
     for (const auto* directory : {"/etc/glvnd/egl_vendor.d", "/usr/share/glvnd/egl_vendor.d"}) {
-        std::error_code error;
-        std::vector<std::string> files;
+        std::error_code error{};
+        std::vector<std::string> files{};
         std::filesystem::directory_iterator entry(directory, error), end;
         while (!error && entry != end) {
             if (entry->is_regular_file(error) && entry->path().extension() == ".json") {

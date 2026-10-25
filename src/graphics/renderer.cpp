@@ -26,31 +26,31 @@ using namespace std;
 namespace {
 
 struct RectVert {
-    float p1_x, p1_y;
-    float p1_r, p1_g, p1_b, p1_a;
+    float p1_x{}, p1_y{};
+    float p1_r{}, p1_g{}, p1_b{}, p1_a{};
 
-    float p2_x, p2_y;
-    float p2_r, p2_g, p2_b, p2_a;
+    float p2_x{}, p2_y{};
+    float p2_r{}, p2_g{}, p2_b{}, p2_a{};
 
-    float p3_x, p3_y;
-    float p3_r, p3_g, p3_b, p3_a;
+    float p3_x{}, p3_y{};
+    float p3_r{}, p3_g{}, p3_b{}, p3_a{};
 
-    float p4_x, p4_y;
-    float p4_r, p4_g, p4_b, p4_a;
+    float p4_x{}, p4_y{};
+    float p4_r{}, p4_g{}, p4_b{}, p4_a{};
 };
 
 struct ImgVert {
-    float p1_x, p1_y;
-    float p1_u, p1_v;
+    float p1_x{}, p1_y{};
+    float p1_u{}, p1_v{};
 
-    float p2_x, p2_y;
-    float p2_u, p2_v;
+    float p2_x{}, p2_y{};
+    float p2_u{}, p2_v{};
 
-    float p3_x, p3_y;
-    float p3_u, p3_v;
+    float p3_x{}, p3_y{};
+    float p3_u{}, p3_v{};
 
-    float p4_x, p4_y;
-    float p4_u, p4_v;
+    float p4_x{}, p4_y{};
+    float p4_u{}, p4_v{};
 };
 
 // tmp
@@ -72,10 +72,10 @@ RectVert rectangle_vertices(
     Frame frame,
     array<float, 4> color
     ) {
-    float left = frame.x;
-    float top = frame.y;
-    float right = left + frame.width;
-    float bottom = top + frame.height;
+    const float left{frame.x};
+    const float top{frame.y};
+    const float right{left + frame.width};
+    const float bottom{top + frame.height};
 
     // x, y, r, g, b, a
 
@@ -88,10 +88,10 @@ RectVert rectangle_vertices(
 }
 
 ImgVert image_vertices(Frame frame) {
-    float left = frame.x;
-    float top = frame.y;
-    float right = left + frame.width;
-    float bottom = top + frame.height;
+    const float left{frame.x};
+    const float top{frame.y};
+    const float right{left + frame.width};
+    const float bottom{top + frame.height};
 
     return {
         // x, y, u, v
@@ -103,11 +103,11 @@ ImgVert image_vertices(Frame frame) {
 }
 
 rect_proj_uniform_t projection() {
-    auto surface_size = Wayland::get_surface_size();
+    const auto surface_size = Wayland::get_surface_size();
 
     rect_proj_uniform_t result{};
-    result.proj[0] = 2.0F / surface_size[0];
-    result.proj[5] = -2.0F / surface_size[1];
+    result.proj[0] = 2.0F / static_cast<float>(surface_size[0]);
+    result.proj[5] = -2.0F / static_cast<float>(surface_size[1]);
     result.proj[10] = 1.0F;
     result.proj[12] = -1.0F;
     result.proj[13] = 1.0F;
@@ -136,11 +136,11 @@ void enable_blending(sg_pipeline_desc& descriptor) {
 }
 
 sg_swapchain swapchain() {
-    auto surface_size = Wayland::get_buffer_size();
+    const auto surface_size = Wayland::get_buffer_size();
 
     sg_swapchain result{};
-    result.width = surface_size[0];
-    result.height = surface_size[1];
+    result.width = static_cast<int>(surface_size[0]);
+    result.height = static_cast<int>(surface_size[1]);
     result.sample_count = 1;
     result.color_format = SG_PIXELFORMAT_RGBA8;
     result.depth_format = SG_PIXELFORMAT_NONE;
@@ -164,9 +164,9 @@ Frame calculate_frame(
 
     if (resize) {
 
-        float scale_x = frame.width / image_width;
-        float scale_y = frame.height / image_height;
-        float scale = min(scale_x, scale_y);
+        const float scale_x{frame.width / image_width};
+        const float scale_y{frame.height / image_height};
+        const float scale{min(scale_x, scale_y)};
 
         result.width = image_width * scale;
         result.height = image_height * scale;
@@ -307,13 +307,13 @@ void Renderer::begin_frame() {
 void Renderer::set_clip(const Frame& frame) {
     const auto surface = Wayland::get_surface_size();
     const auto buffer = Wayland::get_buffer_size();
-    const float scale_x = static_cast<float>(buffer[0]) / surface[0];
-    const float scale_y = static_cast<float>(buffer[1]) / surface[1];
+    const float scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
+    const float scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
     // Round shared edges identically so adjacent groups neither overlap nor leave seams.
-    const int x = static_cast<int>(round(clamp(frame.x, 0.0f, static_cast<float>(surface[0])) * scale_x));
-    const int y = static_cast<int>(round(clamp(frame.y, 0.0f, static_cast<float>(surface[1])) * scale_y));
-    const int right = static_cast<int>(round(clamp(frame.x + frame.width, 0.0f, static_cast<float>(surface[0])) * scale_x));
-    const int bottom = static_cast<int>(round(clamp(frame.y + frame.height, 0.0f, static_cast<float>(surface[1])) * scale_y));
+    const int x{static_cast<int>(round(clamp(frame.x, 0.0f, static_cast<float>(surface[0])) * scale_x))};
+    const int y{static_cast<int>(round(clamp(frame.y, 0.0f, static_cast<float>(surface[1])) * scale_y))};
+    const int right{static_cast<int>(round(clamp(frame.x + frame.width, 0.0f, static_cast<float>(surface[0])) * scale_x))};
+    const int bottom{static_cast<int>(round(clamp(frame.y + frame.height, 0.0f, static_cast<float>(surface[1])) * scale_y))};
     const array<int, 4> clip{x, y, max(0, right - x), max(0, bottom - y)};
     if (clip != current_clip) {
         sg_apply_scissor_rect(clip[0], clip[1], clip[2], clip[3], true);
@@ -330,11 +330,11 @@ void Renderer::end_frame() {
 
 void Renderer::draw_rectangle(const RectDesc& desc) {
 
-    float max_r = min(desc.frame.width, desc.frame.height) * 0.5f;
-    float radius = clamp(desc.radius, 0.0f, max_r);
+    const float max_r{min(desc.frame.width, desc.frame.height) * 0.5f};
+    const float radius{clamp(desc.radius, 0.0f, max_r)};
 
-    RectVert vertices = rectangle_vertices(desc.frame, desc.color.to_rgba());
-    int offset = sg_append_buffer(rect_vertex_buffer, SG_RANGE(vertices));
+    const RectVert vertices{rectangle_vertices(desc.frame, desc.color.to_rgba())};
+    const int offset{sg_append_buffer(rect_vertex_buffer, SG_RANGE(vertices))};
     if (sg_query_buffer_overflow(rect_vertex_buffer)) {
         Log::fatal("Vertex bufer overflow");
     }
@@ -344,8 +344,8 @@ void Renderer::draw_rectangle(const RectDesc& desc) {
     bindings.vertex_buffer_offsets[0] = offset;
     sg_apply_pipeline(rectangle_pipeline);
     sg_apply_bindings(&bindings);
-    auto project = projection();
-    auto radius_data = radius_uniform<rect_radius_uniform_t>(desc.frame, radius);
+    const auto project = projection();
+    const auto radius_data = radius_uniform<rect_radius_uniform_t>(desc.frame, radius);
     sg_apply_uniforms(UB_rect_proj_uniform, SG_RANGE(project));
     sg_apply_uniforms(UB_rect_radius_uniform, SG_RANGE(radius_data));
     sg_draw(0, 4, 1);
@@ -353,23 +353,21 @@ void Renderer::draw_rectangle(const RectDesc& desc) {
 
 void Renderer::prepare_image(const ImageDesc& desc, Texture& texture) {
     int width{}, height{}, channels{};
-    unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels{
+    const unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels{
         stbi_load(desc.path.c_str(), &width, &height, &channels, 4),
         &stbi_image_free
     };
     if (!pixels) {
         Log::fatal(R"@(Failed to load picture, path="{}")@", desc.path);
     }
-    if (width <= 0 || height <= 0 ||
-        static_cast<size_t>(height) > numeric_limits<size_t>::max() / 4 / width) {
-        Log::fatal(R"@(Invalid image dimensions, path="{}")@", desc.path);
-    }
-    const size_t size = static_cast<size_t>(width) * height * 4;
+    // stbi_load guarantees positive dimensions and an allocation that fits size_t.
+    // Texture::upload validates the dimensions and byte count at the upload boundary.
+    const size_t size{static_cast<size_t>(width) * static_cast<size_t>(height) * 4};
     texture.upload(width, height, Texture::Format::RGBA8, {pixels.get(), size});
 }
 
 void Renderer::prepare_text(const TextDesc& desc, Texture& texture) {
-    Text::Bitmap bitmap = Text::draw(desc.text, desc.font, Wayland::get_scale());
+    const auto bitmap = Text::draw(desc.text, desc.font, Wayland::get_scale());
     if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
         texture.reset();
         return;
@@ -386,11 +384,11 @@ void Renderer::draw_image(const ImageDesc& desc, const Texture& texture) {
     if (!texture.valid()) {
         return;
     }
-    ImgVert vertices = image_vertices(calculate_frame(
+    const ImgVert vertices = image_vertices(calculate_frame(
         desc.frame, desc.horizontal_align, desc.vertical_align,
-        texture.width(), texture.height(), true
+        static_cast<float>(texture.width()), static_cast<float>(texture.height()), true
         ));
-    int offset = sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices));
+    const int offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
     if (sg_query_buffer_overflow(image_vertex_buffer)) {
         Log::fatal("Image vertex buffer overflow");
     }
@@ -403,9 +401,9 @@ void Renderer::draw_image(const ImageDesc& desc, const Texture& texture) {
     sg_apply_pipeline(image_pipeline);
     sg_apply_bindings(&bindings);
 
-    auto project = projection();
+    const auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
-    auto radius_data = radius_uniform<img_radius_uniform_t>(desc.frame, desc.radius);
+    const auto radius_data = radius_uniform<img_radius_uniform_t>(desc.frame, desc.radius);
     sg_apply_uniforms(UB_img_radius_uniform, SG_RANGE(radius_data));
     sg_draw(0, 4, 1);
 }
@@ -416,18 +414,18 @@ void Renderer::draw_text(const TextDesc& desc, const Texture& texture) {
     }
     const auto surface_size = Wayland::get_surface_size();
     const auto buffer_size = Wayland::get_buffer_size();
-    const float scale_x = static_cast<float>(buffer_size[0]) / surface_size[0];
-    const float scale_y = static_cast<float>(buffer_size[1]) / surface_size[1];
+    const float scale_x{static_cast<float>(buffer_size[0]) / static_cast<float>(surface_size[0])};
+    const float scale_y{static_cast<float>(buffer_size[1]) / static_cast<float>(surface_size[1])};
     Frame new_frame = calculate_frame(
         desc.frame, desc.horizontal_align, desc.vertical_align,
-        texture.width() / scale_x,
-        texture.height() / scale_y, false
+        static_cast<float>(texture.width()) / scale_x,
+        static_cast<float>(texture.height()) / scale_y, false
         );
     new_frame.x = round(new_frame.x * scale_x) / scale_x;
     new_frame.y = round(new_frame.y * scale_y) / scale_y;
 
-    ImgVert vertices = image_vertices(new_frame);
-    int offset = sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices));
+    const ImgVert vertices{image_vertices(new_frame)};
+    const int offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
     if (sg_query_buffer_overflow(image_vertex_buffer)) {
         Log::fatal("Text vertex buffer overflow");
     }
@@ -440,10 +438,10 @@ void Renderer::draw_text(const TextDesc& desc, const Texture& texture) {
     sg_apply_pipeline(text_pipeline);
     sg_apply_bindings(&bindings);
 
-    auto project = projection();
+    const auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
     text_params_t params{};
-    array<float, 4> color = desc.color.to_rgba();
+    const auto color = desc.color.to_rgba();
     copy(color.begin(), color.end(), params.color);
     sg_apply_uniforms(UB_text_params, SG_RANGE(params));
     sg_draw(0, 4, 1);

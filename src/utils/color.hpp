@@ -13,17 +13,19 @@
 // Ex. #AABBCC or #AABBCCDD
 // but not rgb(1,2,3) or rgba(1,2,3,4)
 
-// output is array<float,4> (RGBA), from 0 - 1. but not 0 - 255
+// Values are normalized RGBA in [0, 1], rather than [0, 255].
 // Ex. opaque black = {0.0, 0.0, 0.0, 1.0}
 // opaque red = {1.0, 0.0, 0.0, 1.0}
 
 class Color {
 private:
-    std::array<float,4> color;
+    std::array<float, 4> color{0, 0, 0, 1};
 
     struct PresetTag {};
     constexpr Color(PresetTag, unsigned char r, unsigned char g, unsigned char b)
-        : color{r / 255.0f, g / 255.0f, b / 255.0f, 1.0f} {}
+        : color{static_cast<float>(r) / 255.0f,
+                static_cast<float>(g) / 255.0f,
+                static_cast<float>(b) / 255.0f, 1} {}
 
 public:
     static const Color Black;
@@ -45,7 +47,7 @@ public:
 
     static std::expected<Color, std::string_view> parse(std::string_view input);
 
-    Color();
+    Color() = default;
     Color(std::string_view color, std::source_location l = std::source_location::current());
     Color(std::array<float,3> arg_color, std::source_location l = std::source_location::current());
     Color(std::array<float,4> arg_color, std::source_location l = std::source_location::current());
