@@ -8,16 +8,19 @@ using namespace std;
 
 namespace {
 
+Object::Handle<Object::Layout> add_root() {
+    const auto& island = API::get_island();
+
+    LayoutDesc root_desc = {
+        .frame   = {0, 0, static_cast<float>(island.island_width), static_cast<float>(island.island_height)},
+        .spacing = 0,
+    };
+
+    return Object::add_layout(root_desc);
+}
+
 Object::Handle<Object::ClickableRect> add_main_land() {
     const auto& island = API::get_island();
-    constexpr std::uint16_t expanded_width{400};
-
-    constexpr AnimationDesc main_land_w{
-        .to       = static_cast<float>(expanded_width),
-        .priority = 1,
-        .duration = 300,
-        .target   = AnimationTarget::Width,
-    };
 
     const RectDesc main_land_desc{
         .frame  = {0, 0, static_cast<float>(island.island_width), static_cast<float>(island.island_height)},
@@ -25,14 +28,6 @@ Object::Handle<Object::ClickableRect> add_main_land() {
         .color  = island.color,
     };
     const auto main_land = Object::add_clickable_rect(main_land_desc);
-
-    main_land->set_callback_right([]() {
-        Log::logger(Log::Debug, "Right click callback triggered");
-    });
-    main_land->set_callback_left([main_land, main_land_w]() {
-        API::resize(expanded_width, API::get_island().island_height);
-        if (main_land) main_land->add_animation(main_land_w);
-    });
 
     return main_land;
 }
@@ -52,7 +47,17 @@ int main() {
 
     API::init();
 
-    add_main_land();
+    const auto main_font = API::load_font("Sans Serif", 18);
+    auto       main_land = add_main_land();
+    auto       root      = add_root();
+
+    StateManager::Resources resources{
+        .main_font = main_font,
+        .root      = root,
+        .main_land = main_land,
+    };
+
+    StateManager::init(resources);
 
     StateManager::switch_state(StateType::Clock);
 

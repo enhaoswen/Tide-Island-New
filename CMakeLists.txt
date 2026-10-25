@@ -42,6 +42,8 @@ set(SRC
         src/app/state_manager.cpp
         src/backend/config.cpp
         src/backend/config.hpp
+        src/app/views/music_player.cpp
+        src/app/views/music_player.hpp
 )
 
 add_executable(Tide-island ${SRC})

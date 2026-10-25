@@ -43,13 +43,13 @@ void schedule_next_tick() {
 
 } // namespace
 
-void ClockView::start(ClockDesc clock_desc, source_location l) {
-    if (!clock_desc.font.id) {
+void ClockView::start(Object::Handle<Object::Layout> root, FontHandle font, std::source_location l){
+    if (!font.id) {
         Log::logger(Log::Error, "{}:{}: Invalid font id", l.file_name(), l.line());
         return;
     }
 
-    if (!clock_desc.root) {
+    if (!root) {
         Log::logger(Log::Error, "{}:{}: Invalid root", l.file_name(), l.line());
         return;
     }
@@ -58,16 +58,16 @@ void ClockView::start(ClockDesc clock_desc, source_location l) {
 
     time_text = Object::add_text(TextDesc{
         .text             = "",
-        .font             = clock_desc.font,
+        .font             = font,
         .color            = Color::White,
         .horizontal_align = Align::Center,
         .vertical_align   = Align::Center,
     });
 
-    clock_desc.root->add_element(time_text, Align::Center, Object::SizeMode::Fill);
     running = true;
     update();
     schedule_next_tick();
+    root->add_element(time_text, Align::Center, Object::SizeMode::Fill);
 }
 
 void ClockView::stop() {
