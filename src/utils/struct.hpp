@@ -68,6 +68,8 @@ struct LayoutDesc {
     float spacing{};
     bool  vertical{};
     Align cross_align{Align::Center};
+    Color background{0, 0, 0, 0};
+    float radius{};
 };
 
 // Animation.

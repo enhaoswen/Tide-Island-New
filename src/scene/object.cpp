@@ -96,7 +96,8 @@ bool valid_frame(const Frame& frame) {
 }
 
 bool valid_layout(const LayoutDesc& desc) {
-    return valid_frame(desc.frame) && isfinite(desc.spacing) && desc.spacing >= 0 && valid_align(desc.cross_align);
+    return valid_frame(desc.frame) && isfinite(desc.spacing) && desc.spacing >= 0 &&
+        valid_align(desc.cross_align) && isfinite(desc.radius) && desc.radius >= 0;
 }
 
 Frame intersection(const Frame& a, const Frame& b) {
@@ -159,12 +160,17 @@ float* animation_target(desc_type& type, AnimationTarget target) {
     case AnimationTarget::ColorG:
     case AnimationTarget::ColorB:
     case AnimationTarget::ColorA:
+    {
+        const auto index = static_cast<unsigned>(target)
+            - static_cast<unsigned>(AnimationTarget::ColorR);
         if constexpr (requires { type.color; }) {
-            const auto index = static_cast<unsigned>(target)
-                - static_cast<unsigned>(AnimationTarget::ColorR);
             return &type.color[index];
         }
+        else if constexpr (requires { type.background; }) {
+            return &type.background[index];
+        }
         return nullptr;
+    }
     default:
         return nullptr;
     }
@@ -455,6 +461,14 @@ struct Object::DontUse::SceneAccess {
         }
         visit([&](const auto& object) {
             if constexpr (same_as<remove_reference_t<decltype(*object)>, Layout>) {
+                if (object->desc.background[3] > 0) {
+                    Renderer::set_clip(intersection(clip, object->desc.frame));
+                    Renderer::draw_rectangle({
+                        .frame = object->desc.frame,
+                        .radius = object->desc.radius,
+                        .color = object->desc.background,
+                    });
+                }
                 const auto clips = group_clips(*object, clip);
                 for (const auto& item : object->elements) {
                     draw(item.index, clips[static_cast<size_t>(item.align)]);
@@ -479,6 +493,7 @@ struct Object::DontUse::SceneAccess {
                         return true;
                     }
                 }
+                return object->click(x, y, left);
             }
             else if constexpr (requires { object->click(x, y, left); }) {
                 return object->click(x, y, left);
@@ -710,6 +725,20 @@ void Object::Layout::set_frame(const Frame& frame) {
     Element::set_frame(frame);
 }
 
+void Object::Layout::set_background(const Color& color) {
+    desc.background = color;
+    Island::request_redraw(true);
+}
+
+void Object::Layout::set_radius(float radius) {
+    if (!isfinite(radius) || radius < 0) {
+        Log::logger(Log::Error, "Layout radius must be finite and nonnegative");
+        return;
+    }
+    desc.radius = radius;
+    Island::request_redraw(true);
+}
+
 void Object::Layout::set_spacing(float spacing) {
     if (!isfinite(spacing) || spacing < 0) {
         Log::logger(Log::Error, "Layout spacing must be finite and nonnegative");
@@ -805,6 +834,10 @@ void Object::Layout::update() {
     }
 }
 
+bool Object::Layout::click(float x, float y, bool left) {
+    return click_object(desc.frame, desc.radius, left ? callback_left : callback_right, x, y);
+}
+
 Object::Handle<Object::Rectangle> Object::add_rectangle(const RectDesc& desc) {
     return DontUse::SceneAccess::add<Rectangle>(desc);
 }
@@ -851,7 +884,7 @@ void Object::draw() {
     Renderer::set_clip(clip);
 }
 
-void Object::update() {
+void Object::update(void (*before_layout)()) {
     // Swap removal makes finishing an animation O(1); only active objects are visited.
     for (size_t i{}; i < animated_objects.size();) {
         const auto index = animated_objects[i];
@@ -864,6 +897,8 @@ void Object::update() {
         if (i < animated_objects.size() && animated_objects[i] == index)
             ++i;
     }
+    if (before_layout)
+        before_layout();
     const auto           surface = Wayland::get_surface_size();
     const auto           buffer  = Wayland::get_buffer_size();
     const auto           scale   = Wayland::get_scale();

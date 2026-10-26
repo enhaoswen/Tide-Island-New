@@ -624,6 +624,14 @@ void Wayland::request_resize(
         Log::fatal("EGL_window is not initialized");
     }
 
+    // Hyprland Error
+    // see more info in Hyprland Discussion #12878
+    // we add 1 pixel to avoid the issue
+    // Widen before adding so a configured size of 65535 does not wrap to zero.
+
+    ++width;
+    ++height;
+
     zwlr_layer_surface_v1_set_size(layer_surface.get(), width, height);
     requested_width  = width;
     requested_height = height;
@@ -646,8 +654,8 @@ float Wayland::get_scale() {
 void Wayland::apply_config(
     std::uint16_t width,
     std::uint16_t height,
-    int32_t  exclusive_zone,
-    int32_t  margin_top
+    int32_t       exclusive_zone,
+    int32_t       margin_top
     ) {
     if (width == 0 || height == 0) {
         Log::fatal("Island width and height must be positive");

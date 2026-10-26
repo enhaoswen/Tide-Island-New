@@ -5,6 +5,7 @@
 #include "backend/timer.hpp"
 #include "app/island.hpp"
 #include "app/views/clock_view.hpp"
+#include "app/state_manager.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 #include "graphics/text.hpp"
@@ -58,7 +59,6 @@ const IslandConf& API::get_island() {
     return *island;
 }
 
-// TODO: complete support for animation in the future.
 void API::resize(std::uint16_t width, std::uint16_t height) {
     Wayland::request_resize(width, height);
     Island::set_size(width, height);
@@ -83,7 +83,7 @@ void API::run(){
 
         if (island->need_redraw) {
             Island::request_redraw(false);
-            Object::update();
+            Object::update(StateManager::update);
             Renderer::begin_frame();
             Object::draw();
             Renderer::end_frame();

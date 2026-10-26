@@ -80,3 +80,16 @@ target_compile_options(Tide-island PRIVATE
 target_compile_options(Tide-island PRIVATE
         -Wno-unused-but-set-variable
 )
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(scene-layout-tests
+            tests/scene_layout_test.cpp
+            src/app/state_manager.cpp
+            src/app/views/clock_view.cpp
+            src/scene/object.cpp
+            src/utils/color.cpp
+    )
+    target_include_directories(scene-layout-tests PRIVATE src)
+    add_test(NAME scene-layout COMMAND scene-layout-tests)
+endif()

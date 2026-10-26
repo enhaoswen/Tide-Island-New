@@ -14,22 +14,16 @@ Object::Handle<Object::Layout> add_root() {
     LayoutDesc root_desc = {
         .frame   = {0, 0, static_cast<float>(island.island_width), static_cast<float>(island.island_height)},
         .spacing = 0,
-    };
-
-    return Object::add_layout(root_desc);
-}
-
-Object::Handle<Object::ClickableRect> add_main_land() {
-    const auto& island = API::get_island();
-
-    const RectDesc main_land_desc{
-        .frame  = {0, 0, static_cast<float>(island.island_width), static_cast<float>(island.island_height)},
+        .background = island.color,
         .radius = island.radius,
-        .color  = island.color,
     };
-    const auto main_land = Object::add_clickable_rect(main_land_desc);
+    const auto root = Object::add_layout(root_desc);
 
-    return main_land;
+    root->set_callback_left([]() {
+        StateManager::switch_state(StateType::MusicPLayer);
+    });
+
+    return root;
 }
 
 } // namespace
@@ -48,13 +42,11 @@ int main() {
     API::init();
 
     const auto main_font = API::load_font("Sans Serif", 18);
-    auto       main_land = add_main_land();
     auto       root      = add_root();
 
     StateManager::Resources resources{
         .main_font = main_font,
         .root      = root,
-        .main_land = main_land,
     };
 
     StateManager::init(resources);

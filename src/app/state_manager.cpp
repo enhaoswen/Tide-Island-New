@@ -1,6 +1,8 @@
 #include "state_manager.hpp"
-#include "views/clock_view.hpp"
+#include "API.hpp"
 #include "island.hpp"
+#include "views/clock_view.hpp"
+#include "backend/wayland.hpp"
 
 // Tide Island QS size
 
@@ -28,14 +30,7 @@ namespace {
 
 StateManager::Resources resources;
 
-void resize_main(float value, AnimationTarget target, uint32_t duration = 300) {
-
-    resources.main_land->add_animation({
-        .to       = value,
-        .priority = 1,
-        .duration = duration,
-        .target   = target,
-    });
+void resize_root(float value, AnimationTarget target, uint32_t duration = 300) {
 
     resources.root->add_animation({
         .to       = value,
@@ -49,6 +44,17 @@ void resize_main(float value, AnimationTarget target, uint32_t duration = 300) {
 
 void StateManager::init(Resources& arg_resources) {
     resources = arg_resources;
+    update();
+}
+
+void StateManager::update() {
+    if (auto* root = resources.root.get()) {
+        const auto size = Wayland::get_surface_size();
+        auto frame = root->get_frame();
+        frame.x = (static_cast<float>(size[0]) - frame.width) / 2.0f;
+        frame.y = 0;
+        root->set_frame(frame);
+    }
 }
 
 void StateManager::switch_state(StateType state) {
@@ -57,11 +63,17 @@ void StateManager::switch_state(StateType state) {
     Island::set_state(state);
 
     if (state == StateType::Clock) {
-
-        resize_main(140, AnimationTarget::Width);
-        resize_main(38, AnimationTarget::Height);
+        API::resize(140,38);
+        resize_root(140, AnimationTarget::Width);
+        resize_root(38, AnimationTarget::Height);
 
         ClockView::start(resources.root, resources.main_font);
+    }
+
+    else if (state == StateType::MusicPLayer) {
+        API::resize(410,165);
+        resize_root(410, AnimationTarget::Width);
+        resize_root(165, AnimationTarget::Height);
     }
 }
 

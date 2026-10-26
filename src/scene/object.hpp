@@ -264,7 +264,10 @@ concept LayoutElement = std::same_as<T, Rectangle> || std::same_as<T, Image> ||
 // Each group preserves insertion order. Center stays centered on the whole frame;
 // sides take space first, losing equal inner portions if they collide. Drawing and
 // clicks are clipped to each group's region and every ancestor's region.
-class Layout : public Element<LayoutDesc> {
+// The background is transparent by default and draws behind members without
+// taking layout space. Radius affects the background and this layout's own hit
+// area; member clipping remains rectangular. Children receive clicks first.
+class Layout : public Element<LayoutDesc>, public DontUse::ClickableItem {
     friend struct DontUse::SceneAccess;
 
     struct Item {
@@ -289,6 +292,10 @@ public:
     void set_desc(const LayoutDesc& desc);
 
     void set_frame(const Frame& frame);
+
+    void set_background(const Color& color);
+
+    void set_radius(float radius);
 
     void set_spacing(float spacing);
 
@@ -318,6 +325,8 @@ public:
     // Updates this subtree's sizes/positions; Object::update advances animations.
     // Parent layouts control member x/y. Frames use absolute scene coordinates.
     void update();
+
+    bool click(float x, float y, bool left);
 };
 
 // Handles are invalidated immediately by deletion/clear, even inside callbacks.
@@ -339,7 +348,8 @@ void click(float x, float y, bool left);
 
 void draw();
 
-void update();
+// Optional root positioning runs after animations and before child layout.
+void update(void (*before_layout)() = nullptr);
 
 bool has_active_animations();
 

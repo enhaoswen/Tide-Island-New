@@ -11,10 +11,11 @@ namespace StateManager {
 struct Resources {
     FontHandle main_font{};
     Object::Handle<Object::Layout> root{};
-    Object::Handle<Object::ClickableRect> main_land{};
 };
 
 void init(Resources& resources);
+// Center the root after animations, before laying out its children.
+void update();
 void switch_state(StateType state);
 void stop();
 
