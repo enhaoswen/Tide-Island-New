@@ -134,17 +134,26 @@ template <typename T, typename... Features>
 bool Object::Element<T, Features...>::click(float x, float y, bool left)
     requires (requires(Features f) { f.lcb; } && ...) {
 
-    if (desc.frame.width <= 0 || desc.frame.height <= 0 ||
-        x < desc.frame.x || x > desc.frame.x + desc.frame.width ||
-        y < desc.frame.y || y > desc.frame.y + desc.frame.height) {
+    if (this->desc.frame.width <= 0 || this->desc.frame.height <= 0 ||
+        x < this->desc.frame.x || x > this->desc.frame.x + this->desc.frame.width ||
+        y < this->desc.frame.y || y > this->desc.frame.y + this->desc.frame.height) {
         return false;
         }
-    const float corner_radius{clamp(radius, 0.0f, max(0.0f, min(desc.frame.width, desc.frame.height) / 2))};
-    const float dx{x - clamp(x, desc.frame.x + corner_radius, desc.frame.x + desc.frame.width - corner_radius)};
-    const float dy{y - clamp(y, desc.frame.y + corner_radius, desc.frame.y + desc.frame.height - corner_radius)};
-    if (dx * dx + dy * dy > corner_radius * corner_radius || !callback) {
+    const float corner_radius{clamp(this->radius, 0.0f, max(0.0f, min(this->desc.frame.width, this->desc.frame.height) / 2))};
+    const float dx{x - clamp(x, this->desc.frame.x + corner_radius, this->desc.frame.x + this->desc.frame.width - corner_radius)};
+    const float dy{y - clamp(y, this->desc.frame.y + corner_radius, this->desc.frame.y + this->desc.frame.height - corner_radius)};
+    if (dx * dx + dy * dy > corner_radius * corner_radius) {
         return false;
     }
-    callback();
-    return true;
+
+    if (left && this->lcb) {
+        this->lcb();
+        return true;
+    }
+    if (!left && this->rcb) {
+        this->rcb();
+        return true;
+    }
+
+    return false;
 }
