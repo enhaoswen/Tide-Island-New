@@ -16,12 +16,12 @@ vector<unique_ptr<Animation> > animations;
 // BASE
 
 template <typename T>
-Object::Base<T>::Base(const T& arg_desc) {
+Object::Detail::Base<T>::Base(const T& arg_desc) {
     desc = arg_desc;
 }
 
 template <typename T>
-float* Object::Base<T>::animation_target(AnimationTarget target) {
+float* Object::Detail::Base<T>::animation_target(AnimationTarget target) {
     switch (target) {
     case AnimationTarget::Width:
         return &desc.frame.width;
@@ -53,7 +53,7 @@ float* Object::Base<T>::animation_target(AnimationTarget target) {
 }
 
 template <typename T>
-void Object::Base<T>::add_animation(const AnimationDesc animation_desc) {
+void Object::Detail::Base<T>::add_animation(const AnimationDesc animation_desc) {
 
     float* target_ptr = animation_target(animation_desc.target);
 
@@ -96,13 +96,13 @@ void Object::Base<T>::add_animation(const AnimationDesc animation_desc) {
 }
 
 template <typename T>
-void Object::Base<T>::set_radius(float radius, source_location)
-    requires Object::has_radius<T> {
+void Object::Detail::Base<T>::set_radius(float radius, source_location)
+    requires Object::Detail::has_radius<T> {
     desc.radius = radius;
 }
 
 template <typename T>
-void Object::Base<T>::set_radius(float, source_location l) {
+void Object::Detail::Base<T>::set_radius(float, source_location l) {
     Log::logger(
         Log::Warning,
         "{}:{}: {} does not support function set_radius",
@@ -113,13 +113,13 @@ void Object::Base<T>::set_radius(float, source_location l) {
 }
 
 template <typename T>
-void Object::Base<T>::set_color(Color color, source_location)
-    requires Object::has_color<T> {
+void Object::Detail::Base<T>::set_color(Color color, source_location)
+    requires Object::Detail::has_color<T> {
     desc.color = color;
 }
 
 template <typename T>
-void Object::Base<T>::set_color(Color, source_location l) {
+void Object::Detail::Base<T>::set_color(Color, source_location l) {
     Log::logger(
         Log::Warning,
         "{}:{}: {} does not support function set_color",
@@ -130,8 +130,8 @@ void Object::Base<T>::set_color(Color, source_location l) {
 }
 
 template <typename T, typename... Features>
-    requires Object::is_element<T>
-bool Object::Element<T, Features...>::click(float x, float y, bool left)
+    requires Object::Detail::is_element<T>
+bool Object::Detail::Element<T, Features...>::click(float x, float y, bool left)
     requires (requires(Features f) { f.lcb; } && ...) {
 
     if (this->desc.frame.width <= 0 || this->desc.frame.height <= 0 ||
@@ -157,3 +157,5 @@ bool Object::Element<T, Features...>::click(float x, float y, bool left)
 
     return false;
 }
+
+Object::add

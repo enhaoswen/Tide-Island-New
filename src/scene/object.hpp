@@ -5,6 +5,7 @@
 
 #include <source_location>
 #include <functional>
+#include <cstdint>
 
 /* ARCHITECTURE
 
@@ -18,6 +19,8 @@ run the program.
 */
 
 namespace Object {
+
+namespace Detail {
 
 template <typename T>
 concept has_radius = requires(T t) { { t.radius } -> std::same_as<float&>; };
@@ -74,13 +77,46 @@ class Element : public T, public Features... {
 
 };
 
-using Rectangle          = Element<Base<RectDesc> >;
-using Image              = Element<Base<ImageDesc> >;
-using Text               = Element<Base<TextDesc> >;
-using Layout             = Element<Base<LayoutDesc> >;
-using ClickableRectangle = Element<Base<RectDesc>, Interactive>;
-using ClickableImage     = Element<Base<ImageDesc>, Interactive>;
-using ClickableText      = Element<Base<TextDesc>, Interactive>;
-using ClickableLayout    = Element<Base<LayoutDesc>, Interactive>;
+}
+
+using Rectangle          = Detail::Element<Detail::Base<RectDesc> >;
+using Image              = Detail::Element<Detail::Base<ImageDesc> >;
+using Text               = Detail::Element<Detail::Base<TextDesc> >;
+using Layout             = Detail::Element<Detail::Base<LayoutDesc> >;
+using ClickableRectangle = Detail::Element<Detail::Base<RectDesc>, Detail::Interactive>;
+using ClickableImage     = Detail::Element<Detail::Base<ImageDesc>, Detail::Interactive>;
+using ClickableText      = Detail::Element<Detail::Base<TextDesc>, Detail::Interactive>;
+using ClickableLayout    = Detail::Element<Detail::Base<LayoutDesc>, Detail::Interactive>;
+
+template <typename T>
+    requires Detail::is_element<T>
+class Handle {
+private:
+    T*       handle;
+    uint16_t gen;
+
+public:
+    explicit Handle(T* arg_handle, const uint16_t arg_gen) : handle(arg_handle), gen(arg_gen) {
+    }
+};
+
+Handle<Rectangle> add_rectangle(RectDesc desc);
+
+Handle<Image> add_image(ImageDesc desc);
+
+Handle<Text> add_text(TextDesc desc);
+
+Handle<Layout> add_layout(LayoutDesc desc);
+
+Handle<ClickableRectangle> add_clickable_rectangle(RectDesc desc);
+
+Handle<ClickableImage> add_clickable_image(ImageDesc desc);
+
+Handle<ClickableText> add_clickable_text(TextDesc desc);
+
+Handle<ClickableLayout> add_clickable_layout(LayoutDesc desc);
+
+template <typename T>
+void delete_handle(Handle<T> handle);
 
 }
