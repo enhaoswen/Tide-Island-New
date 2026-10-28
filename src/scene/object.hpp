@@ -35,7 +35,7 @@ concept is_element =
 
 template <typename T>
 class Base {
-private:
+protected:
     T desc;
 
     float* animation_target(AnimationTarget target);
@@ -67,7 +67,7 @@ public:
 
 template <typename T, typename... Features>
     requires is_element<T>
-class Element : public Features... {
+class Element : public T, public Features... {
 
     bool click(float x, float y, bool left)
         requires (requires(Features f) { f.lcb; } && ...);
