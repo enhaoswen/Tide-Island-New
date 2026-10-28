@@ -37,24 +37,13 @@ Issues, bug reports, design suggestions, and pull requests are all welcome.
 
 AI is a tool, not a replacement for understanding. Using AI for small, well-defined modules is perfectly fine, but code should never be blindly generated and accepted without being understood and reviewed.
 
-## Star History
+## Acknowledgements
 
-<a href="https://star-history.com/#enhaoswen/Tide-island&Date">
-  <picture>
-    <source
-      media="(prefers-color-scheme: dark)"
-      srcset="https://api.star-history.com/svg?repos=enhaoswen/Tide-island&type=Date&theme=dark"
-    />
-    <source
-      media="(prefers-color-scheme: light)"
-      srcset="https://api.star-history.com/svg?repos=enhaoswen/Tide-island&type=Date"
-    />
-    <img
-      alt="Star History Chart"
-      src="https://api.star-history.com/svg?repos=enhaoswen/Tide-island&type=Date"
-    />
-  </picture>
-</a>
+Special thanks to the developers and contributors of these projects:
+
+- [sokol](https://github.com/floooh/sokol) — for providing a lightweight graphics and cross-platform development library.
+- [Wayland](https://wayland.freedesktop.org/) — for the display and windowing protocol.
+- [Glaze](https://github.com/stephenberry/glaze) — for providing fast JSON serialization and deserialization.
 
 <p align="center">
   <sub>
