@@ -8,10 +8,6 @@
 #include <functional>
 #include <string>
 
-// Shared scene descriptors, animation data, and application state.
-
-// Geometry and input.
-
 using ClickCallback = std::function<void()>;
 
 // Positions and sizes use floating point values for animation.
