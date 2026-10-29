@@ -19,52 +19,40 @@ vector<Object::Handle>         objects;
 
 template <typename T>
 Object::Detail::Base<T>::Base(const T& arg_desc) {
-    desc = arg_desc;
+    info = arg_desc;
 }
 
 template <typename T>
 pair<float, float> Object::Detail::Base<T>::actual_size()
-    requires requires(T t) { { t.desc.fix } -> same_as<bool&>; } {
-
-    if constexpr (same_as<T, Object::Image>) {
-
-    }
-
-    else if constexpr (same_as<T, Object::Text>) {
-
-    }
-
-    else if constexpr (same_as<T, Object::Layout>) {
-
-    }
-
+    requires requires(T t) { { t.info.fix } -> same_as<bool&>; } {
+    return {this->info.frame.x, this->info.frame.y};
 }
 
 template <typename T>
 float* Object::Detail::Base<T>::animation_target(AnimationTarget target) {
     switch (target) {
     case AnimationTarget::Width:
-        return &desc.frame.width;
+        return &info.frame.width;
     case AnimationTarget::Height:
-        return &desc.frame.height;
+        return &info.frame.height;
     case AnimationTarget::X:
-        return &desc.frame.x;
+        return &info.frame.x;
     case AnimationTarget::Y:
-        return &desc.frame.y;
+        return &info.frame.y;
 
     case AnimationTarget::Radius:
-        if constexpr (requires { desc.radius; })
-            return &desc.radius;
+        if constexpr (requires { info.radius; })
+            return &info.radius;
         return nullptr;
 
     case AnimationTarget::ColorR:
     case AnimationTarget::ColorG:
     case AnimationTarget::ColorB:
     case AnimationTarget::ColorA:
-        if constexpr (requires { desc.color; }) {
+        if constexpr (requires { info.color; }) {
             const auto index = static_cast<unsigned>(target)
                 - static_cast<unsigned>(AnimationTarget::ColorR);
-            return &desc.color[index];
+            return &info.color[index];
         }
         return nullptr;
     default:
@@ -118,7 +106,7 @@ void Object::Detail::Base<T>::add_animation(const AnimationDesc animation_desc) 
 template <typename T>
 void Object::Detail::Base<T>::set_radius(float radius, source_location)
     requires Object::Detail::has_radius<T> {
-    desc.radius = radius;
+    info.radius = radius;
 }
 
 template <typename T>
@@ -128,14 +116,14 @@ void Object::Detail::Base<T>::set_radius(float, source_location l) {
         "{}:{}: {} does not support function set_radius",
         l.file_name(),
         l.line(),
-        desc.radius, Log::get_type_name<T>()
+        info.radius, Log::get_type_name<T>()
         );
 }
 
 template <typename T>
 void Object::Detail::Base<T>::set_color(Color color, source_location)
     requires Object::Detail::has_color<T> {
-    desc.color = color;
+    info.color = color;
 }
 
 template <typename T>
@@ -145,7 +133,7 @@ void Object::Detail::Base<T>::set_color(Color, source_location l) {
         "{}:{}: {} does not support function set_color",
         l.file_name(),
         l.line(),
-        desc.radius, Log::get_type_name<T>()
+        info.radius, Log::get_type_name<T>()
         );
 }
 
@@ -154,14 +142,14 @@ template <typename T, typename... Features>
 bool Object::Detail::Element<T, Features...>::click(float x, float y, bool left)
     requires (requires(Features f) { f.lcb; } && ...) {
 
-    if (this->desc.frame.width <= 0 || this->desc.frame.height <= 0 ||
-        x < this->desc.frame.x || x > this->desc.frame.x + this->desc.frame.width ||
-        y < this->desc.frame.y || y > this->desc.frame.y + this->desc.frame.height) {
+    if (this->info.frame.width <= 0 || this->info.frame.height <= 0 ||
+        x < this->info.frame.x || x > this->info.frame.x + this->info.frame.width ||
+        y < this->info.frame.y || y > this->info.frame.y + this->info.frame.height) {
         return false;
     }
-    const float corner_radius{clamp(this->radius, 0.0f, max(0.0f, min(this->desc.frame.width, this->desc.frame.height) / 2))};
-    const float dx{x - clamp(x, this->desc.frame.x + corner_radius, this->desc.frame.x + this->desc.frame.width - corner_radius)};
-    const float dy{y - clamp(y, this->desc.frame.y + corner_radius, this->desc.frame.y + this->desc.frame.height - corner_radius)};
+    const float corner_radius{clamp(this->radius, 0.0f, max(0.0f, min(this->info.frame.width, this->info.frame.height) / 2))};
+    const float dx{x - clamp(x, this->info.frame.x + corner_radius, this->info.frame.x + this->info.frame.width - corner_radius)};
+    const float dy{y - clamp(y, this->info.frame.y + corner_radius, this->info.frame.y + this->info.frame.height - corner_radius)};
     if (dx * dx + dy * dy > corner_radius * corner_radius) {
         return false;
     }
@@ -176,8 +164,4 @@ bool Object::Detail::Element<T, Features...>::click(float x, float y, bool left)
     }
 
     return false;
-}
-
-Object::Handle Object::add_rectangle(RectDesc desc) {
-
 }

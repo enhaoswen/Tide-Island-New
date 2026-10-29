@@ -1,11 +1,12 @@
 #pragma once
 
+#include "graphics/texture.hpp"
 #include "utils/color.hpp"
 #include "utils/struct.hpp"
 
-#include <source_location>
-#include <functional>
 #include <cstdint>
+#include <functional>
+#include <source_location>
 
 /* ARCHITECTURE
 
@@ -28,17 +29,40 @@ concept has_radius = requires(T t) { { t.radius } -> std::same_as<float&>; };
 template <typename T>
 concept has_color = requires(T t) { { t.color } -> std::same_as<Color&>; };
 
+struct Rectangle {
+    Frame frame{};
+    Color color{};
+    float radius{};
+};
+
+struct Image {
+    Frame   frame{};
+    Texture texture{};
+    float   radius{};
+    bool    fix{true};
+    bool    have_parent{false};
+};
+
+struct Text {
+    Frame      frame{};
+    Texture    texture{};
+    FontHandle font{};
+    Color      color{};
+    bool       fit{true};
+    bool       have_parent{false};
+};
+
 template <typename T>
 concept is_element =
-    std::same_as<decltype(std::declval<T>().desc), RectDesc> ||
-    std::same_as<decltype(std::declval<T>().desc), ImageDesc> ||
-    std::same_as<decltype(std::declval<T>().desc), TextDesc> ||
-    std::same_as<decltype(std::declval<T>().desc), LayoutDesc>;
+    std::same_as<decltype(std::declval<T>().info), Rectangle> ||
+    std::same_as<decltype(std::declval<T>().info), Image> ||
+    std::same_as<decltype(std::declval<T>().info), Text> ||
+    std::same_as<decltype(std::declval<T>().info), LayoutDesc>; // TODO
 
 template <typename T>
 class Base {
 protected:
-    T desc;
+    T info;
 
     float* animation_target(AnimationTarget target);
 
@@ -46,7 +70,7 @@ public:
     explicit Base(const T& arg_desc);
 
     std::pair<float, float> actual_size()
-    requires requires (T t) { {t.desc.fix} -> std::same_as<bool&>;};
+        requires requires(T t) { { t.info.fix } -> std::same_as<bool&>; };
 
     void add_animation(AnimationDesc animation_desc);
 
@@ -81,12 +105,12 @@ class Element : public T, public Features... {
 
 }
 
-using Rectangle          = Detail::Element<Detail::Base<RectDesc> >;
-using Image              = Detail::Element<Detail::Base<ImageDesc> >;
-using Text               = Detail::Element<Detail::Base<TextDesc> >;
-using ClickableRectangle = Detail::Element<Detail::Base<RectDesc>, Detail::Interactive>;
-using ClickableImage     = Detail::Element<Detail::Base<ImageDesc>, Detail::Interactive>;
-using ClickableText      = Detail::Element<Detail::Base<TextDesc>, Detail::Interactive>;
+using Rectangle          = Detail::Element<Detail::Base<Detail::Rectangle> >;
+using Image              = Detail::Element<Detail::Base<Detail::Image> >;
+using Text               = Detail::Element<Detail::Base<Detail::Text> >;
+using ClickableRectangle = Detail::Element<Detail::Base<Detail::Rectangle>, Detail::Interactive>;
+using ClickableImage     = Detail::Element<Detail::Base<Detail::Image>, Detail::Interactive>;
+using ClickableText      = Detail::Element<Detail::Base<Detail::Text>, Detail::Interactive>;
 
 class Layout : public Detail::Base<LayoutDesc> {
 private:

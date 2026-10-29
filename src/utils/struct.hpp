@@ -17,6 +17,10 @@ struct Frame {
     bool operator==(const Frame&) const = default;
 };
 
+struct Position {
+    float x, y;
+};
+
 enum struct Align : std::uint8_t {
     Left,
     Center,
@@ -43,11 +47,9 @@ struct RectDesc {
 };
 
 struct ImageDesc {
-    Frame       frame{};
+    Position pos{};
     std::string path{};
     float       radius{};
-    Align       horizontal_align{};
-    Align       vertical_align{};
 
     // If true, the image is scaled proportionally to fit the given size.
     // If false, the image keeps its original size and may be cropped.
@@ -55,12 +57,10 @@ struct ImageDesc {
 };
 
 struct TextDesc {
-    Frame       frame{};
+    Position pos{};
     std::string text{};
     FontHandle  font{};
     Color       color{};
-    Align       horizontal_align{};
-    Align       vertical_align{};
     bool        fit{true};
 };
 
