@@ -97,7 +97,7 @@ void Command::handle_command(string_view cmd) {
 
     if (result[0] == "animation") {
         if (result.size() <= 2) {
-            Log::logger(Log::Error, R"@(Command "animation" requires more args. {})@", cmd);
+            Log::logger(Log::Error, R"_(Command "animation" requires more args. {})_", cmd);
             return;
         }
         handle_animation(result);

@@ -20,8 +20,8 @@ class Color;
 
 // if your log contains special symbol that need espace
 // Ex. (" \"key\",\"value\" ")
-// please use R"@(...)@"
-// (R"@("key", "value")@")
+// please use R"_(...)_"
+// (R"_("key", "value")_")
 
 // if there's a key & value, write them like this:
 // key="...", value="..."

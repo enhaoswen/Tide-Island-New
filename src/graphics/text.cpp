@@ -238,7 +238,7 @@ FaceState* get_face(LoadedFont& font, unsigned index) {
     if (state.face && state.hb_font) {
         if (state.raster_size != font.raster_size) {
             if (FT_Set_Pixel_Sizes(state.face, 0, font.raster_size)) {
-                Log::logger(Log::Error, R"@(Failed to set font size, path="{}")@", state.path);
+                Log::logger(Log::Error, R"_(Failed to set font size, path="{}")_", state.path);
                 return nullptr;
             }
             hb_ft_font_changed(state.hb_font);
@@ -248,11 +248,11 @@ FaceState* get_face(LoadedFont& font, unsigned index) {
     }
 
     if (FT_New_Face(ft_library, state.path.c_str(), state.face_index, &state.face)) {
-        Log::logger(Log::Error, R"@(Failed to load font file, path="{}")@", state.path);
+        Log::logger(Log::Error, R"_(Failed to load font file, path="{}")_", state.path);
         return nullptr;
     }
     if (FT_Set_Pixel_Sizes(state.face, 0, font.raster_size)) {
-        Log::logger(Log::Error, R"@(Failed to set font size, path="{}")@", state.path);
+        Log::logger(Log::Error, R"_(Failed to set font size, path="{}")_", state.path);
         FT_Done_Face(state.face);
         state.face = nullptr;
         return nullptr;

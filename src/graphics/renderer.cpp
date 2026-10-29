@@ -358,7 +358,7 @@ void Renderer::prepare_image(const ImageDesc& desc, Texture& texture) {
         &stbi_image_free
     };
     if (!pixels) {
-        Log::fatal(R"@(Failed to load picture, path="{}")@", desc.path);
+        Log::fatal(R"_(Failed to load picture, path="{}")_", desc.path);
     }
     // stbi_load guarantees positive dimensions and an allocation that fits size_t.
     // Texture::upload validates the dimensions and byte count at the upload boundary.

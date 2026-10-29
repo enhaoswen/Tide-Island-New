@@ -72,7 +72,7 @@ Color::Color(string_view arg_color, source_location l) {
         color = *parsed;
     }
     else {
-        Log::logger(Log::Error, R"@({}:{}: {}, value="{}")@",
+        Log::logger(Log::Error, R"_({}:{}: {}, value="{}")_",
                     l.file_name(), l.line(), parsed.error(), arg_color);
     }
 }
@@ -94,7 +94,7 @@ Color::Color(array<float, 4> arg_color, source_location l) {
         if (!isfinite(f) || f > 1 || f < 0) {
             Log::logger(
                 Log::Error,
-                R"@({}:{}: Unsupported color type, value="{}")@",
+                R"_({}:{}: Unsupported color type, value="{}")_",
                 l.file_name(),
                 l.line(),
                 array_to_string(arg_color)
