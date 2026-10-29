@@ -35,7 +35,6 @@ concept is_element =
     std::same_as<decltype(std::declval<T>().desc), TextDesc> ||
     std::same_as<decltype(std::declval<T>().desc), LayoutDesc>;
 
-
 template <typename T>
 class Base {
 protected:
@@ -45,6 +44,9 @@ protected:
 
 public:
     explicit Base(const T& arg_desc);
+
+    std::pair<float, float> actual_size()
+    requires requires (T t) { {t.desc.fix} -> std::same_as<bool&>;};
 
     void add_animation(AnimationDesc animation_desc);
 
@@ -82,41 +84,43 @@ class Element : public T, public Features... {
 using Rectangle          = Detail::Element<Detail::Base<RectDesc> >;
 using Image              = Detail::Element<Detail::Base<ImageDesc> >;
 using Text               = Detail::Element<Detail::Base<TextDesc> >;
-using Layout             = Detail::Element<Detail::Base<LayoutDesc> >;
 using ClickableRectangle = Detail::Element<Detail::Base<RectDesc>, Detail::Interactive>;
 using ClickableImage     = Detail::Element<Detail::Base<ImageDesc>, Detail::Interactive>;
 using ClickableText      = Detail::Element<Detail::Base<TextDesc>, Detail::Interactive>;
-using ClickableLayout    = Detail::Element<Detail::Base<LayoutDesc>, Detail::Interactive>;
 
-template <typename T>
-    requires Detail::is_element<T>
+class Layout : public Detail::Base<LayoutDesc> {
+private:
+
+public:
+
+};
+
 class Handle {
 private:
-    T*       handle;
+    void*    handle;
     uint16_t gen;
 
 public:
-    explicit Handle(T* arg_handle, const uint16_t arg_gen) : handle(arg_handle), gen(arg_gen) {
+    explicit Handle(void* arg_handle, const uint16_t arg_gen) : handle(arg_handle), gen(arg_gen) {
     }
 };
 
-Handle<Rectangle> add_rectangle(RectDesc desc);
+Handle add_rectangle(RectDesc desc);
 
-Handle<Image> add_image(ImageDesc desc);
+Handle add_image(ImageDesc desc);
 
-Handle<Text> add_text(TextDesc desc);
+Handle add_text(TextDesc desc);
 
-Handle<Layout> add_layout(LayoutDesc desc);
+Handle add_layout(LayoutDesc desc);
 
-Handle<ClickableRectangle> add_clickable_rectangle(RectDesc desc);
+Handle add_clickable_rectangle(RectDesc desc);
 
-Handle<ClickableImage> add_clickable_image(ImageDesc desc);
+Handle add_clickable_image(ImageDesc desc);
 
-Handle<ClickableText> add_clickable_text(TextDesc desc);
+Handle add_clickable_text(TextDesc desc);
 
-Handle<ClickableLayout> add_clickable_layout(LayoutDesc desc);
+Handle add_clickable_layout(LayoutDesc desc);
 
-template <typename T>
-void delete_handle(Handle<T> handle);
+void delete_handle(Handle handle);
 
 }

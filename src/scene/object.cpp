@@ -1,5 +1,6 @@
 #include "object.hpp"
 
+#include "graphics/renderer.hpp"
 #include "utils/log.hpp"
 
 #include <memory>
@@ -10,6 +11,7 @@ using namespace std;
 namespace {
 
 vector<unique_ptr<Animation> > animations;
+vector<Object::Handle>         objects;
 
 }
 
@@ -18,6 +20,24 @@ vector<unique_ptr<Animation> > animations;
 template <typename T>
 Object::Detail::Base<T>::Base(const T& arg_desc) {
     desc = arg_desc;
+}
+
+template <typename T>
+pair<float, float> Object::Detail::Base<T>::actual_size()
+    requires requires(T t) { { t.desc.fix } -> same_as<bool&>; } {
+
+    if constexpr (same_as<T, Object::Image>) {
+
+    }
+
+    else if constexpr (same_as<T, Object::Text>) {
+
+    }
+
+    else if constexpr (same_as<T, Object::Layout>) {
+
+    }
+
 }
 
 template <typename T>
@@ -138,7 +158,7 @@ bool Object::Detail::Element<T, Features...>::click(float x, float y, bool left)
         x < this->desc.frame.x || x > this->desc.frame.x + this->desc.frame.width ||
         y < this->desc.frame.y || y > this->desc.frame.y + this->desc.frame.height) {
         return false;
-        }
+    }
     const float corner_radius{clamp(this->radius, 0.0f, max(0.0f, min(this->desc.frame.width, this->desc.frame.height) / 2))};
     const float dx{x - clamp(x, this->desc.frame.x + corner_radius, this->desc.frame.x + this->desc.frame.width - corner_radius)};
     const float dy{y - clamp(y, this->desc.frame.y + corner_radius, this->desc.frame.y + this->desc.frame.height - corner_radius)};
@@ -158,4 +178,6 @@ bool Object::Detail::Element<T, Features...>::click(float x, float y, bool left)
     return false;
 }
 
-Object::add
+Object::Handle Object::add_rectangle(RectDesc desc) {
+
+}

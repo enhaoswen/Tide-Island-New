@@ -3,16 +3,16 @@
 #include "color.hpp"
 
 #include <chrono>
-#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 
 using ClickCallback = std::function<void()>;
 
 // Positions and sizes use floating point values for animation.
 struct Frame {
-    float x{}, y{}, width{}, height{};
+    float x, y, width, height = std::numeric_limits<float>::max();
 
     bool operator==(const Frame&) const = default;
 };
@@ -30,7 +30,7 @@ struct FontHandle {
 };
 
 struct Font {
-    std::string path{};
+    std::string   path{};
     std::uint16_t size{};
 };
 
@@ -44,10 +44,14 @@ struct RectDesc {
 
 struct ImageDesc {
     Frame       frame{};
-    float       radius{};
     std::string path{};
+    float       radius{};
     Align       horizontal_align{};
     Align       vertical_align{};
+
+    // If true, the image is scaled proportionally to fit the given size.
+    // If false, the image keeps its original size and may be cropped.
+    bool        fit{true};
 };
 
 struct TextDesc {
@@ -57,15 +61,17 @@ struct TextDesc {
     Color       color{};
     Align       horizontal_align{};
     Align       vertical_align{};
+    bool        fit{true};
 };
 
 struct LayoutDesc {
     Frame frame{};
-    float spacing{};
-    bool  vertical{};
-    Align cross_align{Align::Center};
-    Color background{0, 0, 0, 0};
     float radius{};
+    float spacing{};
+    Color background{0, 0, 0, 0};
+    Align cross_align{Align::Center};
+    bool  vertical{};
+    bool  fit{true};
 };
 
 // Animation.

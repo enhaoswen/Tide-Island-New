@@ -44,6 +44,7 @@ Special thanks to the developers and contributors of these projects:
 - [sokol](https://github.com/floooh/sokol) — for providing a lightweight graphics and cross-platform development library.
 - [Wayland](https://wayland.freedesktop.org/) — for the display and windowing protocol.
 - [Glaze](https://github.com/stephenberry/glaze) — for providing fast JSON serialization and deserialization.
+- [stb](https://github.com/nothings/stb) — for providing lightweight image loading and decoding utilities.
 
 <p align="center">
   <sub>
