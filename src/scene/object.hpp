@@ -21,6 +21,16 @@ run the program.
 
 namespace Object {
 
+class Handle {
+private:
+    void*    handle;
+    uint16_t gen;
+
+public:
+    explicit Handle(void* arg_handle, const uint16_t arg_gen) : handle(arg_handle), gen(arg_gen) {
+    }
+};
+
 namespace Detail {
 
 template <typename T>
@@ -33,6 +43,7 @@ struct Rectangle {
     Frame frame{};
     Color color{};
     float radius{};
+    bool  dirty{true};
 };
 
 struct Image {
@@ -41,6 +52,7 @@ struct Image {
     float   radius{};
     bool    fix{true};
     bool    have_parent{false};
+    bool    dirty{true};
 };
 
 struct Text {
@@ -50,6 +62,16 @@ struct Text {
     Color      color{};
     bool       fit{true};
     bool       have_parent{false};
+    bool       dirty{true};
+};
+
+struct Layout {
+    Frame               frame{};
+    std::vector<Handle> children{};
+    float               spacing{};
+    bool                vertical{false};
+    Align               align{Align::Left};
+    bool                dirty{true};
 };
 
 template <typename T>
@@ -57,7 +79,7 @@ concept is_element =
     std::same_as<decltype(std::declval<T>().info), Rectangle> ||
     std::same_as<decltype(std::declval<T>().info), Image> ||
     std::same_as<decltype(std::declval<T>().info), Text> ||
-    std::same_as<decltype(std::declval<T>().info), LayoutDesc>; // TODO
+    std::same_as<decltype(std::declval<T>().info), Layout>;
 
 template <typename T>
 class Base {
@@ -83,15 +105,20 @@ public:
         requires has_color<T>;
 
     void set_color(Color color, std::source_location l = std::source_location::current());
+
+    [[nodiscard]] bool dirty() { return info.dirty; }
+
+    [[nodiscard]] float left() { return info.frame.x; }
+    [[nodiscard]] float right() { return info.frame.x + info.frame.width; }
+    [[nodiscard]] float top() { return info.frame.y; }
+    [[nodiscard]] float bottom() { return info.frame.y + info.frame.height; }
+
 };
 
 class Interactive {
 private:
     std::function<void()> lcb;
     std::function<void()> rcb;
-
-public:
-
 };
 
 template <typename T, typename... Features>
@@ -112,22 +139,17 @@ using ClickableRectangle = Detail::Element<Detail::Base<Detail::Rectangle>, Deta
 using ClickableImage     = Detail::Element<Detail::Base<Detail::Image>, Detail::Interactive>;
 using ClickableText      = Detail::Element<Detail::Base<Detail::Text>, Detail::Interactive>;
 
-class Layout : public Detail::Base<LayoutDesc> {
+class Layout : public Detail::Base<Detail::Layout> {
 private:
 
 public:
+    // always add to the left
+    void add_children(Handle id) { this->info.children.push_back(id); }
 
+    void update();
 };
 
-class Handle {
-private:
-    void*    handle;
-    uint16_t gen;
 
-public:
-    explicit Handle(void* arg_handle, const uint16_t arg_gen) : handle(arg_handle), gen(arg_gen) {
-    }
-};
 
 Handle add_rectangle(RectDesc desc);
 

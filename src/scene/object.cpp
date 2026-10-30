@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <vector>
+#include <ranges>
 
 using namespace std;
 
@@ -164,4 +165,11 @@ bool Object::Detail::Element<T, Features...>::click(float x, float y, bool left)
     }
 
     return false;
+}
+
+void Object::Layout::update() {
+    uint16_t len = 0;
+    for (Object::Handle id : this->info.children) {
+        len += id
+    }
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "get_type_name.h"
+
 #include <algorithm>
 #include <array>
 #include <cstdlib>
@@ -155,7 +157,7 @@ inline void frame_logger(LogLevel level, Args&&... args) {
 // make sure your type doesn't contain any special characters, 
 // or you have to escape them yourself.
 template <typename T>
-std::string get_type_name() {
+consteval std::string get_type_name() {
     if constexpr (std::is_same_v<T, int>) {
         return "int";
     }
