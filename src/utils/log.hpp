@@ -154,41 +154,4 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     print("{}", out_msg);
 }
 
-// make sure your type doesn't contain any special characters, 
-// or you have to escape them yourself.
-template <typename T>
-consteval std::string get_type_name() {
-    if constexpr (std::is_same_v<T, int>) {
-        return "int";
-    }
-    else if constexpr (std::is_same_v<T, float>) {
-        return "float";
-    }
-    else if constexpr (std::is_same_v<T, std::string>) {
-        return "string";
-    }
-    else if constexpr (std::is_same_v<T, bool>) {
-        return "bool";
-    }
-    else if constexpr (std::is_same_v<T, std::vector<int> >) {
-        return "list<int>";
-    }
-    else if constexpr (std::is_same_v<T, std::vector<float> >) {
-        return "list<float>";
-    }
-    else if constexpr (std::is_same_v<T, std::vector<std::string> >) {
-        return "list<string>";
-    }
-    else if constexpr (std::is_same_v<T, std::vector<bool> >) {
-        return "list<bool>";
-    }
-    else if constexpr (std::is_same_v<T, Color>) {
-        return "Color";
-    }
-    else {
-        return typeid(T).name();
-    }
-
-}
-
 } // namespace Log
