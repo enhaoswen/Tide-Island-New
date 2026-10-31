@@ -2,9 +2,11 @@
 
 #include "graphics/texture.hpp"
 #include "utils/color.hpp"
+#include "utils/log.hpp"
 #include "utils/struct.hpp"
 
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <source_location>
 
@@ -23,21 +25,15 @@ namespace Object {
 
 class Handle {
 private:
-    void*    handle;
+    uint16_t id;
     uint16_t gen;
 
 public:
-    explicit Handle(void* arg_handle, const uint16_t arg_gen) : handle(arg_handle), gen(arg_gen) {
+    explicit Handle(uint16_t arg_id, const uint16_t arg_gen) : id(arg_id), gen(arg_gen) {
     }
 };
 
 namespace Detail {
-
-template <typename T>
-concept has_radius = requires(T t) { { t.radius } -> std::same_as<float&>; };
-
-template <typename T>
-concept has_color = requires(T t) { { t.color } -> std::same_as<Color&>; };
 
 struct Rectangle {
     Frame frame{};
@@ -75,36 +71,100 @@ struct Layout {
 };
 
 template <typename T>
+concept has_radius = requires(T t) { { t.radius } -> std::same_as<float&>; };
+
+template <typename T>
+concept has_color = requires(T t) { { t.color } -> std::same_as<Color&>; };
+
+
+template <typename T>
 concept is_element =
     std::same_as<decltype(std::declval<T>().info), Rectangle> ||
     std::same_as<decltype(std::declval<T>().info), Image> ||
     std::same_as<decltype(std::declval<T>().info), Text> ||
     std::same_as<decltype(std::declval<T>().info), Layout>;
 
+void add_animation(AnimationDesc animation_desc, float* target_ptr);
+
 template <typename T>
 class Base {
 protected:
     T info;
 
-    float* animation_target(AnimationTarget target);
+    float* animation_target(AnimationTarget target) {
+        switch (target) {
+        case AnimationTarget::Width:
+            return &info.frame.width;
+        case AnimationTarget::Height:
+            return &info.frame.height;
+        case AnimationTarget::X:
+            return &info.frame.x;
+        case AnimationTarget::Y:
+            return &info.frame.y;
+
+        case AnimationTarget::Radius:
+            if constexpr (requires { info.radius; })
+                return &info.radius;
+            return nullptr;
+
+        case AnimationTarget::ColorR:
+        case AnimationTarget::ColorG:
+        case AnimationTarget::ColorB:
+        case AnimationTarget::ColorA:
+            if constexpr (requires { info.color; }) {
+                const auto index = static_cast<unsigned>(target)
+                    - static_cast<unsigned>(AnimationTarget::ColorR);
+                return &info.color[index];
+            }
+            return nullptr;
+        default:
+            return nullptr;
+        }
+    }
 
 public:
-    explicit Base(const T& arg_desc);
+    explicit Base(const T& arg_desc) {
+        info = arg_desc;
+    }
 
     std::pair<float, float> actual_size()
-        requires requires(T t) { { t.info.fix } -> std::same_as<bool&>; };
+        requires requires(T t) { { t.info.fix } -> std::same_as<bool&>; } {
+        return {this->info.frame.width, this->info.frame.height};
+    }
 
-    void add_animation(AnimationDesc animation_desc);
+    void add_animation(AnimationDesc animation_desc) {
+        Detail::add_animation(animation_desc, animation_target(animation_desc.target));
+    }
 
     void set_radius(float radius, std::source_location l = std::source_location::current())
-        requires has_radius<T>;
+        requires has_radius<T> {
+        info.radius = radius;
+    }
 
-    void set_radius(float radius, std::source_location l = std::source_location::current());
+    void set_radius(float, std::source_location l = std::source_location::current()) {
+        Log::logger(
+            Log::Warning,
+            "{}:{}: {} does not support function set_radius",
+            l.file_name(),
+            l.line(),
+            info.radius, Log::type_name<T>()
+            );
+    }
 
     void set_color(Color color, std::source_location l = std::source_location::current())
-        requires has_color<T>;
+        requires has_color<T> {
+        info.color = color;
+    }
 
-    void set_color(Color color, std::source_location l = std::source_location::current());
+    void set_color(Color, std::source_location l = std::source_location::current()) {
+        Log::logger(
+            Log::Warning,
+            "{}:{}: {} does not support function set_color",
+            l.file_name(),
+            l.line(),
+            info.radius, Log::type_name<T>()
+            );
+    }
 
     [[nodiscard]] bool dirty() { return info.dirty; }
 
@@ -130,6 +190,45 @@ class Element : public T, public Features... {
 
 };
 
+template <typename T>
+class Pool {
+private:
+    std::deque<T> elements;
+    std::vector<uint16_t> free;
+
+public:
+
+    template <typename... A>
+    std::pair<uint32_t, uint16_t> emplace(A&&... a) {
+        uint32_t i;
+        if (free.empty()) {
+            i = static_cast<uint32_t>(elements.size());
+            elements.emplace_back();
+        } else {
+            i = free.back();
+            free.pop_back();
+        }
+        elements[i].value.emplace(std::forward<A>(a)...);
+        return {i, elements[i].gen};
+    }
+
+    T* get(uint32_t i, uint16_t g) {
+        if (i >= elements.size()) return nullptr;
+        auto& s = elements[i];
+        return (s.gen == g) ? &*s.value : nullptr;
+    }
+
+    void erase(uint32_t i, uint16_t g) {
+        if (!get(i, g)) return;
+        elements[i].value.reset();
+        ++elements[i].gen;
+        free.push_back(i);
+    }
+};
+
+template <typename T>
+Pool<T> pool;
+
 }
 
 using Rectangle          = Detail::Element<Detail::Base<Detail::Rectangle> >;
@@ -148,7 +247,6 @@ public:
 
     void update();
 };
-
 
 
 Handle add_rectangle(RectDesc desc);

@@ -16,55 +16,8 @@ vector<Object::Handle>         objects;
 
 }
 
-// BASE
 
-template <typename T>
-Object::Detail::Base<T>::Base(const T& arg_desc) {
-    info = arg_desc;
-}
-
-template <typename T>
-pair<float, float> Object::Detail::Base<T>::actual_size()
-    requires requires(T t) { { t.info.fix } -> same_as<bool&>; } {
-    return {this->info.frame.x, this->info.frame.y};
-}
-
-template <typename T>
-float* Object::Detail::Base<T>::animation_target(AnimationTarget target) {
-    switch (target) {
-    case AnimationTarget::Width:
-        return &info.frame.width;
-    case AnimationTarget::Height:
-        return &info.frame.height;
-    case AnimationTarget::X:
-        return &info.frame.x;
-    case AnimationTarget::Y:
-        return &info.frame.y;
-
-    case AnimationTarget::Radius:
-        if constexpr (requires { info.radius; })
-            return &info.radius;
-        return nullptr;
-
-    case AnimationTarget::ColorR:
-    case AnimationTarget::ColorG:
-    case AnimationTarget::ColorB:
-    case AnimationTarget::ColorA:
-        if constexpr (requires { info.color; }) {
-            const auto index = static_cast<unsigned>(target)
-                - static_cast<unsigned>(AnimationTarget::ColorR);
-            return &info.color[index];
-        }
-        return nullptr;
-    default:
-        return nullptr;
-    }
-}
-
-template <typename T>
-void Object::Detail::Base<T>::add_animation(const AnimationDesc animation_desc) {
-
-    float* target_ptr = animation_target(animation_desc.target);
+void Object::Detail::add_animation(const AnimationDesc animation_desc, float* const target_ptr) {
 
     const auto existing = find_if(
         animations.begin(),
@@ -104,39 +57,6 @@ void Object::Detail::Base<T>::add_animation(const AnimationDesc animation_desc) 
     }
 }
 
-template <typename T>
-void Object::Detail::Base<T>::set_radius(float radius, source_location)
-    requires Object::Detail::has_radius<T> {
-    info.radius = radius;
-}
-
-template <typename T>
-void Object::Detail::Base<T>::set_radius(float, source_location l) {
-    Log::logger(
-        Log::Warning,
-        "{}:{}: {} does not support function set_radius",
-        l.file_name(),
-        l.line(),
-        info.radius, Log::type_name<T>()
-        );
-}
-
-template <typename T>
-void Object::Detail::Base<T>::set_color(Color color, source_location)
-    requires Object::Detail::has_color<T> {
-    info.color = color;
-}
-
-template <typename T>
-void Object::Detail::Base<T>::set_color(Color, source_location l) {
-    Log::logger(
-        Log::Warning,
-        "{}:{}: {} does not support function set_color",
-        l.file_name(),
-        l.line(),
-        info.radius, Log::type_name<T>()
-        );
-}
 
 template <typename T, typename... Features>
     requires Object::Detail::is_element<T>
@@ -165,11 +85,4 @@ bool Object::Detail::Element<T, Features...>::click(float x, float y, bool left)
     }
 
     return false;
-}
-
-void Object::Layout::update() {
-    uint16_t len = 0;
-    for (Object::Handle id : this->info.children) {
-        len += id
-    }
 }
