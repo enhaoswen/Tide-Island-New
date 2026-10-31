@@ -1,6 +1,6 @@
 #pragma once
 
-#include "get_type_name.h"
+#include "get_type_name.hpp"
 
 #include <algorithm>
 #include <array>

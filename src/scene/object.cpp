@@ -117,7 +117,7 @@ void Object::Detail::Base<T>::set_radius(float, source_location l) {
         "{}:{}: {} does not support function set_radius",
         l.file_name(),
         l.line(),
-        info.radius, Log::get_type_name<T>()
+        info.radius, Log::type_name<T>()
         );
 }
 
@@ -134,7 +134,7 @@ void Object::Detail::Base<T>::set_color(Color, source_location l) {
         "{}:{}: {} does not support function set_color",
         l.file_name(),
         l.line(),
-        info.radius, Log::get_type_name<T>()
+        info.radius, Log::type_name<T>()
         );
 }
 
