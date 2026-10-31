@@ -12,7 +12,6 @@ using namespace std;
 namespace {
 
 vector<unique_ptr<Animation> > animations;
-vector<Object::Handle>         objects;
 
 }
 
@@ -55,34 +54,4 @@ void Object::Detail::add_animation(const AnimationDesc animation_desc, float* co
     else {
         animations.push_back(move(animation));
     }
-}
-
-
-template <typename T, typename... Features>
-    requires Object::Detail::is_element<T>
-bool Object::Detail::Element<T, Features...>::click(float x, float y, bool left)
-    requires (requires(Features f) { f.lcb; } && ...) {
-
-    if (this->info.frame.width <= 0 || this->info.frame.height <= 0 ||
-        x < this->info.frame.x || x > this->info.frame.x + this->info.frame.width ||
-        y < this->info.frame.y || y > this->info.frame.y + this->info.frame.height) {
-        return false;
-    }
-    const float corner_radius{clamp(this->radius, 0.0f, max(0.0f, min(this->info.frame.width, this->info.frame.height) / 2))};
-    const float dx{x - clamp(x, this->info.frame.x + corner_radius, this->info.frame.x + this->info.frame.width - corner_radius)};
-    const float dy{y - clamp(y, this->info.frame.y + corner_radius, this->info.frame.y + this->info.frame.height - corner_radius)};
-    if (dx * dx + dy * dy > corner_radius * corner_radius) {
-        return false;
-    }
-
-    if (left && this->lcb) {
-        this->lcb();
-        return true;
-    }
-    if (!left && this->rcb) {
-        this->rcb();
-        return true;
-    }
-
-    return false;
 }

@@ -27,9 +27,10 @@ class Handle {
 private:
     uint16_t id;
     uint16_t gen;
+    uint8_t  type;
 
 public:
-    explicit Handle(uint16_t arg_id, const uint16_t arg_gen) : id(arg_id), gen(arg_gen) {
+    explicit Handle(uint16_t arg_id, const uint16_t arg_gen, const uint8_t arg_type) : id(arg_id), gen(arg_gen), type(arg_type) {
     }
 };
 
@@ -85,6 +86,7 @@ concept is_element =
     std::same_as<decltype(std::declval<T>().info), Layout>;
 
 void add_animation(AnimationDesc animation_desc, float* target_ptr);
+
 
 template <typename T>
 class Base {
@@ -175,7 +177,7 @@ public:
 
 };
 
-class Interactive {
+class Clickable {
 private:
     std::function<void()> lcb;
     std::function<void()> rcb;
@@ -186,25 +188,83 @@ template <typename T, typename... Features>
 class Element : public T, public Features... {
 
     bool click(float x, float y, bool left)
-        requires (requires(Features f) { f.lcb; } && ...);
+        requires (requires(Features f) { f.lcb; } && ...) {
+        if (this->info.frame.width <= 0 || this->info.frame.height <= 0 ||
+            x < this->info.frame.x || x > this->info.frame.x + this->info.frame.width ||
+            y < this->info.frame.y || y > this->info.frame.y + this->info.frame.height) {
+            return false;
+        }
+        const float corner_radius{clamp(this->radius, 0.0f, max(0.0f, min(this->info.frame.width, this->info.frame.height) / 2))};
+        const float dx{x - clamp(x, this->info.frame.x + corner_radius, this->info.frame.x + this->info.frame.width - corner_radius)};
+        const float dy{y - clamp(y, this->info.frame.y + corner_radius, this->info.frame.y + this->info.frame.height - corner_radius)};
+        if (dx * dx + dy * dy > corner_radius * corner_radius) {
+            return false;
+        }
 
+        if (left && this->lcb) {
+            this->lcb();
+            return true;
+        }
+        if (!left && this->rcb) {
+            this->rcb();
+            return true;
+        }
+
+        return false;
+    }
+
+    consteval uint8_t calculate_type(std::source_location l = std::source_location::current()) {
+        uint8_t type{0xff}; // or 0x1111 1111
+        // 0x aab0 0000
+        // aa = type. {rect, img, txt, etc}
+        // b = is clickable.
+        // we might have more.
+
+        if constexpr (std::same_as<T, Rectangle>)
+            type = 1;
+        else if constexpr (std::same_as<T, Image>)
+            type = 2;
+        else if constexpr (std::same_as<T, Text>)
+            type = 3;
+        else if constexpr (std::same_as<T, Texture>)
+            type = 4;
+
+        else {
+            Log::fatal("{}:{}: Unknow type {}", l.file_name(), l.line(), Log::type_name<T>());
+
+        }
+
+        type <<= 6;
+
+        (
+            [&]() {
+                if constexpr (std::same_as<Features, Clickable>) {
+                    type += (1 << 5);
+                }
+
+                else {
+                    Log::fatal("{}:{}: Unknow type {}", l.file_name(), l.line(), Log::type_name<Features>());
+                }
+            }, ...
+        );
+    }
 };
 
 template <typename T>
 class Pool {
 private:
-    std::deque<T> elements;
+    std::deque<T>         elements;
     std::vector<uint16_t> free;
 
 public:
-
     template <typename... A>
     std::pair<uint32_t, uint16_t> emplace(A&&... a) {
         uint32_t i;
         if (free.empty()) {
             i = static_cast<uint32_t>(elements.size());
             elements.emplace_back();
-        } else {
+        }
+        else {
             i = free.back();
             free.pop_back();
         }
@@ -213,13 +273,15 @@ public:
     }
 
     T* get(uint32_t i, uint16_t g) {
-        if (i >= elements.size()) return nullptr;
+        if (i >= elements.size())
+            return nullptr;
         auto& s = elements[i];
         return (s.gen == g) ? &*s.value : nullptr;
     }
 
     void erase(uint32_t i, uint16_t g) {
-        if (!get(i, g)) return;
+        if (!get(i, g))
+            return;
         elements[i].value.reset();
         ++elements[i].gen;
         free.push_back(i);
@@ -227,16 +289,16 @@ public:
 };
 
 template <typename T>
-Pool<T> pool;
+inline Pool<T> pool;
 
 }
 
 using Rectangle          = Detail::Element<Detail::Base<Detail::Rectangle> >;
 using Image              = Detail::Element<Detail::Base<Detail::Image> >;
 using Text               = Detail::Element<Detail::Base<Detail::Text> >;
-using ClickableRectangle = Detail::Element<Detail::Base<Detail::Rectangle>, Detail::Interactive>;
-using ClickableImage     = Detail::Element<Detail::Base<Detail::Image>, Detail::Interactive>;
-using ClickableText      = Detail::Element<Detail::Base<Detail::Text>, Detail::Interactive>;
+using ClickableRectangle = Detail::Element<Detail::Base<Detail::Rectangle>, Detail::Clickable>;
+using ClickableImage     = Detail::Element<Detail::Base<Detail::Image>, Detail::Clickable>;
+using ClickableText      = Detail::Element<Detail::Base<Detail::Text>, Detail::Clickable>;
 
 class Layout : public Detail::Base<Detail::Layout> {
 private:
@@ -247,24 +309,5 @@ public:
 
     void update();
 };
-
-
-Handle add_rectangle(RectDesc desc);
-
-Handle add_image(ImageDesc desc);
-
-Handle add_text(TextDesc desc);
-
-Handle add_layout(LayoutDesc desc);
-
-Handle add_clickable_rectangle(RectDesc desc);
-
-Handle add_clickable_image(ImageDesc desc);
-
-Handle add_clickable_text(TextDesc desc);
-
-Handle add_clickable_layout(LayoutDesc desc);
-
-void delete_handle(Handle handle);
 
 }
