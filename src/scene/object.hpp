@@ -5,11 +5,16 @@
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 
+#include <algorithm>
+#include <array>
+#include <concepts>
 #include <cstdint>
 #include <deque>
 #include <functional>
 #include <optional>
 #include <source_location>
+#include <utility>
+#include <vector>
 
 namespace Object {
 
@@ -60,10 +65,11 @@ struct Layout {
     Align               align{Align::Left};
 };
 
+// type layout: aab0 0000
+// aa = kind, b = clickable
 enum class Kind : uint8_t { Rectangle = 0, Image = 1, Text = 2, Layout = 3 };
 
 constexpr uint8_t k_clickable_bit = 1 << 5;
-constexpr uint8_t k_invalid_type  = 0xff;
 
 template <typename T> struct kind_of;
 
@@ -83,11 +89,11 @@ template <> struct kind_of<Layout> {
     static constexpr Kind value = Kind::Layout;
 };
 
-template <typename E>
+template <typename T>
 inline constexpr uint8_t type_code_v =
     static_cast<uint8_t>(
-        (static_cast<uint8_t>(kind_of<typename E::info_type>::value) << 6) |
-        (E::clickable ? k_clickable_bit : 0));
+        (static_cast<uint8_t>(kind_of<typename T::info_type>::value) << 6) |
+        (T::clickable ? k_clickable_bit : 0));
 
 template <typename T>
 concept has_radius = requires(T t) { { t.radius } -> std::same_as<float&>; };
@@ -96,11 +102,11 @@ template <typename T>
 concept has_color = requires(T t) { { t.color } -> std::same_as<Color&>; };
 
 template <typename T>
-concept is_element = requires {
-    kind_of<typename T::info_type>::value;
-};
+concept has_fix = requires(T t) { { t.fix } -> std::same_as<bool&>; };
 
 template <typename T>
+concept is_element = requires { kind_of<typename T::info_type>::value; };
+
 void add_animation(AnimationDesc animation_desc, float* target_ptr);
 
 template <typename T>
@@ -142,12 +148,16 @@ protected:
 public:
     using info_type = T;
 
+    static constexpr bool clickable = false;
+
+    Base() = default;
+
     explicit Base(const T& arg_desc) {
         info = arg_desc;
     }
 
     std::pair<float, float> actual_size()
-        requires requires(T t) { { t.info.fix } -> std::same_as<bool&>; } {
+        requires has_fix<T> {
         return {this->info.frame.width, this->info.frame.height};
     }
 
@@ -181,11 +191,9 @@ public:
             "{}:{}: {} does not support function set_color",
             l.file_name(),
             l.line(),
-            info.radius, Log::type_name<T>()
+            Log::type_name<T>()
             );
     }
-
-    [[nodiscard]] bool dirty() { return info.dirty; }
 
     [[nodiscard]] float left() { return info.frame.x; }
     [[nodiscard]] float right() { return info.frame.x + info.frame.width; }
@@ -194,8 +202,7 @@ public:
 
 };
 
-class Clickable {
-private:
+struct Clickable {
     std::function<void()> lcb;
     std::function<void()> rcb;
 };
@@ -204,21 +211,29 @@ template <typename T, typename... Features>
     requires is_element<T>
 class Element : public T, public Features... {
 private:
-    bool dirty{true};
+    bool dirty_{true};
 
 public:
-    Element<T, Features...>() = default;
+    static constexpr bool clickable = (std::same_as<Features, Clickable> || ...);
+
+    using T::T;
+
+    Element() = default;
 
     bool click(float x, float y, bool left)
-        requires (requires(Features f) { f.lcb; } && ...) {
+        requires clickable {
         if (this->info.frame.width <= 0 || this->info.frame.height <= 0 ||
             x < this->info.frame.x || x > this->info.frame.x + this->info.frame.width ||
             y < this->info.frame.y || y > this->info.frame.y + this->info.frame.height) {
             return false;
         }
-        const float corner_radius{clamp(this->radius, 0.0f, max(0.0f, min(this->info.frame.width, this->info.frame.height) / 2))};
-        const float dx{x - clamp(x, this->info.frame.x + corner_radius, this->info.frame.x + this->info.frame.width - corner_radius)};
-        const float dy{y - clamp(y, this->info.frame.y + corner_radius, this->info.frame.y + this->info.frame.height - corner_radius)};
+
+        float corner_radius{};
+        if constexpr (has_radius<typename T::info_type>) {
+            corner_radius = std::clamp(this->info.radius, 0.0f, std::max(0.0f, std::min(this->info.frame.width, this->info.frame.height) / 2));
+        }
+        const float dx{x - std::clamp(x, this->info.frame.x + corner_radius, this->info.frame.x + this->info.frame.width - corner_radius)};
+        const float dy{y - std::clamp(y, this->info.frame.y + corner_radius, this->info.frame.y + this->info.frame.height - corner_radius)};
         if (dx * dx + dy * dy > corner_radius * corner_radius) {
             return false;
         }
@@ -235,7 +250,8 @@ public:
         return false;
     }
 
-    void set_dirty(bool d) { dirty = d; }
+    [[nodiscard]] bool dirty() const { return dirty_; }
+    void               set_dirty(bool d) { dirty_ = d; }
 
 };
 
@@ -248,7 +264,7 @@ private:
     };
 
     std::deque<Node>      elements;
-    std::vector<uint32_t> free;
+    std::vector<uint16_t> free;
 
 public:
     template <typename... A>
@@ -257,7 +273,7 @@ public:
         uint16_t i;
 
         if (free.empty()) {
-            i = static_cast<uint32_t>(elements.size());
+            i = static_cast<uint16_t>(elements.size());
             elements.emplace_back();
         }
         else {
@@ -285,9 +301,7 @@ public:
     }
 
     void erase(uint16_t i, uint16_t g) {
-        T* ptr = get(i, g);
-
-        if (!ptr)
+        if (!get(i, g))
             return;
 
         elements[i].t.reset();
@@ -311,6 +325,8 @@ using ClickableText      = Detail::Element<Detail::Base<Detail::Text>, Detail::C
 
 class Layout : public Detail::Base<Detail::Layout> {
 public:
+    using Base::Base;
+
     // always add to the left
     void add_children(Handle id) { this->info.children.push_back(id); }
 
@@ -323,20 +339,49 @@ public:
     void update();
 };
 
-// API
+namespace Detail {
 
-template <typename... Ts>
-Handle add(Ts... ts) {
-    Detail::Element elem{ts...};
-    using Type = decltype(elem);
+using remove_cb = void (*)(uint16_t, uint16_t);
 
-    auto [i,g] = Detail::pool<Type>.emplace(elem);
+template <typename... Es>
+struct TypeList {
+};
 
-    return {i, g, elem.calculate_type()};
+using AllElements = TypeList<
+    Object::Rectangle, Object::Image, Object::Text,
+    Object::ClickableRectangle, Object::ClickableImage, Object::ClickableText,
+    Object::Layout
+>;
+
+template <typename T>
+void erase_impl(uint16_t i, uint16_t g) {
+    pool<T>.erase(i, g);
 }
 
-void remove(Handle id) {
-    Detail::pool<Type>.erase(id);
+template <typename... Es>
+constexpr std::array<remove_cb, 256> make_erase_table(TypeList<Es...>) {
+    std::array<remove_cb, 256> t{};
+    ((t[type_code_v<Es>] = &erase_impl<Es>), ...);
+    return t;
+}
+
+inline constexpr auto erase_table = make_erase_table(AllElements{});
+
+}
+
+// API
+
+template <typename E, typename... Args>
+Handle add(Args&&... args) {
+    auto [i, g] = Detail::pool<E>.emplace(std::forward<Args>(args)...);
+    return Handle{i, g, Detail::type_code_v<E>};
+}
+
+inline void remove(Handle h) {
+    if (const auto fn = Detail::erase_table[h.type])
+        fn(h.id, h.gen);
+    else
+        Log::logger(Log::Warning, "remove: invalid handle type {:#04x}", h.type);
 }
 
 }
