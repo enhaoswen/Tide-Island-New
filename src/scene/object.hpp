@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <optional>
 #include <source_location>
 
 /* ARCHITECTURE
@@ -24,13 +25,16 @@ run the program.
 namespace Object {
 
 class Handle {
-private:
+public:
     uint16_t id;
     uint16_t gen;
     uint8_t  type;
 
-public:
     explicit Handle(uint16_t arg_id, const uint16_t arg_gen, const uint8_t arg_type) : id(arg_id), gen(arg_gen), type(arg_type) {
+    }
+
+    void set_gen(uint16_t arg_gen) {
+        gen = arg_gen;
     }
 };
 
@@ -86,7 +90,6 @@ concept is_element =
     std::same_as<decltype(std::declval<T>().info), Layout>;
 
 void add_animation(AnimationDesc animation_desc, float* target_ptr);
-
 
 template <typename T>
 class Base {
@@ -186,7 +189,7 @@ private:
 template <typename T, typename... Features>
     requires is_element<T>
 class Element : public T, public Features... {
-
+public:
     bool click(float x, float y, bool left)
         requires (requires(Features f) { f.lcb; } && ...) {
         if (this->info.frame.width <= 0 || this->info.frame.height <= 0 ||
@@ -220,15 +223,19 @@ class Element : public T, public Features... {
         // b = is clickable.
         // we might have more.
 
-        if constexpr (std::same_as<T, Rectangle>)
+        if constexpr (std::same_as<T, Rectangle>) {
             type = 1;
-        else if constexpr (std::same_as<T, Image>)
+        }
+        else if constexpr (std::same_as<T, Image>) {
             type = 2;
-        else if constexpr (std::same_as<T, Text>)
+        }
+        else if constexpr (std::same_as<T, Text>) {
             type = 3;
-        else if constexpr (std::same_as<T, Texture>)
+        }
+        else if constexpr (std::same_as<T, Texture>) {
             type = 4;
 
+        }
         else {
             Log::fatal("{}:{}: Unknow type {}", l.file_name(), l.line(), Log::type_name<T>());
 
@@ -248,18 +255,27 @@ class Element : public T, public Features... {
             }, ...
         );
     }
+
+    Handle add(T t, Features... f);
 };
 
 template <typename T>
 class Pool {
 private:
-    std::deque<T>         elements;
-    std::vector<uint16_t> free;
+    struct Node {
+        std::optional<T> t;
+        uint16_t         gen{0};
+    };
+
+    std::deque<Node>      elements;
+    std::vector<uint32_t> free;
 
 public:
     template <typename... A>
+    [[nodiscard]]
     std::pair<uint32_t, uint16_t> emplace(A&&... a) {
         uint32_t i;
+
         if (free.empty()) {
             i = static_cast<uint32_t>(elements.size());
             elements.emplace_back();
@@ -268,28 +284,50 @@ public:
             i = free.back();
             free.pop_back();
         }
-        elements[i].value.emplace(std::forward<A>(a)...);
-        return {i, elements[i].gen};
+
+        auto& node = elements[i];
+
+        node.t.emplace(std::forward<A>(a)...);
+
+        return {i, node.gen};
     }
 
     T* get(uint32_t i, uint16_t g) {
         if (i >= elements.size())
             return nullptr;
-        auto& s = elements[i];
-        return (s.gen == g) ? &*s.value : nullptr;
+
+        auto& node = elements[i];
+
+        if (node.gen != g || !node.t)
+            return nullptr;
+
+        return &*node.t;
     }
 
     void erase(uint32_t i, uint16_t g) {
-        if (!get(i, g))
+        T* ptr = get(i, g);
+
+        if (!ptr)
             return;
-        elements[i].value.reset();
+
+        elements[i].t.reset();
         ++elements[i].gen;
+
         free.push_back(i);
     }
 };
 
 template <typename T>
 inline Pool<T> pool;
+
+template <typename T, typename... Features> requires is_element<T>
+Handle Element<T, Features...>::add(T t, Features... f) {
+    using Type  = std::remove_cvref_t<decltype(*this)>;
+    auto [i, g] = pool<Type>.emplace(
+        Type{std::move(t), std::move(f)...}
+        );
+    return {i, g, calculate_type()};
+}
 
 }
 
@@ -309,5 +347,7 @@ public:
 
     void update();
 };
+
+// API
 
 }
