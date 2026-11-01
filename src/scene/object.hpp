@@ -11,17 +11,6 @@
 #include <optional>
 #include <source_location>
 
-/* ARCHITECTURE
-
-1. we use template<> Handle to refer to object
-instead of it's pointer.
-
-2. we use object_entry to save void* elements
-so that we don't need to know the type while we
-run the program.
-
-*/
-
 namespace Object {
 
 class Handle {
@@ -44,7 +33,6 @@ struct Rectangle {
     Frame frame{};
     Color color{};
     float radius{};
-    bool  dirty{true};
 };
 
 struct Image {
@@ -53,7 +41,6 @@ struct Image {
     float   radius{};
     bool    fix{true};
     bool    have_parent{false};
-    bool    dirty{true};
 };
 
 struct Text {
@@ -63,7 +50,6 @@ struct Text {
     Color      color{};
     bool       fit{true};
     bool       have_parent{false};
-    bool       dirty{true};
 };
 
 struct Layout {
@@ -72,8 +58,36 @@ struct Layout {
     float               spacing{};
     bool                vertical{false};
     Align               align{Align::Left};
-    bool                dirty{true};
 };
+
+enum class Kind : uint8_t { Rectangle = 0, Image = 1, Text = 2, Layout = 3 };
+
+constexpr uint8_t k_clickable_bit = 1 << 5;
+constexpr uint8_t k_invalid_type  = 0xff;
+
+template <typename T> struct kind_of;
+
+template <> struct kind_of<Rectangle> {
+    static constexpr Kind value = Kind::Rectangle;
+};
+
+template <> struct kind_of<Image> {
+    static constexpr Kind value = Kind::Image;
+};
+
+template <> struct kind_of<Text> {
+    static constexpr Kind value = Kind::Text;
+};
+
+template <> struct kind_of<Layout> {
+    static constexpr Kind value = Kind::Layout;
+};
+
+template <typename E>
+inline constexpr uint8_t type_code_v =
+    static_cast<uint8_t>(
+        (static_cast<uint8_t>(kind_of<typename E::info_type>::value) << 6) |
+        (E::clickable ? k_clickable_bit : 0));
 
 template <typename T>
 concept has_radius = requires(T t) { { t.radius } -> std::same_as<float&>; };
@@ -81,14 +95,12 @@ concept has_radius = requires(T t) { { t.radius } -> std::same_as<float&>; };
 template <typename T>
 concept has_color = requires(T t) { { t.color } -> std::same_as<Color&>; };
 
+template <typename T>
+concept is_element = requires {
+    kind_of<typename T::info_type>::value;
+};
 
 template <typename T>
-concept is_element =
-    std::same_as<decltype(std::declval<T>().info), Rectangle> ||
-    std::same_as<decltype(std::declval<T>().info), Image> ||
-    std::same_as<decltype(std::declval<T>().info), Text> ||
-    std::same_as<decltype(std::declval<T>().info), Layout>;
-
 void add_animation(AnimationDesc animation_desc, float* target_ptr);
 
 template <typename T>
@@ -128,6 +140,8 @@ protected:
     }
 
 public:
+    using info_type = T;
+
     explicit Base(const T& arg_desc) {
         info = arg_desc;
     }
@@ -152,7 +166,7 @@ public:
             "{}:{}: {} does not support function set_radius",
             l.file_name(),
             l.line(),
-            info.radius, Log::type_name<T>()
+            Log::type_name<T>()
             );
     }
 
@@ -189,7 +203,12 @@ private:
 template <typename T, typename... Features>
     requires is_element<T>
 class Element : public T, public Features... {
+private:
+    bool dirty{true};
+
 public:
+    Element<T, Features...>() = default;
+
     bool click(float x, float y, bool left)
         requires (requires(Features f) { f.lcb; } && ...) {
         if (this->info.frame.width <= 0 || this->info.frame.height <= 0 ||
@@ -216,47 +235,8 @@ public:
         return false;
     }
 
-    consteval uint8_t calculate_type(std::source_location l = std::source_location::current()) {
-        uint8_t type{0xff}; // or 0x1111 1111
-        // 0x aab0 0000
-        // aa = type. {rect, img, txt, etc}
-        // b = is clickable.
-        // we might have more.
+    void set_dirty(bool d) { dirty = d; }
 
-        if constexpr (std::same_as<T, Rectangle>) {
-            type = 1;
-        }
-        else if constexpr (std::same_as<T, Image>) {
-            type = 2;
-        }
-        else if constexpr (std::same_as<T, Text>) {
-            type = 3;
-        }
-        else if constexpr (std::same_as<T, Texture>) {
-            type = 4;
-
-        }
-        else {
-            Log::fatal("{}:{}: Unknow type {}", l.file_name(), l.line(), Log::type_name<T>());
-
-        }
-
-        type <<= 6;
-
-        (
-            [&]() {
-                if constexpr (std::same_as<Features, Clickable>) {
-                    type += (1 << 5);
-                }
-
-                else {
-                    Log::fatal("{}:{}: Unknow type {}", l.file_name(), l.line(), Log::type_name<Features>());
-                }
-            }, ...
-        );
-    }
-
-    Handle add(T t, Features... f);
 };
 
 template <typename T>
@@ -273,8 +253,8 @@ private:
 public:
     template <typename... A>
     [[nodiscard]]
-    std::pair<uint32_t, uint16_t> emplace(A&&... a) {
-        uint32_t i;
+    std::pair<uint16_t, uint16_t> emplace(A&&... a) {
+        uint16_t i;
 
         if (free.empty()) {
             i = static_cast<uint32_t>(elements.size());
@@ -292,7 +272,7 @@ public:
         return {i, node.gen};
     }
 
-    T* get(uint32_t i, uint16_t g) {
+    T* get(uint16_t i, uint16_t g) {
         if (i >= elements.size())
             return nullptr;
 
@@ -304,7 +284,7 @@ public:
         return &*node.t;
     }
 
-    void erase(uint32_t i, uint16_t g) {
+    void erase(uint16_t i, uint16_t g) {
         T* ptr = get(i, g);
 
         if (!ptr)
@@ -320,15 +300,6 @@ public:
 template <typename T>
 inline Pool<T> pool;
 
-template <typename T, typename... Features> requires is_element<T>
-Handle Element<T, Features...>::add(T t, Features... f) {
-    using Type  = std::remove_cvref_t<decltype(*this)>;
-    auto [i, g] = pool<Type>.emplace(
-        Type{std::move(t), std::move(f)...}
-        );
-    return {i, g, calculate_type()};
-}
-
 }
 
 using Rectangle          = Detail::Element<Detail::Base<Detail::Rectangle> >;
@@ -339,15 +310,33 @@ using ClickableImage     = Detail::Element<Detail::Base<Detail::Image>, Detail::
 using ClickableText      = Detail::Element<Detail::Base<Detail::Text>, Detail::Clickable>;
 
 class Layout : public Detail::Base<Detail::Layout> {
-private:
-
 public:
     // always add to the left
     void add_children(Handle id) { this->info.children.push_back(id); }
+
+    void add_children(const std::vector<Handle>& ids) {
+        for (auto id : ids) {
+            this->info.children.push_back(id);
+        }
+    }
 
     void update();
 };
 
 // API
+
+template <typename... Ts>
+Handle add(Ts... ts) {
+    Detail::Element elem{ts...};
+    using Type = decltype(elem);
+
+    auto [i,g] = Detail::pool<Type>.emplace(elem);
+
+    return {i, g, elem.calculate_type()};
+}
+
+void remove(Handle id) {
+    Detail::pool<Type>.erase(id);
+}
 
 }
