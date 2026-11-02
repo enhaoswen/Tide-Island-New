@@ -15,7 +15,6 @@ vector<unique_ptr<Animation> > animations;
 
 }
 
-
 void Object::Detail::add_animation(const AnimationDesc animation_desc, float* const target_ptr) {
 
     const auto existing = find_if(

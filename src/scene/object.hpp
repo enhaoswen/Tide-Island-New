@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -31,6 +32,9 @@ public:
         gen = arg_gen;
     }
 };
+
+template <typename T>
+class Ref;
 
 namespace Detail {
 
@@ -57,19 +61,12 @@ struct Text {
     bool       have_parent{false};
 };
 
-struct Layout {
-    Frame               frame{};
-    std::vector<Handle> children{};
-    float               spacing{};
-    bool                vertical{false};
-    Align               align{Align::Left};
-};
-
-// type layout: aab0 0000
-// aa = kind, b = clickable
-enum class Kind : uint8_t { Rectangle = 0, Image = 1, Text = 2, Layout = 3 };
+// type layout: aabc 0000
+// aa = kind, b = clickable, c = layouter
+enum class Kind : uint8_t { Rectangle = 0, Image = 1, Text = 2 };
 
 constexpr uint8_t k_clickable_bit = 1 << 5;
+constexpr uint8_t k_layouter_bit  = 1 << 4;
 
 template <typename T> struct kind_of;
 
@@ -85,15 +82,12 @@ template <> struct kind_of<Text> {
     static constexpr Kind value = Kind::Text;
 };
 
-template <> struct kind_of<Layout> {
-    static constexpr Kind value = Kind::Layout;
-};
-
 template <typename T>
 inline constexpr uint8_t type_code_v =
     static_cast<uint8_t>(
         (static_cast<uint8_t>(kind_of<typename T::info_type>::value) << 6) |
-        (T::clickable ? k_clickable_bit : 0));
+        (T::clickable ? k_clickable_bit : 0) |
+        (T::layouter ? k_layouter_bit : 0));
 
 template <typename T>
 concept has_radius = requires(T t) { { t.radius } -> std::same_as<float&>; };
@@ -148,12 +142,9 @@ protected:
 public:
     using info_type = T;
 
-    static constexpr bool clickable = false;
-
     Base() = default;
 
-    explicit Base(const T& arg_desc) {
-        info = arg_desc;
+    explicit Base(T arg_desc) : info(std::move(arg_desc)) {
     }
 
     std::pair<float, float> actual_size()
@@ -207,6 +198,21 @@ struct Clickable {
     std::function<void()> rcb;
 };
 
+class Layouter {
+private:
+    std::vector<Handle> children;
+
+public:
+    void add_children(Handle id) { children.push_back(id); }
+
+    void add_children(const std::vector<Handle>& ids) {
+        for (auto id : ids) {
+            children.push_back(id);
+        }
+    }
+
+};
+
 template <typename T, typename... Features>
     requires is_element<T>
 class Element : public T, public Features... {
@@ -215,6 +221,7 @@ private:
 
 public:
     static constexpr bool clickable = (std::same_as<Features, Clickable> || ...);
+    static constexpr bool layouter  = (std::same_as<Features, Layouter> || ...);
 
     using T::T;
 
@@ -252,6 +259,12 @@ public:
 
     [[nodiscard]] bool dirty() const { return dirty_; }
     void               set_dirty(bool d) { dirty_ = d; }
+
+    void update()
+        requires layouter {
+
+
+    }
 
 };
 
@@ -319,26 +332,13 @@ inline Pool<T> pool;
 using Rectangle          = Detail::Element<Detail::Base<Detail::Rectangle> >;
 using Image              = Detail::Element<Detail::Base<Detail::Image> >;
 using Text               = Detail::Element<Detail::Base<Detail::Text> >;
+using Layout             = Detail::Element<Detail::Base<Detail::Rectangle>, Detail::Layouter>;
 using ClickableRectangle = Detail::Element<Detail::Base<Detail::Rectangle>, Detail::Clickable>;
 using ClickableImage     = Detail::Element<Detail::Base<Detail::Image>, Detail::Clickable>;
 using ClickableText      = Detail::Element<Detail::Base<Detail::Text>, Detail::Clickable>;
+using ClickableLayout    = Detail::Element<Detail::Base<Detail::Rectangle>, Detail::Clickable, Detail::Layouter>;
 
-class Layout : public Detail::Base<Detail::Layout> {
-public:
-    using Base::Base;
-
-    // always add to the left
-    void add_children(Handle id) { this->info.children.push_back(id); }
-
-    void add_children(const std::vector<Handle>& ids) {
-        for (auto id : ids) {
-            this->info.children.push_back(id);
-        }
-    }
-
-    void update();
-};
-
+// some magic here
 namespace Detail {
 
 using remove_cb = void (*)(uint16_t, uint16_t);
@@ -348,10 +348,38 @@ struct TypeList {
 };
 
 using AllElements = TypeList<
-    Object::Rectangle, Object::Image, Object::Text,
-    Object::ClickableRectangle, Object::ClickableImage, Object::ClickableText,
-    Object::Layout
+    Object::Rectangle, Object::Image, Object::Text, Object::Layout,
+    Object::ClickableRectangle, Object::ClickableImage, Object::ClickableText, Object::ClickableLayout
 >;
+
+template <typename... Es>
+constexpr bool all_unique(TypeList<Es...>) {
+    constexpr std::array<uint8_t, sizeof...(Es)> codes{type_code_v<Es>...};
+    for (std::size_t i = 0; i < codes.size(); ++i)
+        for (std::size_t j = i + 1; j < codes.size(); ++j)
+            if (codes[i] == codes[j])
+                return false;
+    return true;
+}
+
+static_assert(all_unique(AllElements{}), "duplicate Handle type code");
+
+template <typename T>
+T* get(const Handle& h) {
+    if (h.type != Detail::type_code_v<T>)
+        return nullptr;
+    return Detail::pool<T>.get(h.id, h.gen);
+}
+
+template <typename T>
+class Ref : public Handle {
+public:
+    using Handle::Handle;
+
+    T* get() const { return pool<T>.get(id, gen); }
+    T* operator->() const { return get(); }
+    explicit operator bool() const { return get() != nullptr; }
+};
 
 template <typename T>
 void erase_impl(uint16_t i, uint16_t g) {
@@ -371,10 +399,10 @@ inline constexpr auto erase_table = make_erase_table(AllElements{});
 
 // API
 
-template <typename E, typename... Args>
-Handle add(Args&&... args) {
-    auto [i, g] = Detail::pool<E>.emplace(std::forward<Args>(args)...);
-    return Handle{i, g, Detail::type_code_v<E>};
+template <typename T, typename... Args>
+Ref<T> add(Args&&... args) {
+    auto [i, g] = Detail::pool<T>.emplace(std::forward<Args>(args)...);
+    return {i, g, Detail::type_code_v<T>};
 }
 
 inline void remove(Handle h) {
