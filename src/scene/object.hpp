@@ -28,13 +28,15 @@ public:
     explicit Handle(uint16_t arg_id, const uint16_t arg_gen, const uint8_t arg_type) : id(arg_id), gen(arg_gen), type(arg_type) {
     }
 
+    bool operator==(const Handle&) const = default;
+
     void set_gen(uint16_t arg_gen) {
         gen = arg_gen;
     }
 };
 
-template <typename T>
-class Ref;
+template <typename F>
+bool visit(Handle h, F&& f);
 
 namespace Detail {
 
@@ -49,7 +51,6 @@ struct Image {
     Texture texture{};
     float   radius{};
     bool    fix{true};
-    bool    have_parent{false};
 };
 
 struct Text {
@@ -58,7 +59,6 @@ struct Text {
     FontHandle font{};
     Color      color{};
     bool       fit{true};
-    bool       have_parent{false};
 };
 
 // type layout: aabc 0000
@@ -147,6 +147,8 @@ public:
     explicit Base(T arg_desc) : info(std::move(arg_desc)) {
     }
 
+    Frame& frame() { return info.frame; }
+
     std::pair<float, float> actual_size()
         requires has_fix<T> {
         return {this->info.frame.width, this->info.frame.height};
@@ -199,8 +201,11 @@ struct Clickable {
 };
 
 class Layouter {
-private:
+protected:
     std::vector<Handle> children;
+    float               spacing{};
+    bool                vertical{false};
+    Align               align{Align::Left};
 
 public:
     void add_children(Handle id) { children.push_back(id); }
@@ -210,6 +215,13 @@ public:
             children.push_back(id);
         }
     }
+
+    void remove(Handle id) { std::erase(children, id); }
+    void clear() { children.clear(); }
+
+    void set_spacing(float s) { spacing = s; }
+    void set_vertical(bool v) { vertical = v; }
+    void set_align(Align a) { align = a; }
 
 };
 
@@ -262,8 +274,39 @@ public:
 
     void update()
         requires layouter {
+        const auto& host   = this->info.frame;
+        float       cursor = this->vertical ? host.y : host.x;
+        std::size_t kept   = 0;
 
+        for (const Handle child : this->children) {
+            const bool alive = Object::visit(child, [&](auto& e) {
+                auto& f = e.frame();
 
+                const float space  = this->vertical ? host.width - f.width : host.height - f.height;
+                const float offset = this->align == Align::Center ? space / 2 : this->align == Align::Right ? space : 0.0f;
+
+                if (this->vertical) {
+                    f.x = host.x + offset;
+                    f.y = cursor;
+                    cursor += f.height;
+                }
+                else {
+                    f.x = cursor;
+                    f.y = host.y + offset;
+                    cursor += f.width;
+                }
+                cursor += this->spacing;
+
+                if constexpr (requires { e.update(); })
+                    e.update();
+            });
+
+            if (alive)
+                this->children[kept++] = child;
+        }
+
+        this->children.erase(this->children.begin() + kept, this->children.end());
+        dirty_ = false;
     }
 
 };
@@ -329,6 +372,20 @@ inline Pool<T> pool;
 
 }
 
+template <typename E>
+E* get(const Handle& h) {
+    return h.type == Detail::type_code_v<E> ? Detail::pool<E>.get(h.id, h.gen) : nullptr;
+}
+
+template <typename E>
+class Ref : public Handle {
+public:
+    using Handle::Handle;
+
+    E* operator->() const { return get<E>(*this); }
+    explicit operator bool() const { return get<E>(*this) != nullptr; }
+};
+
 using Rectangle          = Detail::Element<Detail::Base<Detail::Rectangle> >;
 using Image              = Detail::Element<Detail::Base<Detail::Image> >;
 using Text               = Detail::Element<Detail::Base<Detail::Text> >;
@@ -365,23 +422,6 @@ constexpr bool all_unique(TypeList<Es...>) {
 static_assert(all_unique(AllElements{}), "duplicate Handle type code");
 
 template <typename T>
-T* get(const Handle& h) {
-    if (h.type != Detail::type_code_v<T>)
-        return nullptr;
-    return Detail::pool<T>.get(h.id, h.gen);
-}
-
-template <typename T>
-class Ref : public Handle {
-public:
-    using Handle::Handle;
-
-    T* get() const { return pool<T>.get(id, gen); }
-    T* operator->() const { return get(); }
-    explicit operator bool() const { return get() != nullptr; }
-};
-
-template <typename T>
 void erase_impl(uint16_t i, uint16_t g) {
     pool<T>.erase(i, g);
 }
@@ -402,7 +442,7 @@ inline constexpr auto erase_table = make_erase_table(AllElements{});
 template <typename T, typename... Args>
 Ref<T> add(Args&&... args) {
     auto [i, g] = Detail::pool<T>.emplace(std::forward<Args>(args)...);
-    return {i, g, Detail::type_code_v<T>};
+    return Ref<T>{i, g, Detail::type_code_v<T>};
 }
 
 inline void remove(Handle h) {
@@ -410,6 +450,22 @@ inline void remove(Handle h) {
         fn(h.id, h.gen);
     else
         Log::logger(Log::Warning, "remove: invalid handle type {:#04x}", h.type);
+}
+
+template <typename F>
+bool visit(Handle h, F&& f) {
+    bool hit = false;
+    auto one = [&]<typename E>() {
+        if (Detail::type_code_v<E> == h.type)
+            if (auto* p = Detail::pool<E>.get(h.id, h.gen)) {
+                f(*p);
+                hit = true;
+            }
+    };
+    [&]<typename... Es>(Detail::TypeList<Es...>) {
+        (one.template operator()<Es>(), ...);
+    }(Detail::AllElements{});
+    return hit;
 }
 
 }
