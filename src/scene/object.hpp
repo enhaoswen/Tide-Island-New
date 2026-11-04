@@ -61,12 +61,13 @@ struct Text {
     bool       fit{true};
 };
 
-// type layout: aabc 0000
-// aa = kind, b = clickable, c = layouter
+// type layout: aabc d000
+// aa = kind, b = clickable, c = hoverable, d = layouter
 enum class Kind : uint8_t { Rectangle = 0, Image = 1, Text = 2 };
 
 constexpr uint8_t k_clickable_bit = 1 << 5;
-constexpr uint8_t k_layouter_bit  = 1 << 4;
+constexpr uint8_t k_hoverable_bit = 1 << 4;
+constexpr uint8_t k_layouter_bit  = 1 << 3;
 
 template <typename T> struct kind_of;
 
@@ -87,6 +88,7 @@ inline constexpr uint8_t type_code_v =
     static_cast<uint8_t>(
         (static_cast<uint8_t>(kind_of<typename T::info_type>::value) << 6) |
         (T::clickable ? k_clickable_bit : 0) |
+        (T::hoverable ? k_hoverable_bit : 0) |
         (T::layouter ? k_layouter_bit : 0));
 
 template <typename T>
@@ -200,6 +202,10 @@ struct Clickable {
     std::function<void()> rcb;
 };
 
+struct Hoverable {
+    std::function<void()> cb;
+};
+
 class Layouter {
 protected:
     std::vector<Handle> children;
@@ -233,13 +239,14 @@ private:
 
 public:
     static constexpr bool clickable = (std::same_as<Features, Clickable> || ...);
+    static constexpr bool hoverable = (std::same_as<Features, Hoverable> || ...);
     static constexpr bool layouter  = (std::same_as<Features, Layouter> || ...);
 
     using T::T;
 
     Element() = default;
 
-    bool click(float x, float y, bool left)
+    bool contains(float x, float y) const
         requires clickable {
         if (this->info.frame.width <= 0 || this->info.frame.height <= 0 ||
             x < this->info.frame.x || x > this->info.frame.x + this->info.frame.width ||
@@ -248,24 +255,50 @@ public:
         }
 
         float corner_radius{};
+
         if constexpr (has_radius<typename T::info_type>) {
-            corner_radius = std::clamp(this->info.radius, 0.0f, std::max(0.0f, std::min(this->info.frame.width, this->info.frame.height) / 2));
-        }
-        const float dx{x - std::clamp(x, this->info.frame.x + corner_radius, this->info.frame.x + this->info.frame.width - corner_radius)};
-        const float dy{y - std::clamp(y, this->info.frame.y + corner_radius, this->info.frame.y + this->info.frame.height - corner_radius)};
-        if (dx * dx + dy * dy > corner_radius * corner_radius) {
-            return false;
-        }
-
-        if (left && this->lcb) {
-            this->lcb();
-            return true;
-        }
-        if (!left && this->rcb) {
-            this->rcb();
-            return true;
+            corner_radius = std::clamp(
+                this->info.radius,
+                0.0f,
+                std::min(this->info.frame.width, this->info.frame.height) / 2
+                );
         }
 
+        const float dx = x - std::clamp(
+            x,
+            this->info.frame.x + corner_radius,
+            this->info.frame.x + this->info.frame.width - corner_radius
+            );
+
+        const float dy = y - std::clamp(
+            y,
+            this->info.frame.y + corner_radius,
+            this->info.frame.y + this->info.frame.height - corner_radius
+            );
+
+        return dx * dx + dy * dy <= corner_radius * corner_radius;
+    }
+
+    bool click(float x, float y, bool left)
+        requires clickable {
+        if (contains(x, y)) {
+            if (left && this->lcb)
+                this->lcb();
+            else
+                if (!left && this->rcb)
+                    this->rcb();
+            return true;
+        }
+
+        return false;
+    }
+
+    bool hover(float x, float y) const
+        requires hoverable {
+        if (contains(x, y)) {
+            this->cb();
+            return true;
+        }
         return false;
     }
 
@@ -274,39 +307,14 @@ public:
 
     void update()
         requires layouter {
-        const auto& host   = this->info.frame;
-        float       cursor = this->vertical ? host.y : host.x;
-        std::size_t kept   = 0;
 
-        for (const Handle child : this->children) {
-            const bool alive = Object::visit(child, [&](auto& e) {
-                auto& f = e.frame();
+        size_t size{0};
 
-                const float space  = this->vertical ? host.width - f.width : host.height - f.height;
-                const float offset = this->align == Align::Center ? space / 2 : this->align == Align::Right ? space : 0.0f;
-
-                if (this->vertical) {
-                    f.x = host.x + offset;
-                    f.y = cursor;
-                    cursor += f.height;
-                }
-                else {
-                    f.x = cursor;
-                    f.y = host.y + offset;
-                    cursor += f.width;
-                }
-                cursor += this->spacing;
-
-                if constexpr (requires { e.update(); })
-                    e.update();
+        for (const Handle c : this->children) {
+            visit(c, [&](auto& e) {
+                
             });
-
-            if (alive)
-                this->children[kept++] = child;
         }
-
-        this->children.erase(this->children.begin() + kept, this->children.end());
-        dirty_ = false;
     }
 
 };
@@ -372,18 +380,18 @@ inline Pool<T> pool;
 
 }
 
-template <typename E>
-E* get(const Handle& h) {
-    return h.type == Detail::type_code_v<E> ? Detail::pool<E>.get(h.id, h.gen) : nullptr;
+template <typename T>
+T* get(const Handle& h) {
+    return h.type == Detail::type_code_v<T> ? Detail::pool<T>.get(h.id, h.gen) : nullptr;
 }
 
-template <typename E>
+template <typename T>
 class Ref : public Handle {
 public:
     using Handle::Handle;
 
-    E* operator->() const { return get<E>(*this); }
-    explicit operator bool() const { return get<E>(*this) != nullptr; }
+    T*       operator->() const { return get<T>(*this); }
+    explicit operator bool() const { return get<T>(*this) != nullptr; }
 };
 
 using Rectangle          = Detail::Element<Detail::Base<Detail::Rectangle> >;
@@ -400,18 +408,18 @@ namespace Detail {
 
 using remove_cb = void (*)(uint16_t, uint16_t);
 
-template <typename... Es>
+template <typename... Ts>
 struct TypeList {
 };
 
+// ignore the error
 using AllElements = TypeList<
-    Object::Rectangle, Object::Image, Object::Text, Object::Layout,
-    Object::ClickableRectangle, Object::ClickableImage, Object::ClickableText, Object::ClickableLayout
+#include "all_type.inc"
 >;
 
-template <typename... Es>
-constexpr bool all_unique(TypeList<Es...>) {
-    constexpr std::array<uint8_t, sizeof...(Es)> codes{type_code_v<Es>...};
+template <typename... Ts>
+constexpr bool all_unique(TypeList<Ts...>) {
+    constexpr std::array<uint8_t, sizeof...(Ts)> codes{type_code_v<Ts>...};
     for (std::size_t i = 0; i < codes.size(); ++i)
         for (std::size_t j = i + 1; j < codes.size(); ++j)
             if (codes[i] == codes[j])
@@ -426,10 +434,10 @@ void erase_impl(uint16_t i, uint16_t g) {
     pool<T>.erase(i, g);
 }
 
-template <typename... Es>
-constexpr std::array<remove_cb, 256> make_erase_table(TypeList<Es...>) {
+template <typename... Ts>
+constexpr std::array<remove_cb, 256> make_erase_table(TypeList<Ts...>) {
     std::array<remove_cb, 256> t{};
-    ((t[type_code_v<Es>] = &erase_impl<Es>), ...);
+    ((t[type_code_v<Ts>] = &erase_impl<Ts>), ...);
     return t;
 }
 
@@ -462,8 +470,8 @@ bool visit(Handle h, F&& f) {
                 hit = true;
             }
     };
-    [&]<typename... Es>(Detail::TypeList<Es...>) {
-        (one.template operator()<Es>(), ...);
+    [&]<typename... Ts>(Detail::TypeList<Ts...>) {
+        (one.template operator()<Ts>(), ...);
     }(Detail::AllElements{});
     return hit;
 }
