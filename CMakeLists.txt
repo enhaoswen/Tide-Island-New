@@ -32,7 +32,6 @@ set(SRC
         src/graphics/driver_memory.cpp
         src/graphics/renderer.cpp
         src/graphics/text.cpp
-        src/scene/object.cpp
         src/graphics/texture.cpp
         third_party/wayland/wlr-layer-shell-unstable-v1-protocol.c
         third_party/wayland/xdg-shell-client-protocol.c
@@ -88,7 +87,6 @@ if(BUILD_TESTING)
             tests/scene_layout_test.cpp
             src/app/state_manager.cpp
             src/app/views/clock_view.cpp
-            src/scene/object.cpp
             src/utils/color.cpp
     )
     target_include_directories(scene-layout-tests PRIVATE src)
