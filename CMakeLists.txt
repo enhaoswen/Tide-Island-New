@@ -44,6 +44,9 @@ set(SRC
         src/app/views/music_player.cpp
         src/app/views/music_player.hpp
         src/utils/get_type_name.hpp
+        src/scene/context.cpp
+        src/scene/context.hpp
+        src/scene/struct.hpp
 )
 
 add_executable(Tide-island ${SRC})
