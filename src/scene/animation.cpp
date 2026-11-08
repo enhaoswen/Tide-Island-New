@@ -103,31 +103,31 @@ Animator::Entry* Animator::acquire(Object::Context& ctx, Object::Handle h, Prop 
     return &entries_.back();
 }
 
-bool Animator::start(SAnimDesc& desc) {
-    Entry* e = acquire(desc.ctx, desc.h, desc.prop);
+bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Spring& s, float delay) {
+    Entry* e = acquire(ctx, h, p);
     if (!e)
         return false;
 
     if (e->mode == Mode::Timed)
         e->velocity = 0.f;
     e->mode   = Mode::Spring;
-    e->target = desc.to;
-    e->delay  = max(desc.delay, 0.f);
-    e->spring = {desc.spring->stiffness, desc.spring->damping, desc.spring->mass};
+    e->target = to;
+    e->delay  = std::max(delay, 0.f);
+    e->spring = {s.stiffness, s.damping, s.mass};
     return true;
 }
 
-bool Animator::start(TAnimDesc& desc) {
-    Entry* e = acquire(desc.ctx, desc.h, desc.prop);
+bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Timing& t, float delay) {
+    Entry* e = acquire(ctx, h, p);
     if (!e)
         return false;
 
     e->mode     = Mode::Timed;
-    e->ease     = desc.timing.ease;
+    e->ease     = t.ease;
     e->velocity = 0.f;
-    e->target   = desc.to;
-    e->delay    = max(desc.delay, 0.f);
-    e->timed    = {e->value, desc.timing.duration, 0.f};
+    e->target   = to;
+    e->delay    = std::max(delay, 0.f);
+    e->timed    = {e->value, t.duration, 0.f};
     return true;
 }
 

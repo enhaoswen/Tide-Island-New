@@ -31,29 +31,9 @@ struct Timing {
 
 
 class Animator {
-
-    struct SAnimDesc {
-        Object::Context& ctx;
-        Object::Handle   h;
-        Prop             prop{};
-        float            to{};
-        const Spring*    spring{};
-        float            delay{};
-    };
-
-    struct TAnimDesc {
-        Object::Context& ctx;
-        Object::Handle   h;
-        Prop             prop{};
-        float            to{};
-        const Timing&    timing{};
-        float            delay{};
-    };
-
 public:
-    bool start(SAnimDesc& desc);
-
-    bool start(TAnimDesc& desc);
+    bool start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Spring& s, float delay);
+    bool start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Timing& t, float delay);
 
     void cancel(Object::Handle h, Prop p); // stops where it is
     void cancel_all(Object::Handle h);

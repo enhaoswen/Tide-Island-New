@@ -2,18 +2,20 @@
 
 #include <algorithm>
 
+using namespace std;
+
 namespace Object {
 
 namespace {
 [[nodiscard]] uint8_t quantize_opacity(float v) {
-    v = std::clamp(v, 0.f, 1.f);
+    v = clamp(v, 0.f, 1.f);
     return static_cast<uint8_t>(v * 255.f + 0.5f);
 }
 
 }
 
-Context::Context(std::size_t reserve_nodes) {
-    nodes_.reserve(std::min<std::size_t>(reserve_nodes, kNone));
+Context::Context(size_t reserve_nodes) {
+    nodes_.reserve(min<size_t>(reserve_nodes, kNone));
 }
 
 uint16_t Context::alloc_node() {
@@ -30,7 +32,7 @@ uint16_t Context::alloc_node() {
     }
 
     Node&          n   = nodes_[i];
-    const uint16_t gen = n.gen; // already bumped when the slot was released
+    const uint16_t gen = n.gen;
     n                  = Node{};
     n.gen              = gen;
     ++live_;
@@ -142,7 +144,7 @@ void Context::destroy(Handle h) {
     const uint16_t root = h.id;
 
     if (n->flags & flag::root) {
-        std::erase(roots_, h);
+        erase(roots_, h);
     }
     else if (n->parent != kNone) {
         const uint16_t old_parent = unlink(root);
@@ -270,8 +272,8 @@ void Context::move_to_front(Handle h) {
         return;
 
     if (n->flags & flag::root) {
-        if (const auto it = std::find(roots_.begin(), roots_.end(), h); it != roots_.end())
-            std::rotate(it, it + 1, roots_.end());
+        if (const auto it = find(roots_.begin(), roots_.end(), h); it != roots_.end())
+            rotate(it, it + 1, roots_.end());
         return;
     }
     if (n->parent == kNone || n->next == kNone)
@@ -289,8 +291,8 @@ void Context::move_to_back(Handle h) {
         return;
 
     if (n->flags & flag::root) {
-        if (const auto it = std::find(roots_.begin(), roots_.end(), h); it != roots_.end())
-            std::rotate(roots_.begin(), it, it + 1);
+        if (const auto it = find(roots_.begin(), roots_.end(), h); it != roots_.end())
+            rotate(roots_.begin(), it, it + 1);
         return;
     }
     if (n->parent == kNone || n->prev == kNone)
@@ -424,10 +426,10 @@ float Context::radius_of(const Node& n) const {
     }
 }
 
-std::optional<float> Context::get_prop(Handle h, Prop p) const {
+optional<float> Context::get_prop(Handle h, Prop p) const {
     const Node* n = node(h);
     if (!n)
-        return std::nullopt;
+        return nullopt;
 
     switch (p) {
     case Prop::X:
@@ -443,7 +445,7 @@ std::optional<float> Context::get_prop(Handle h, Prop p) const {
     case Prop::Radius:
         if (n->kind == Kind::Rect || n->kind == Kind::Image)
             return radius_of(*n);
-        return std::nullopt;
+        return nullopt;
     case Prop::ColorR:
     case Prop::ColorG:
     case Prop::ColorB:
@@ -453,10 +455,10 @@ std::optional<float> Context::get_prop(Handle h, Prop p) const {
             return color_channel(rects_[n->data].color, ch);
         if (n->kind == Kind::Text)
             return color_channel(texts_[n->data].color, ch);
-        return std::nullopt;
+        return nullopt;
     }
     }
-    return std::nullopt;
+    return nullopt;
 }
 
 bool Context::set_prop(Handle h, Prop p, float v) {
@@ -472,14 +474,14 @@ bool Context::set_prop(Handle h, Prop p, float v) {
         n->frame.y = v;
         return true;
     case Prop::W:
-        v = std::max(v, 0.f);
+        v = max(v, 0.f);
         if (n->frame.width != v) {
             n->frame.width = v;
             mark_dirty(h.id);
         }
         return true;
     case Prop::H:
-        v = std::max(v, 0.f);
+        v = max(v, 0.f);
         if (n->frame.height != v) {
             n->frame.height = v;
             mark_dirty(h.id);
@@ -490,11 +492,11 @@ bool Context::set_prop(Handle h, Prop p, float v) {
         return true;
     case Prop::Radius:
         if (n->kind == Kind::Rect) {
-            rects_[n->data].radius = std::max(v, 0.f);
+            rects_[n->data].radius = max(v, 0.f);
             return true;
         }
         if (n->kind == Kind::Image) {
-            images_[n->data].radius = std::max(v, 0.f);
+            images_[n->data].radius = max(v, 0.f);
             return true;
         }
         return false;
@@ -536,12 +538,12 @@ TextView Context::text(Handle h) {
 //  animation glue / frame
 // ============================================================================
 
-bool Context::animate(Handle h, Prop p, float to, const Spring& s, float delay) {
-    return anim_.start(*this, h, p, to, s, delay);
+bool Context::animate(SAnimDesc desc) {
+    return anim_.start(*this, desc.h, desc.p, desc.to, desc.s, desc.delay);
 }
 
-bool Context::animate(Handle h, Prop p, float to, const Timing& t, float delay) {
-    return anim_.start(*this, h, p, to, t, delay);
+bool Context::animate(TAnimDesc desc) {
+    return anim_.start(*this, desc.h, desc.p, desc.to, desc.t, desc.delay);
 }
 
 void Context::update(float dt) {

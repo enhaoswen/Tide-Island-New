@@ -49,6 +49,7 @@ set(SRC
         src/scene/struct.hpp
         src/scene/animation.cpp
         src/scene/animation.hpp
+        src/scene/layout.cpp
 )
 
 add_executable(Tide-island ${SRC})

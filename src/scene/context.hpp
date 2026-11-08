@@ -1,5 +1,6 @@
 #pragma once
 
+#include "animation.hpp"
 #include "struct.hpp"
 
 #include <cstddef>
@@ -26,16 +27,32 @@ struct TextDesc {
     Color      color{};
 };
 
+struct SAnimDesc {
+    Handle h;
+    float to{};
+    const Spring& s;
+    float delay{};
+    Prop p;
+};
+
+struct TAnimDesc {
+    Handle h;
+    float to{};
+    const Timing& t;
+    float delay{};
+    Prop p;
+};
+
 template <class R>
 concept Renderer = requires(R& r, const Frame& f, const Color& c, const Texture& t,
     const FontHandle&          font, float     x)
-{
-    r.draw_rect(f, c, x /*radius*/, x /*opacity*/);
-    r.draw_image(f, t, x /*radius*/, x /*opacity*/);
-    r.draw_text(f, t, font, c, x /*opacity*/);
-    r.push_clip(f, x /*radius*/);
-    r.pop_clip();
-};
+    {
+        r.draw_rect(f, c, x /*radius*/, x /*opacity*/);
+        r.draw_image(f, t, x /*radius*/, x /*opacity*/);
+        r.draw_text(f, t, font, c, x /*opacity*/);
+        r.push_clip(f, x /*radius*/);
+        r.pop_clip();
+    };
 
 class Context;
 
@@ -210,8 +227,10 @@ public:
 
     void clear_layout(Handle h);
 
-    [[nodiscard]] Frame    frame(Handle h) const;
-    [[nodiscard]] Frame    absolute_frame(Handle h) const;
+    [[nodiscard]] Frame frame(Handle h) const;
+
+    [[nodiscard]] Frame absolute_frame(Handle h) const;
+
     [[nodiscard]] uint32_t tag(Handle h) const;
 
     [[nodiscard]] std::optional<float> get_prop(Handle h, Prop p) const;
@@ -225,21 +244,15 @@ public:
 
     [[nodiscard]] TextView text(Handle h);
 
-    // ===== animation ========================================================
-    // Return false if the handle is dead or the node has no such property.
-    bool animate(Handle h, Prop p, float to, const Spring& s, float delay = 0.f);
+    bool animate(SAnimDesc desc);
 
-    bool animate(Handle h, Prop p, float to, const Timing& t, float delay = 0.f);
+    bool animate(TAnimDesc desc);
 
     void               cancel_animation(Handle h, Prop p) { anim_.cancel(h, p); }
     [[nodiscard]] bool is_animating(Handle h, Prop p) const { return anim_.active(h, p); }
 
-    // ===== frame ============================================================
-    // animation step + layout + hover refresh (elements that move under a
-    // still pointer produce correct Hover events).
     void update(float dt);
 
-    // Re-lays out dirty subtrees. Returns true if any work was done.
     bool layout();
 
     template <Renderer R>
@@ -290,7 +303,6 @@ private:
 
     void set_flag(Handle h, uint16_t bit, bool on);
 
-    // ---- layout ----------------------------------------------------------------
     void measure(uint16_t i);
 
     void arrange(uint16_t i);
