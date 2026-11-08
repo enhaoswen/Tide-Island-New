@@ -18,7 +18,6 @@ struct Position {
     float x, y;
 };
 
-
 // Fonts.
 
 struct FontHandle {

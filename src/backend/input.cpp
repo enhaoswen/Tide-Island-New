@@ -2,20 +2,10 @@
 
 #include <algorithm>
 
-// Pointer state machine. All hover / click / drag behaviour lives here, so a new
-// interaction (double click, long press, ...) is one more branch in this file and
-// never touches node storage or types.
-//
-//   hovered_  top-most interactive node under the pointer
-//   pressed_  node that received the button-down (captures the pointer)
-//   dragging_ pressed_ moved past the drag threshold and is Draggable;
-//             while dragging, hover is frozen and events go to pressed_
-
 namespace Object {
 
 namespace {
 
-// Point in rounded rect (radius clamped to half the shorter side).
 [[nodiscard]] bool contains(float fx, float fy, float fw, float fh, float radius,
                             float px, float py) noexcept {
     if (fw <= 0.f || fh <= 0.f || px < fx || px > fx + fw || py < fy || py > fy + fh)
@@ -29,12 +19,9 @@ namespace {
     return dx * dx + dy * dy <= radius * radius;
 }
 
-} // namespace
+}
 
-// Front-to-back search with early exit: children are visited last-to-first, so
-// the first hit is the top-most one. Clip nodes prune their whole subtree when
-// the point is outside (children cannot be visible there anyway).
-uint16_t Context::hit_node(uint16_t i, float x, float y, float ox, float oy) const noexcept {
+uint16_t Context::hit_node(uint16_t i, float x, float y, float ox, float oy) const {
     const Node& n = nodes_[i];
     if (!(n.flags & flag::visible) || n.opacity == 0)
         return kNone; // what you cannot see you cannot click
@@ -75,8 +62,7 @@ void Context::emit(Handle target, EventType type, Button b, float dx, float dy) 
     events_.push_back(Event{target, n ? n->tag : 0u, px_, py_, dx, dy, type, b});
 }
 
-// Forget hovered / pressed nodes that were destroyed since the last call.
-void Context::validate_input() noexcept {
+void Context::validate_input() {
     if (hovered_ && !alive(hovered_))
         hovered_ = {};
     if (pressed_ && !alive(pressed_)) {
@@ -140,12 +126,12 @@ void Context::pointer_button(Button b, bool down) {
 
     if (down) {
         if (pressed_)
-            return; // one button at a time
+            return;
 
-        update_hover(); // hovered_ may be stale if the scene changed under a still pointer
+        update_hover();
         const Node* n = node(hovered_);
         if (!n || !(n->flags & (flag::clickable | flag::draggable)))
-            return; // top-most interactive node is hover-only: it swallows the press
+            return;
 
         pressed_        = hovered_;
         pressed_button_ = b;
@@ -165,7 +151,7 @@ void Context::pointer_button(Button b, bool down) {
     if (dragging_) {
         dragging_ = false;
         emit(p, EventType::DragEnd, b, 0.f, 0.f);
-        update_hover(); // hover was frozen during the drag; resync
+        update_hover();
         return;
     }
 
@@ -195,7 +181,7 @@ bool Context::poll_event(Event& out) {
     while (event_head_ < events_.size()) {
         const Event e = events_[event_head_++];
         if (!alive(e.target))
-            continue; // destroyed between emit and poll
+            continue;
         out = e;
         return true;
     }
@@ -204,4 +190,4 @@ bool Context::poll_event(Event& out) {
     return false;
 }
 
-} // namespace UI
+}

@@ -4,9 +4,6 @@
 
 namespace Object {
 
-// One DFS in sibling order == painter's order: z-order, group opacity and
-// clipping all fall out of the tree. State carried down: absolute origin,
-// accumulated opacity. The clip stack lives in the renderer.
 template <class R>
 void Context::draw_node(R& r, uint16_t i, float ox, float oy, float alpha) const {
     const Node& n = nodes_[i];
@@ -15,7 +12,7 @@ void Context::draw_node(R& r, uint16_t i, float ox, float oy, float alpha) const
 
     alpha *= static_cast<float>(n.opacity) * (1.f / 255.f);
     if (alpha <= 0.f)
-        return; // fully transparent: the whole subtree is invisible
+        return;
 
     Frame abs = n.frame;
     abs.x += ox;
