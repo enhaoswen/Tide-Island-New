@@ -51,7 +51,7 @@ struct Event {
 
 
 [[nodiscard]] inline std::pair<float, float> texture_extent(const Texture& t) noexcept {
-    return {static_cast<float>(t.width()), static_cast<float>(t.height())};
+    return {t.logical_width(), t.logical_height()};
 }
 
 [[nodiscard]] inline float& color_channel(Color& c, const unsigned i) noexcept { return c[i]; }

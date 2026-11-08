@@ -11,6 +11,7 @@ struct Texture::Impl {
     sg_view  view{};
     int      width{};
     int      height{};
+    float    scale{1.0f};
 
     void reset() {
         if (view.id)
@@ -18,9 +19,10 @@ struct Texture::Impl {
         if (image.id)
             sg_destroy_image(image);
 
-        view  = {};
-        image = {};
-        width = height = 0;
+        view   = {};
+        image  = {};
+        width  = height = 0;
+        scale  = 1.0f;
     }
 
     ~Impl() {
@@ -121,4 +123,21 @@ int Texture::height() const {
 
 uint32_t Texture::view_id() const {
     return impl ? impl->view.id : 0;
+}
+
+void Texture::set_scale(float scale) noexcept {
+    if (impl)
+        impl->scale = scale > 0.0f ? scale : 1.0f;
+}
+
+float Texture::scale() const noexcept {
+    return impl ? impl->scale : 1.0f;
+}
+
+float Texture::logical_width() const noexcept {
+    return impl ? static_cast<float>(impl->width) / impl->scale : 0.0f;
+}
+
+float Texture::logical_height() const noexcept {
+    return impl ? static_cast<float>(impl->height) / impl->scale : 0.0f;
 }

@@ -1,22 +1,25 @@
 #pragma once
 
+#include "scene/context.hpp"
 #include "utils/struct.hpp"
-
-// we will only include this header in main, so we can put what every header here.
-// no need to consider about header pollution
-#include "scene/i_used_to_have_a_dream"
 
 namespace StateManager {
 
 struct Resources {
     FontHandle main_font{};
-    Object::Handle<Object::Layout> root{};
 };
 
-void init(Resources& resources);
-// Center the root after animations, before laying out its children.
+void init(const Resources& resources);
+
+// Center the root on the surface; run every frame before layout so resize
+// animations stay centered.
 void update();
+
 void switch_state(StateType state);
+
+// Stop the active view and destroy the root.
 void stop();
 
-}
+[[nodiscard]] Object::Context& context();
+
+} // namespace StateManager

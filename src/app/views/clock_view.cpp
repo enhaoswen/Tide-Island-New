@@ -1,23 +1,32 @@
 #include "app/views/clock_view.hpp"
 #include "utils/log.hpp"
 #include "app/API.hpp"
+#include "app/state_manager.hpp"
 #include "backend/timer.hpp"
 
 #include <chrono>
 #include <format>
+#include <string>
 
 using namespace std;
 
 namespace {
 
-Object::Handle<Object::Text> time_text{};
-Timer::EventHandle           next_tick{};
-bool                         running{};
+Object::Handle     time_text{};
+Timer::EventHandle next_tick{};
+bool               running{};
+string             last{};
 
 void update() {
     const auto now = chrono::system_clock::now();
-    if (auto* text = time_text.get()) {
-        text->set_text(format("{:%H:%M}", chrono::current_zone()->to_local(now)));
+    auto&      ctx = StateManager::context();
+    auto       view = ctx.text(time_text);
+
+    // Re-rasterize only when the string actually changes.
+    const string s{format("{:%H:%M}", chrono::current_zone()->to_local(now))};
+    if (s != last) {
+        last = s;
+        view.set_text(s);
     }
 }
 
@@ -43,7 +52,7 @@ void schedule_next_tick() {
 
 } // namespace
 
-void ClockView::start(Object::Handle<Object::Layout> root, FontHandle font, std::source_location l){
+void ClockView::start(Object::Handle root, FontHandle font, std::source_location l) {
     if (!font.id) {
         Log::logger(Log::Error, "{}:{}: Invalid font id", l.file_name(), l.line());
         return;
@@ -56,26 +65,30 @@ void ClockView::start(Object::Handle<Object::Layout> root, FontHandle font, std:
 
     stop();
 
-    time_text = Object::add_text(TextDesc{
-        .text             = "",
-        .font             = font,
-        .color            = Color::White,
-        .horizontal_align = Align::Center,
-        .vertical_align   = Align::Center,
-    });
+    auto& ctx = StateManager::context();
 
+    Object::LayoutData layout{};
+    layout.align   = Object::Alignment::Center;
+    layout.justify = Object::Justify::Center;
+    ctx.set_layout(root, layout);
+
+    time_text = ctx.create_text(root, {});
+    ctx.text(time_text).set_font(font).set_color(Color::White);
+
+    last    = {};
     running = true;
     update();
     schedule_next_tick();
-    root->add_element(time_text, Align::Center, Object::SizeMode::Fill);
 }
 
 void ClockView::stop() {
     running = false;
     API::cancel_event(next_tick);
     next_tick = {};
-    Object::delete_element(time_text);
-    time_text = {};
+    if (time_text) {
+        StateManager::context().destroy(time_text);
+        time_text = {};
+    }
 }
 
 void ClockView::shutdown() {

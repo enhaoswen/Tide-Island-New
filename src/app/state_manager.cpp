@@ -1,8 +1,9 @@
 #include "state_manager.hpp"
+
 #include "API.hpp"
 #include "island.hpp"
-#include "views/clock_view.hpp"
 #include "backend/wayland.hpp"
+#include "views/clock_view.hpp"
 
 // Tide Island QS size
 
@@ -29,32 +30,26 @@
 namespace {
 
 StateManager::Resources resources;
-
-void resize_root(float value, AnimationTarget target, uint32_t duration = 300) {
-
-    resources.root->add_animation({
-        .to       = value,
-        .priority = 1,
-        .duration = duration,
-        .target   = target,
-    });
-}
+Object::Context         ctx{};
+Object::Handle          root{};
 
 }
 
-void StateManager::init(Resources& arg_resources) {
+void StateManager::init(const Resources& arg_resources) {
     resources = arg_resources;
-    update();
+}
+
+Object::Context& StateManager::context() {
+    return ctx;
 }
 
 void StateManager::update() {
-    if (auto* root = resources.root.get()) {
-        const auto size = Wayland::get_surface_size();
-        auto frame = root->get_frame();
-        frame.x = (static_cast<float>(size[0]) - frame.width) / 2.0f;
-        frame.y = 0;
-        root->set_frame(frame);
-    }
+    if (!root)
+        return;
+
+    const auto  size  = Wayland::get_surface_size();
+    const Frame frame = ctx.frame(root);
+    ctx.set_pos(root, (static_cast<float>(size[0]) - frame.width) * 0.5f, 0.0f);
 }
 
 void StateManager::switch_state(StateType state) {
@@ -63,29 +58,29 @@ void StateManager::switch_state(StateType state) {
     Island::set_state(state);
 
     if (state == StateType::Clock) {
-        API::resize(140,38);
-        resize_root(140, AnimationTarget::Width);
-        resize_root(38, AnimationTarget::Height);
-
-        ClockView::start(resources.root, resources.main_font);
+        API::resize(140, 38);
+        root = ctx.create_root(140.0f, 38.0f);
+        ClockView::start(root, resources.main_font);
     }
-
     else if (state == StateType::MusicPLayer) {
-        API::resize(410,165);
-        resize_root(410, AnimationTarget::Width);
-        resize_root(165, AnimationTarget::Height);
+        API::resize(410, 165);
+        root = ctx.create_root(410.0f, 165.0f);
     }
+
+    Island::request_redraw(true);
 }
 
 void StateManager::stop() {
-
     switch (Island::get_state()) {
-
     case StateType::Clock:
         ClockView::stop();
         break;
-
     default:
         break;
+    }
+
+    if (root) {
+        ctx.destroy(root);
+        root = {};
     }
 }

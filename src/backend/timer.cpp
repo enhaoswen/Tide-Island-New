@@ -3,7 +3,6 @@
 #include "backend/wayland.hpp"
 #include "utils/log.hpp"
 #include "command.hpp"
-#include "scene/i_used_to_have_a_dream"
 
 #include <chrono>
 #include <cstring>
@@ -125,7 +124,7 @@ void Timer::handle_events(std::source_location) {
     arm_next();
 }
 
-bool Timer::wait() {
+bool Timer::wait(bool animating) {
     const short wayland_events = Wayland::prepare_events();
 
     pollfd fds[] = {
@@ -148,7 +147,7 @@ bool Timer::wait() {
 
     int result{};
     // Keep frames advancing while animations run; sleep indefinitely when idle.
-    const int timeout_ms{Object::has_active_animations() ? 16 : -1};
+    const int timeout_ms{animating ? 16 : -1};
 
     do {
         result = poll(fds, 3, timeout_ms);
@@ -180,5 +179,5 @@ bool Timer::wait() {
     }
 
     const bool wayland_redraw{Wayland::get_wayland_redraw()};
-    return result == 0 || wayland_redraw || Object::has_active_animations();
+    return result == 0 || wayland_redraw || animating;
 }

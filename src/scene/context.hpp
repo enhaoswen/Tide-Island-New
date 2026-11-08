@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -79,6 +80,7 @@ public:
     [[nodiscard]] explicit operator bool() const;
 
     ImageView& set_texture(Texture t); // may change the Fit size -> re-layout
+    ImageView& set_image(std::string_view path); // loads then set_texture; no path stored
     ImageView& set_radius(float r);
 
     [[nodiscard]] float radius() const;
@@ -102,6 +104,7 @@ public:
     [[nodiscard]] explicit operator bool() const;
 
     TextView& set_texture(Texture t); // text is rendered to a texture by the caller
+    TextView& set_text(std::string_view s); // rasterizes with the stored font; no string stored
     TextView& set_font(FontHandle f);
 
     TextView& set_color(const Color& c);
@@ -143,6 +146,7 @@ public:
     Handle create_text(Handle parent = {}, TextDesc desc = {});
 
     void                      destroy(Handle h); // whole subtree; stale handles become invalid
+    void                      clear();           // destroy every root
     [[nodiscard]] bool        alive(Handle h) const { return node(h) != nullptr; }
     [[nodiscard]] std::size_t node_count() const { return live_; }
 
@@ -242,6 +246,7 @@ public:
 
     void               cancel_animation(Handle h, Prop p) { anim_.cancel(h, p); }
     [[nodiscard]] bool is_animating(Handle h, Prop p) const { return anim_.active(h, p); }
+    [[nodiscard]] bool animating() const { return !anim_.empty(); }
 
     void update(float dt);
 
@@ -263,7 +268,6 @@ private:
     friend class TextView;
     friend struct Drawer;
 
-    // ---- storage -------------------------------------------------------------
     [[nodiscard]] Node* node(Handle h) {
         return h.id < nodes_.size() && nodes_[h.id].gen == h.gen ? &nodes_[h.id] : nullptr;
     }

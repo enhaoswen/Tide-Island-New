@@ -1,5 +1,7 @@
 #include "context.hpp"
 
+#include "graphics/renderer.hpp"
+
 #include <algorithm>
 
 using namespace std;
@@ -172,6 +174,11 @@ void Context::destroy(Handle h) {
         cur = up;
     }
 
+}
+
+void Context::clear() {
+    while (!roots_.empty())
+        destroy(roots_.back());
 }
 
 void Context::link_last(uint16_t parent, uint16_t child) {
@@ -551,6 +558,22 @@ void Context::update(float dt) {
     const bool laid_out = layout();
     if (animated || laid_out)
         update_hover();
+}
+
+ImageView& ImageView::set_image(std::string_view path) {
+    if (auto* d = data()) {
+        d->texture = Renderer::prepare_image(path);
+        ctx_->mark_dirty(h_.id);
+    }
+    return *this;
+}
+
+TextView& TextView::set_text(std::string_view s) {
+    if (auto* d = data()) {
+        d->texture = Renderer::prepare_text(s, d->font);
+        ctx_->mark_dirty(h_.id);
+    }
+    return *this;
 }
 
 }

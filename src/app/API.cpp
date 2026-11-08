@@ -1,7 +1,6 @@
 #include "app/API.hpp"
 #include "backend/wayland.hpp"
 #include "graphics/renderer.hpp"
-#include "scene/i_used_to_have_a_dream"
 #include "backend/timer.hpp"
 #include "app/island.hpp"
 #include "app/views/clock_view.hpp"
@@ -10,12 +9,23 @@
 #include "utils/struct.hpp"
 #include "graphics/text.hpp"
 #include "backend/egl_vendor.hpp"
+#include "scene/render.hpp"
 
 using namespace std;
+using namespace std::chrono;
 
 namespace {
 
 const IslandConf* island{};
+
+Renderer::GpuRenderer renderer{};
+
+// Wayland reports pointer presses as (x, y, is-left). Forward them to the scene.
+void handle_click(float x, float y, bool left) {
+    auto& ctx = StateManager::context();
+    ctx.pointer_move(x, y);
+    ctx.pointer_button(left ? Object::Button::Left : Object::Button::Right, true);
+}
 
 }
 
@@ -42,7 +52,7 @@ void API::init() {
     Timer::init();
     Log::logger(Log::Debug, "Timer initialized successfully");
 
-    Wayland::set_report_click(Object::click);
+    Wayland::set_report_click(handle_click);
 
     Log::logger(Log::Debug, "Initialization completed successfully");
 }
@@ -64,7 +74,7 @@ void API::resize(std::uint16_t width, std::uint16_t height) {
     Island::set_size(width, height);
 }
 
-Timer::EventHandle API::push_event(std::chrono::microseconds duration, void (*callback)(), float priority) {
+Timer::EventHandle API::push_event(microseconds duration, void (*callback)(), float priority) {
     return Timer::push(duration, callback, priority);
 }
 
@@ -74,29 +84,38 @@ bool API::cancel_event(Timer::EventHandle event) {
 
 void API::clear_status() {
     ClockView::stop();
-    Object::clear();
+    StateManager::context().clear();
 }
 
-void API::run(){
+void API::run() {
+    auto last = steady_clock::now();
 
     while (island->is_running) {
 
         if (island->need_redraw) {
             Island::request_redraw(false);
-            Object::update(StateManager::update);
+
+            const auto  now   = steady_clock::now();
+            const float dt_ms = static_cast<float>(duration_cast<microseconds>(now - last).count()) / 1000.0f;
+            last              = now;
+
+            auto& ctx = StateManager::context();
+            StateManager::update(); // center the root on the surface
+            ctx.update(dt_ms);      // step animations, then layout
+
             Renderer::begin_frame();
-            Object::draw();
+            Object::draw(ctx, renderer);
             Renderer::end_frame();
         }
-        
-        Island::request_redraw(Timer::wait() || island->need_redraw);
+
+        Island::request_redraw(Timer::wait(StateManager::context().animating()) || island->need_redraw);
     }
 }
 
 void API::shutdown() {
     ClockView::shutdown();
+    StateManager::stop();
     Timer::shutdown();
-    Object::clear();
     Text::shutdown();
     Renderer::shutdown();
     Wayland::shutdown();

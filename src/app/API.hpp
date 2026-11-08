@@ -1,9 +1,10 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
+#include <string_view>
 
 #include "utils/struct.hpp"
-#include "scene/i_used_to_have_a_dream"
 #include "backend/event_handle.hpp"
 
 namespace API {
@@ -20,4 +21,4 @@ void run();
 void select_for_wayland();
 
 void shutdown();
-}
+} // namespace API

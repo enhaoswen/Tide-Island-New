@@ -23,5 +23,7 @@ void shutdown();
 
 void handle_events(std::source_location location = std::source_location::current());
 int get_timer_fd();
-bool wait();
+// Blocks until an event or, when `animating` is true, the next frame tick.
+// Returns whether a redraw is needed.
+bool wait(bool animating);
 }

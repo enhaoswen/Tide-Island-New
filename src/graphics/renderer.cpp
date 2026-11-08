@@ -13,9 +13,12 @@
 
 #include <GLES3/gl3.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <string>
+#include <vector>
 
 #ifdef __GLIBC__
 #include <malloc.h>
@@ -62,11 +65,15 @@ sg_shader   image_shader{};
 sg_pipeline image_pipeline{};
 sg_buffer   image_vertex_buffer{};
 
-sg_shader     text_shader{};
-sg_pipeline   text_pipeline{};
-sg_sampler    image_sampler{};
-sg_sampler    text_sampler{};
-array<int, 4> current_clip{-1, -1, -1, -1};
+sg_shader   text_shader{};
+sg_pipeline text_pipeline{};
+sg_sampler  image_sampler{};
+sg_sampler  text_sampler{};
+
+// Scissor state. current_clip is the rect currently applied, expressed in
+// buffer pixels; clip_stack holds the rect to restore on each pop_clip.
+array<int, 4>          current_clip{-1, -1, -1, -1};
+vector<array<int, 4> > clip_stack{};
 
 RectVert rectangle_vertices(
     const Frame           frame,
@@ -148,51 +155,36 @@ sg_swapchain swapchain() {
     return result;
 }
 
-Frame calculate_frame(
-    const Frame frame,
-    const Align horizontal_align,
-    const Align vertical_align,
-    const float image_width,
-    const float image_height,
-    const bool  resize
-    ) {
+[[nodiscard]] float clamp_radius(float radius, const Frame& frame) noexcept {
+    return clamp(radius, 0.0f, min(frame.width, frame.height) * 0.5f);
+}
 
-    Frame result{};
+// Logical frame -> scissor rect in buffer pixels, clamped to the surface.
+array<int, 4> frame_to_scissor(const Frame& frame) {
+    const auto  surface = Wayland::get_surface_size();
+    const auto  buffer  = Wayland::get_buffer_size();
+    const float scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
+    const float scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
+    const int   x{static_cast<int>(round(clamp(frame.x, 0.0f, static_cast<float>(surface[0])) * scale_x))};
+    const int   y{static_cast<int>(round(clamp(frame.y, 0.0f, static_cast<float>(surface[1])) * scale_y))};
+    const int   right{static_cast<int>(round(clamp(frame.x + frame.width, 0.0f, static_cast<float>(surface[0])) * scale_x))};
+    const int   bottom{static_cast<int>(round(clamp(frame.y + frame.height, 0.0f, static_cast<float>(surface[1])) * scale_y))};
+    return {x, y, max(0, right - x), max(0, bottom - y)};
+}
 
-    result.width  = image_width;
-    result.height = image_height;
+array<int, 4> intersect_scissor(const array<int, 4>& a, const array<int, 4>& b) noexcept {
+    const int x      = max(a[0], b[0]);
+    const int y      = max(a[1], b[1]);
+    const int right  = min(a[0] + a[2], b[0] + b[2]);
+    const int bottom = min(a[1] + a[3], b[1] + b[3]);
+    return {x, y, max(0, right - x), max(0, bottom - y)};
+}
 
-    if (resize) {
-
-        const float scale_x{frame.width / image_width};
-        const float scale_y{frame.height / image_height};
-        const float scale{min(scale_x, scale_y)};
-
-        result.width  = image_width * scale;
-        result.height = image_height * scale;
-    }
-
-    if (horizontal_align == Align::Left) {
-        result.x = frame.x;
-    }
-    else if (horizontal_align == Align::Center) {
-        result.x = frame.x + (frame.width - result.width) / 2;
-    }
-    else if (horizontal_align == Align::Right) {
-        result.x = frame.x + frame.width - result.width;
-    }
-
-    if (vertical_align == Align::Left) {
-        result.y = frame.y;
-    }
-    else if (vertical_align == Align::Center) {
-        result.y = frame.y + (frame.height - result.height) / 2;
-    }
-    else if (vertical_align == Align::Right) {
-        result.y = frame.y + frame.height - result.height;
-    }
-
-    return result;
+void apply_scissor(const array<int, 4>& clip) {
+    if (clip == current_clip)
+        return;
+    sg_apply_scissor_rect(clip[0], clip[1], clip[2], clip[3], true);
+    current_clip = clip;
 }
 
 } // namespace
@@ -301,23 +293,13 @@ void Renderer::begin_frame() {
     pass.swapchain                    = swapchain();
 
     sg_begin_pass(&pass);
-    current_clip = {-1, -1, -1, -1};
-}
 
-void Renderer::set_clip(const Frame& frame) {
-    const auto          surface = Wayland::get_surface_size();
-    const auto          buffer  = Wayland::get_buffer_size();
-    const float         scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
-    const float         scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
-    const int           x{static_cast<int>(round(clamp(frame.x, 0.0f, static_cast<float>(surface[0])) * scale_x))};
-    const int           y{static_cast<int>(round(clamp(frame.y, 0.0f, static_cast<float>(surface[1])) * scale_y))};
-    const int           right{static_cast<int>(round(clamp(frame.x + frame.width, 0.0f, static_cast<float>(surface[0])) * scale_x))};
-    const int           bottom{static_cast<int>(round(clamp(frame.y + frame.height, 0.0f, static_cast<float>(surface[1])) * scale_y))};
-    const array<int, 4> clip{x, y, max(0, right - x), max(0, bottom - y)};
-    if (clip != current_clip) {
-        sg_apply_scissor_rect(clip[0], clip[1], clip[2], clip[3], true);
-        current_clip = clip;
-    }
+    // Reset the scissor to the whole buffer; sokol may retain state from the
+    // previous pass, so be explicit rather than relying on defaults.
+    const auto buffer = Wayland::get_buffer_size();
+    current_clip      = {0, 0, static_cast<int>(buffer[0]), static_cast<int>(buffer[1])};
+    sg_apply_scissor_rect(0, 0, static_cast<int>(buffer[0]), static_cast<int>(buffer[1]), true);
+    clip_stack.clear();
 }
 
 void Renderer::end_frame() {
@@ -327,15 +309,52 @@ void Renderer::end_frame() {
     Wayland::swap_buffer();
 }
 
-void Renderer::draw_rectangle(const RectDesc& desc) {
+Texture Renderer::prepare_image(string_view path) {
+    // stbi_load needs a null-terminated filename; string_view does not guarantee
+    // one, so copy. Image loading is rare (startup), so the copy is negligible.
+    int                                                         width{}, height{}, channels{};
+    const unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels{
+        stbi_load(string{path}.c_str(), &width, &height, &channels, 4),
+        &stbi_image_free
+    };
+    if (!pixels) {
+        Log::fatal(R"_(Failed to load picture, path="{}")_", path);
+    }
+    // stbi_load guarantees positive dimensions and an allocation that fits size_t.
+    // Texture::upload validates the dimensions and byte count at the upload boundary.
+    const size_t size{static_cast<size_t>(width) * static_cast<size_t>(height) * 4};
 
-    const float max_r{min(desc.frame.width, desc.frame.height) * 0.5f};
-    const float radius{clamp(desc.radius, 0.0f, max_r)};
+    Texture texture{};
+    texture.upload(width, height, Texture::Format::RGBA8, {pixels.get(), size});
+    return texture;
+}
 
-    const RectVert vertices{rectangle_vertices(desc.frame, desc.color.to_rgba())};
+Texture Renderer::prepare_text(string_view text, FontHandle font) {
+    const float        scale{Wayland::get_scale()};
+    const Text::Bitmap bitmap{Text::draw(text, font, scale)};
+    if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
+        return {};
+    }
+    if (bitmap.width > static_cast<unsigned>(numeric_limits<int>::max()) ||
+        bitmap.height > static_cast<unsigned>(numeric_limits<int>::max())) {
+        Log::fatal("Text bitmap dimensions are too large");
+    }
+
+    Texture texture{};
+    texture.upload(static_cast<int>(bitmap.width), static_cast<int>(bitmap.height),
+        Texture::Format::R8, bitmap.pixels);
+    texture.set_scale(scale);
+    return texture;
+}
+
+void Renderer::GpuRenderer::draw_rect(const Frame& frame, const Color& color, float radius, float opacity) {
+    auto rgba = color.to_rgba();
+    rgba[3]   *= opacity;
+
+    const RectVert vertices{rectangle_vertices(frame, rgba)};
     const int      offset{sg_append_buffer(rect_vertex_buffer, SG_RANGE(vertices))};
     if (sg_query_buffer_overflow(rect_vertex_buffer)) {
-        Log::fatal("Vertex bufer overflow");
+        Log::fatal("Vertex buffer overflow");
     }
 
     sg_bindings bindings{};
@@ -344,50 +363,18 @@ void Renderer::draw_rectangle(const RectDesc& desc) {
     sg_apply_pipeline(rectangle_pipeline);
     sg_apply_bindings(&bindings);
     const auto project     = projection();
-    const auto radius_data = radius_uniform<rect_radius_uniform_t>(desc.frame, radius);
+    const auto radius_data = radius_uniform<rect_radius_uniform_t>(frame, clamp_radius(radius, frame));
     sg_apply_uniforms(UB_rect_proj_uniform, SG_RANGE(project));
     sg_apply_uniforms(UB_rect_radius_uniform, SG_RANGE(radius_data));
     sg_draw(0, 4, 1);
 }
 
-void Renderer::prepare_image(const ImageDesc& desc, Texture& texture) {
-    int                                                         width{}, height{}, channels{};
-    const unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels{
-        stbi_load(desc.path.c_str(), &width, &height, &channels, 4),
-        &stbi_image_free
-    };
-    if (!pixels) {
-        Log::fatal(R"_(Failed to load picture, path="{}")_", desc.path);
-    }
-    // stbi_load guarantees positive dimensions and an allocation that fits size_t.
-    // Texture::upload validates the dimensions and byte count at the upload boundary.
-    const size_t size{static_cast<size_t>(width) * static_cast<size_t>(height) * 4};
-    texture.upload(width, height, Texture::Format::RGBA8, {pixels.get(), size});
-}
-
-void Renderer::prepare_text(const TextDesc& desc, Texture& texture) {
-    const auto bitmap = Text::draw(desc.text, desc.font, Wayland::get_scale());
-    if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
-        texture.reset();
+void Renderer::GpuRenderer::draw_image(const Frame& frame, const Texture& texture, float radius, float opacity) {
+    if (!texture.valid())
         return;
-    }
-    if (bitmap.width > static_cast<unsigned>(numeric_limits<int>::max()) ||
-        bitmap.height > static_cast<unsigned>(numeric_limits<int>::max())) {
-        Log::fatal("Text bitmap dimensions are too large");
-    }
-    texture.upload(static_cast<int>(bitmap.width), static_cast<int>(bitmap.height),
-        Texture::Format::R8, bitmap.pixels);
-}
 
-void Renderer::draw_image(const ImageDesc& desc, const Texture& texture) {
-    if (!texture.valid()) {
-        return;
-    }
-    const ImgVert vertices = image_vertices(calculate_frame(
-        desc.frame, desc.horizontal_align, desc.vertical_align,
-        static_cast<float>(texture.width()), static_cast<float>(texture.height()), true
-        ));
-    const int offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
+    const ImgVert vertices{image_vertices(frame)};
+    const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
     if (sg_query_buffer_overflow(image_vertex_buffer)) {
         Log::fatal("Image vertex buffer overflow");
     }
@@ -402,28 +389,21 @@ void Renderer::draw_image(const ImageDesc& desc, const Texture& texture) {
 
     const auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
-    const auto radius_data = radius_uniform<img_radius_uniform_t>(desc.frame, desc.radius);
+    const auto radius_data = radius_uniform<img_radius_uniform_t>(frame, clamp_radius(radius, frame));
     sg_apply_uniforms(UB_img_radius_uniform, SG_RANGE(radius_data));
+
+    img_params_t params{};
+    params.tint[0] = params.tint[1] = params.tint[2] = 1.0f;
+    params.tint[3] = opacity;
+    sg_apply_uniforms(UB_img_params, SG_RANGE(params));
     sg_draw(0, 4, 1);
 }
 
-void Renderer::draw_text(const TextDesc& desc, const Texture& texture) {
-    if (!texture.valid()) {
+void Renderer::GpuRenderer::draw_text(const Frame& frame, const Texture& texture, FontHandle /*font*/, const Color& color, float opacity) {
+    if (!texture.valid())
         return;
-    }
-    const auto  surface_size = Wayland::get_surface_size();
-    const auto  buffer_size  = Wayland::get_buffer_size();
-    const float scale_x{static_cast<float>(buffer_size[0]) / static_cast<float>(surface_size[0])};
-    const float scale_y{static_cast<float>(buffer_size[1]) / static_cast<float>(surface_size[1])};
-    Frame       new_frame = calculate_frame(
-        desc.frame, desc.horizontal_align, desc.vertical_align,
-        static_cast<float>(texture.width()) / scale_x,
-        static_cast<float>(texture.height()) / scale_y, false
-        );
-    new_frame.x = round(new_frame.x * scale_x) / scale_x;
-    new_frame.y = round(new_frame.y * scale_y) / scale_y;
 
-    const ImgVert vertices{image_vertices(new_frame)};
+    const ImgVert vertices{image_vertices(frame)};
     const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
     if (sg_query_buffer_overflow(image_vertex_buffer)) {
         Log::fatal("Text vertex buffer overflow");
@@ -439,9 +419,27 @@ void Renderer::draw_text(const TextDesc& desc, const Texture& texture) {
 
     const auto project = projection();
     sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
+
+    const auto    rgba = color.to_rgba();
     text_params_t params{};
-    const auto    color = desc.color.to_rgba();
-    copy(color.begin(), color.end(), params.color);
+    copy(rgba.begin(), rgba.end(), params.color);
+    params.color[3] *= opacity;
     sg_apply_uniforms(UB_text_params, SG_RANGE(params));
     sg_draw(0, 4, 1);
+}
+
+void Renderer::GpuRenderer::push_clip(const Frame& frame, float /*radius*/) {
+    // Rounded corners are clipped in the fragment shaders; the scissor only
+    // bounds the rectangular extent, so radius is not needed here.
+    const array<int, 4> next{intersect_scissor(current_clip, frame_to_scissor(frame))};
+    clip_stack.push_back(current_clip);
+    apply_scissor(next);
+}
+
+void Renderer::GpuRenderer::pop_clip() {
+    if (clip_stack.empty())
+        return;
+    const array<int, 4> prev{clip_stack.back()};
+    clip_stack.pop_back();
+    apply_scissor(prev);
 }

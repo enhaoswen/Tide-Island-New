@@ -71,6 +71,10 @@ layout(binding = 3) uniform img_radius_uniform {
     float radius;
 };
 
+layout(binding = 4) uniform img_params {
+    vec4 tint;
+};
+
 out vec4 frag_color;
 
 void main() {
@@ -80,7 +84,7 @@ void main() {
     float px = fwidth(dist) * 0.5;
     float alpha = 1.0 - smoothstep(-px, px, dist);
     vec4 color = texture(sampler2D(tex, smp), uv);
-    frag_color = vec4(color.rgb, color.a * alpha);
+    frag_color = vec4(color.rgb, color.a * tint.a * alpha);
 }
 @end
 

@@ -39,9 +39,21 @@ public:
 
     void upload(int width, int height, Format format, std::span<const std::uint8_t> pixels);
 
+    // Content rasterized for high-DPI is uploaded at scale (physical size), while
+    // the scene graph lays out in logical size. Record the ratio so callers can
+    // recover the logical extent; defaults to 1.0 (logical == physical).
+    void set_scale(float scale) noexcept;
+
+    [[nodiscard]] float scale() const noexcept;
+
     [[nodiscard]] bool valid() const;
 
     [[nodiscard]] int width() const;
 
     [[nodiscard]] int height() const;
+
+    // Physical size divided by scale; used by layout, not by the GPU.
+    [[nodiscard]] float logical_width() const noexcept;
+
+    [[nodiscard]] float logical_height() const noexcept;
 };

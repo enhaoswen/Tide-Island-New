@@ -1,8 +1,8 @@
+#include "state_manager.hpp"
 #include "app/API.hpp"
 #include "scene/context.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
-#include "state_manager.hpp"
 
 using namespace std;
 
@@ -12,6 +12,8 @@ namespace {
 }
 
 int main() {
+
+    // init
 
     print(
         R"_(
@@ -37,9 +39,11 @@ int main() {
 
     API::init();
 
+    // prepare resource
+
     const auto main_font = API::load_font("Sans Serif", 18);
 
-    StateManager::init(resources);
+    StateManager::init({main_font});
 
     StateManager::switch_state(StateType::Clock);
 

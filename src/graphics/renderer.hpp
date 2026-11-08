@@ -1,8 +1,10 @@
 #pragma once
 
+#include "graphics/texture.hpp"
+#include "utils/color.hpp"
 #include "utils/struct.hpp"
 
-class Texture;
+#include <string_view>
 
 namespace Renderer {
 
@@ -15,21 +17,26 @@ void begin_frame();
 
 void end_frame();
 
-// Logical scene coordinates, clipped to the surface. Call inside a render pass.
-void set_clip(const Frame& frame);
+// Content -> texture. String / path handling lives here (not in the scene
+// graph), because font rasterization and image decoding are renderer concerns.
+// Text is rasterized at the surface scale and tagged with it so the scene graph
+// can recover logical dimensions for layout.
+Texture prepare_image(std::string_view path);
 
-void prepare_image(const ImageDesc& desc, Texture& texture);
+Texture prepare_text(std::string_view text, FontHandle font);
 
-void prepare_text(const TextDesc& desc, Texture& texture);
+// Satisfies Object::Renderer (see scene/render.hpp). Stateless: all GL state is
+// internal to the renderer translation unit, so a single instance is enough.
+struct GpuRenderer {
+    void draw_rect(const Frame& frame, const Color& color, float radius, float opacity);
 
-void draw_rectangle(const RectDesc& desc);
+    void draw_image(const Frame& frame, const Texture& texture, float radius, float opacity);
 
-void draw_image(const ImageDesc& desc, const Texture& texture);
+    void draw_text(const Frame& frame, const Texture& texture, FontHandle font, const Color& color, float opacity);
 
-void draw_text(const TextDesc& desc, const Texture& texture);
+    void push_clip(const Frame& frame, float radius);
 
-std::pair<float, float> actual_size(ImageDesc desc);
+    void pop_clip();
+};
 
-std::pair<float, float> actual_size(TextDesc desc);
-
-}
+} // namespace Renderer
