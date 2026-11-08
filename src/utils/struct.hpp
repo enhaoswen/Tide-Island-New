@@ -38,41 +38,6 @@ struct Font {
     std::uint16_t size{};
 };
 
-// Scene descriptors.
-
-struct RectDesc {
-    Frame frame{};
-    float radius{};
-    Color color{};
-};
-
-struct ImageDesc {
-    Position pos{};
-    std::string path{};
-    float       radius{};
-
-    // If true, the image is scaled proportionally to fit the given size.
-    // If false, the image keeps its original size and may be cropped.
-    bool        fit{true};
-};
-
-struct TextDesc {
-    Position pos{};
-    std::string text{};
-    FontHandle  font{};
-    Color       color{};
-    bool        fit{true};
-};
-
-struct LayoutDesc {
-    Frame frame{};
-    float radius{};
-    float spacing{};
-    Color background{0, 0, 0, 0};
-    Align cross_align{Align::Center};
-    bool  vertical{};
-    bool  fit{true};
-};
 
 // Animation.
 

@@ -177,7 +177,7 @@ public:
     }
 
     void release(uint16_t i) {
-        items_[i] = T{}; // drop resources (e.g. textures) right away
+        items_[i] = T{};
         free_.push_back(i);
     }
 
