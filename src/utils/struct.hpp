@@ -3,28 +3,19 @@
 #include "color.hpp"
 
 #include <chrono>
-#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 
-// Shared scene descriptors, animation data, and application state.
-
-// Geometry and input.
-
-using ClickCallback = std::function<void()>;
-
-// Positions and sizes use floating point values for animation.
 struct Frame {
-    float x{}, y{}, width{}, height{};
+    float x, y, width, height = std::numeric_limits<float>::max();
 
     bool operator==(const Frame&) const = default;
 };
 
-enum struct Align : std::uint8_t {
-    Left,
-    Center,
-    Right,
+struct Position {
+    float x, y;
 };
 
 // Fonts.
@@ -34,74 +25,10 @@ struct FontHandle {
 };
 
 struct Font {
-    std::string path{};
+    std::string   path{};
     std::uint16_t size{};
 };
 
-// Scene descriptors.
-
-struct RectDesc {
-    Frame frame{};
-    float radius{};
-    Color color{};
-};
-
-struct ImageDesc {
-    Frame       frame{};
-    float       radius{};
-    std::string path{};
-    Align       horizontal_align{};
-    Align       vertical_align{};
-};
-
-struct TextDesc {
-    Frame       frame{};
-    std::string text{};
-    FontHandle  font{};
-    Color       color{};
-    Align       horizontal_align{};
-    Align       vertical_align{};
-};
-
-struct LayoutDesc {
-    Frame frame{};
-    float spacing{};
-    bool  vertical{};
-    Align cross_align{Align::Center};
-    Color background{0, 0, 0, 0};
-    float radius{};
-};
-
-// Animation.
-
-enum struct AnimationTarget : std::uint8_t {
-    Width,
-    Height,
-    X,
-    Y,
-    Radius,
-    ColorR,
-    ColorG,
-    ColorB,
-    ColorA,
-};
-
-struct AnimationDesc {
-    float           to{};
-    float           priority{};
-    std::uint32_t   duration{}; // Milliseconds.
-    AnimationTarget target{};
-};
-
-// Runtime state for an animation.
-struct Animation {
-    float                                 from{};
-    float                                 to{};
-    float*                                target_ptr{};
-    float                                 priority{};
-    std::uint32_t                         duration{}; // Milliseconds.
-    std::chrono::steady_clock::time_point start_time{};
-};
 
 // Application state.
 

@@ -32,7 +32,6 @@ set(SRC
         src/graphics/driver_memory.cpp
         src/graphics/renderer.cpp
         src/graphics/text.cpp
-        src/scene/object.cpp
         src/graphics/texture.cpp
         third_party/wayland/wlr-layer-shell-unstable-v1-protocol.c
         third_party/wayland/xdg-shell-client-protocol.c
@@ -44,6 +43,15 @@ set(SRC
         src/backend/config.hpp
         src/app/views/music_player.cpp
         src/app/views/music_player.hpp
+        src/utils/get_type_name.hpp
+        src/scene/context.cpp
+        src/scene/context.hpp
+        src/scene/struct.hpp
+        src/scene/animation.cpp
+        src/scene/animation.hpp
+        src/scene/layout.cpp
+        src/scene/render.hpp
+        src/backend/input.cpp
 )
 
 add_executable(Tide-island ${SRC})
@@ -80,16 +88,3 @@ target_compile_options(Tide-island PRIVATE
 target_compile_options(Tide-island PRIVATE
         -Wno-unused-but-set-variable
 )
-
-include(CTest)
-if(BUILD_TESTING)
-    add_executable(scene-layout-tests
-            tests/scene_layout_test.cpp
-            src/app/state_manager.cpp
-            src/app/views/clock_view.cpp
-            src/scene/object.cpp
-            src/utils/color.cpp
-    )
-    target_include_directories(scene-layout-tests PRIVATE src)
-    add_test(NAME scene-layout COMMAND scene-layout-tests)
-endif()

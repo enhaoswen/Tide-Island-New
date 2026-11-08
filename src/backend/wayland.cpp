@@ -546,7 +546,7 @@ void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int3
         EGL_BLUE_SIZE, 8,
         EGL_ALPHA_SIZE, 8,
         EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-        EGL_NONE
+        EGL_NONE,
     };
 
     EGLint count{};
