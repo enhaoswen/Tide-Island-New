@@ -44,17 +44,6 @@ struct TAnimDesc {
     Prop          p;
 };
 
-template <class R>
-concept Renderer = requires(R& r, const Frame& f, const Color& c, const Texture& t,
-    const FontHandle&          font, float     x)
-    {
-        r.draw_rect(f, c, x /*radius*/, x /*opacity*/);
-        r.draw_image(f, t, x /*radius*/, x /*opacity*/);
-        r.draw_text(f, t, font, c, x /*opacity*/);
-        r.push_clip(f, x /*radius*/);
-        r.pop_clip();
-    };
-
 class Context;
 
 class RectView {
@@ -258,9 +247,6 @@ public:
 
     bool layout();
 
-    template <Renderer R>
-    void draw(R& renderer) const;
-
     void pointer_move(float x, float y);
 
     void pointer_button(Button b, bool down);
@@ -275,6 +261,7 @@ private:
     friend class RectView;
     friend class ImageView;
     friend class TextView;
+    friend struct Drawer;
 
     // ---- storage -------------------------------------------------------------
     [[nodiscard]] Node* node(Handle h) {
@@ -295,12 +282,11 @@ private:
 
     [[nodiscard]] Handle spawn(Kind kind, uint16_t data, const Frame& frame, Handle parent);
 
-    // ---- tree helpers ----------------------------------------------------------
     void link_last(uint16_t parent, uint16_t child);
 
     void link_first(uint16_t parent, uint16_t child);
 
-    uint16_t unlink(uint16_t child); // returns the old parent
+    uint16_t unlink(uint16_t child);
     void     mark_dirty(uint16_t i);
 
     void set_flag(Handle h, uint16_t bit, bool on);
@@ -316,9 +302,6 @@ private:
     [[nodiscard]] GrowParams grow_params(uint16_t id, Axis axis) const;
 
     [[nodiscard]] float radius_of(const Node& n) const;
-
-    template <class R>
-    void draw_node(R& r, uint16_t i, float ox, float oy, float alpha) const;
 
     [[nodiscard]] uint16_t hit_node(uint16_t i, float x, float y, float ox, float oy) const;
 

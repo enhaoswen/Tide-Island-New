@@ -1,5 +1,5 @@
 #include "app/API.hpp"
-#include "scene/object.hpp"
+#include "scene/context.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 #include "state_manager.hpp"
@@ -9,7 +9,7 @@ using namespace std;
 namespace {
 
 
-} // namespace
+}
 
 int main() {
 
@@ -26,8 +26,7 @@ int main() {
         o888o     o888o `Y8bod88P" `Y8bod8P'      o888o 8""888P' o888o `Y888""8o o888o o888o `Y8bod88P"
 
 )_"
-    );
-
+        );
 
     frame_logger(Log::Debug,
         "This build was compiled in debug mode.",
