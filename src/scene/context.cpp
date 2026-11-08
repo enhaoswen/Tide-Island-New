@@ -63,12 +63,14 @@ void Context::release_node(uint16_t i) {
     if (n.layout != kNone)
         layouts_.release(n.layout);
 
-    const uint16_t next_gen = static_cast<uint16_t>(n.gen + 1);
-    n                       = Node{};
-    n.gen                   = next_gen; // invalidates every outstanding Handle
-    n.flags                 = 0;
-    n.next                  = free_head_; // free-list link
-    free_head_              = i;
+    if (!grow_.empty())
+        grow_.erase(i);
+
+    n          = Node{};
+    n.gen      = n.gen++;
+    n.flags    = 0;
+    n.next     = free_head_;
+    free_head_ = i;
     --live_;
 }
 
@@ -151,8 +153,6 @@ void Context::destroy(Handle h) {
         mark_dirty(old_parent);
     }
 
-    // Iterative post-order free: repeatedly descend to a leaf and pop it from
-    // its parent's list. No recursion, no allocation.
     uint16_t cur = root;
     for (;;) {
         Node& c = nodes_[cur];
@@ -163,7 +163,7 @@ void Context::destroy(Handle h) {
 
         const uint16_t up = (cur == root) ? kNone : c.parent;
         if (up != kNone)
-            nodes_[up].first = c.next; // siblings' prev/last are stale but die with `up`
+            nodes_[up].first = c.next;
 
         release_node(cur);
 
@@ -171,13 +171,8 @@ void Context::destroy(Handle h) {
             break;
         cur = up;
     }
-    // Hovered / pressed handles and animations of destroyed nodes are dropped
-    // lazily: they fail the generation check.
-}
 
-// ============================================================================
-//  tree
-// ============================================================================
+}
 
 void Context::link_last(uint16_t parent, uint16_t child) {
     Node& p = nodes_[parent];
@@ -228,8 +223,6 @@ uint16_t Context::unlink(uint16_t child) {
     return parent;
 }
 
-// Invariant: a dirty node always has dirty ancestors. Hence we can stop at the
-// first node that is already dirty.
 void Context::mark_dirty(uint16_t i) {
     while (i != kNone) {
         Node& n = nodes_[i];
@@ -277,12 +270,12 @@ void Context::move_to_front(Handle h) {
         return;
     }
     if (n->parent == kNone || n->next == kNone)
-        return; // detached, or already front-most
+        return;
 
     const uint16_t p = unlink(h.id);
     link_last(p, h.id);
     if (nodes_[p].layout != kNone)
-        mark_dirty(p); // sibling order is layout order
+        mark_dirty(p);
 }
 
 void Context::move_to_back(Handle h) {
@@ -314,10 +307,6 @@ Context::ChildRange Context::children(Handle h) const {
     return {this, n ? n->first : kNone};
 }
 
-// ============================================================================
-//  properties
-// ============================================================================
-
 void Context::set_pos(Handle h, float x, float y) {
     if (Node* n = node(h)) {
         n->frame.x = x;
@@ -338,6 +327,21 @@ void Context::set_size_mode(Handle h, Axis axis, SizeMode mode) {
         n->flags = with_size_mode(n->flags, axis, mode);
         mark_dirty(h.id);
     }
+}
+
+void Context::set_grow(Handle h, Axis axis, const GrowParams& params) {
+    Node* n = node(h);
+    if (!n)
+        return;
+
+    GrowParams p                           = params;
+    p.weight                               = max(p.weight, 0.f);
+    p.min                                  = max(p.min, 0.f);
+    p.max                                  = max(p.max, p.min);
+    GrowData& d                            = grow_[h.id];
+    (axis == Axis::Horizontal ? d.h : d.v) = p;
+    n->flags                               = with_size_mode(n->flags, axis, SizeMode::Grow);
+    mark_dirty(h.id);
 }
 
 void Context::set_flag(Handle h, uint16_t bit, bool on) {
@@ -533,10 +537,6 @@ TextView Context::text(Handle h) {
     const Node* n = node(h);
     return n && n->kind == Kind::Text ? TextView{this, h} : TextView{};
 }
-
-// ============================================================================
-//  animation glue / frame
-// ============================================================================
 
 bool Context::animate(SAnimDesc desc) {
     return anim_.start(*this, desc.h, desc.p, desc.to, desc.s, desc.delay);

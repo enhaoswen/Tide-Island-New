@@ -1,13 +1,15 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 #include "graphics/texture.hpp"
 #include "utils/color.hpp"
 #include "utils/struct.hpp"
-
-#include <cstddef>
-#include <cstdint>
-#include <utility>
-#include <vector>
 
 namespace Object {
 
@@ -95,6 +97,7 @@ inline constexpr uint16_t interactive = clickable | hoverable | draggable;
 
 inline constexpr unsigned size_shift_h = 7;
 inline constexpr unsigned size_shift_v = 9;
+inline constexpr uint16_t frozen       = 1u << 11;
 
 [[nodiscard]] constexpr unsigned size_shift(Axis a) noexcept {
     return a == Axis::Horizontal ? size_shift_h : size_shift_v;
@@ -143,12 +146,23 @@ struct RectData {
 struct ImageData {
     Texture texture{};
     float   radius{};
+
+    void reset() {
+        texture.reset();
+        radius = 0.f;
+    }
 };
 
 struct TextData {
     Texture    texture{};
     FontHandle font{};
     Color      color{};
+
+    void reset() {
+        texture.reset();
+        font  = {};
+        color = {};
+    }
 };
 
 struct LayoutData {
@@ -159,10 +173,20 @@ struct LayoutData {
     Justify   justify = Justify::Start;
 };
 
+struct GrowParams {
+    float weight = 1.f;
+    float min    = 0.f;
+    float max    = std::numeric_limits<float>::infinity();
+};
+
+struct GrowData {
+    GrowParams h{};
+    GrowParams v{};
+};
+
 template <class T>
 class SlotVec {
 public:
-
     [[nodiscard]] uint16_t acquire(T value) {
         if (!free_.empty()) {
             const uint16_t i = free_.back();
@@ -177,7 +201,10 @@ public:
     }
 
     void release(uint16_t i) {
-        items_[i] = T{};
+        if constexpr (requires(T& t) { t.reset(); })
+            items_[i].reset();
+        else
+            items_[i] = T{};
         free_.push_back(i);
     }
 

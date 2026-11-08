@@ -1,11 +1,12 @@
 #pragma once
 
-#include "animation.hpp"
-#include "struct.hpp"
-
 #include <cstddef>
 #include <optional>
+#include <unordered_map>
 #include <vector>
+
+#include "animation.hpp"
+#include "struct.hpp"
 
 namespace Object {
 struct RectDesc {
@@ -28,19 +29,19 @@ struct TextDesc {
 };
 
 struct SAnimDesc {
-    Handle h;
-    float to{};
+    Handle        h;
+    float         to{};
     const Spring& s;
-    float delay{};
-    Prop p;
+    float         delay{};
+    Prop          p;
 };
 
 struct TAnimDesc {
-    Handle h;
-    float to{};
+    Handle        h;
+    float         to{};
     const Timing& t;
-    float delay{};
-    Prop p;
+    float         delay{};
+    Prop          p;
 };
 
 template <class R>
@@ -209,6 +210,8 @@ public:
 
     void set_size_mode(Handle h, Axis axis, SizeMode mode);
 
+    void set_grow(Handle h, Axis axis, const GrowParams& params = {});
+
     void set_visible(Handle h, bool v);
 
     void set_opacity(Handle h, float v);
@@ -258,7 +261,6 @@ public:
     template <Renderer R>
     void draw(R& renderer) const;
 
-    // ===== input ============================================================
     void pointer_move(float x, float y);
 
     void pointer_button(Button b, bool down);
@@ -309,7 +311,10 @@ private:
 
     void arrange_children(Node& n);
 
-    // ---- render / input helpers ------------------------------------------------
+    float resolve_grow(Node& n, Axis axis, float space);
+
+    [[nodiscard]] GrowParams grow_params(uint16_t id, Axis axis) const;
+
     [[nodiscard]] float radius_of(const Node& n) const;
 
     template <class R>
@@ -323,7 +328,6 @@ private:
 
     void emit(Handle target, EventType type, Button b, float dx, float dy);
 
-    // ---- data ------------------------------------------------------------------
     std::vector<Node>   nodes_;
     uint16_t            free_head_ = kNone;
     std::size_t         live_      = 0;
@@ -333,10 +337,10 @@ private:
     SlotVec<ImageData>  images_;
     SlotVec<TextData>   texts_;
     SlotVec<LayoutData> layouts_;
+    std::unordered_map<uint16_t, GrowData> grow_;
 
     Animator anim_;
 
-    // input state
     std::vector<Event> events_;
     std::size_t        event_head_ = 0;
     Handle             hovered_{};
@@ -349,7 +353,6 @@ private:
     bool               dragging_       = false;
 };
 
-// ---- view method definitions (need the complete Context) -----------------------
 inline RectData* RectView::data() const {
     Node* n = ctx_ ? ctx_->node(h_) : nullptr;
     return n ? &ctx_->rects_[n->data] : nullptr;
