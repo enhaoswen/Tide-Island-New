@@ -124,15 +124,15 @@ Handle Context::create_rect(Handle parent, const RectDesc& d) {
     return spawn(Kind::Rect, data, d.frame, parent);
 }
 
-Handle Context::create_image(Handle parent, const ImageDesc& d) {
-    const uint16_t data = images_.acquire(ImageData{d.texture, d.radius});
+Handle Context::create_image(Handle parent, ImageDesc d) {
+    const uint16_t data = images_.acquire(ImageData{move(d.texture), d.radius});
     if (data == kNone)
         return {};
     return spawn(Kind::Image, data, d.frame, parent);
 }
 
-Handle Context::create_text(Handle parent, const TextDesc& d) {
-    const uint16_t data = texts_.acquire(TextData{d.texture, d.font, d.color});
+Handle Context::create_text(Handle parent, TextDesc d) {
+    const uint16_t data = texts_.acquire(TextData{move(d.texture), d.font, d.color});
     if (data == kNone)
         return {};
     return spawn(Kind::Text, data, d.frame, parent);

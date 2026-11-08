@@ -149,9 +149,9 @@ public:
 
     Handle create_rect(Handle parent = {}, const RectDesc& desc = {});
 
-    Handle create_image(Handle parent = {}, const ImageDesc& desc = {});
+    Handle create_image(Handle parent = {}, ImageDesc desc = {});
 
-    Handle create_text(Handle parent = {}, const TextDesc& desc = {});
+    Handle create_text(Handle parent = {}, TextDesc desc = {});
 
     void                      destroy(Handle h); // whole subtree; stale handles become invalid
     [[nodiscard]] bool        alive(Handle h) const { return node(h) != nullptr; }
