@@ -214,8 +214,6 @@ public:
     [[nodiscard]] Frame    absolute_frame(Handle h) const;
     [[nodiscard]] uint32_t tag(Handle h) const;
 
-    // Generic numeric property access (what animation uses). get_prop returns
-    // nullopt for dead handles or props the node's Kind does not have.
     [[nodiscard]] std::optional<float> get_prop(Handle h, Prop p) const;
 
     bool set_prop(Handle h, Prop p, float value);

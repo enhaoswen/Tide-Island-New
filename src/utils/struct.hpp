@@ -8,9 +8,6 @@
 #include <limits>
 #include <string>
 
-using ClickCallback = std::function<void()>;
-
-// Positions and sizes use floating point values for animation.
 struct Frame {
     float x, y, width, height = std::numeric_limits<float>::max();
 
@@ -21,11 +18,6 @@ struct Position {
     float x, y;
 };
 
-enum struct Align : std::uint8_t {
-    Left,
-    Center,
-    Right,
-};
 
 // Fonts.
 
@@ -38,37 +30,6 @@ struct Font {
     std::uint16_t size{};
 };
 
-
-// Animation.
-
-enum struct AnimationTarget : std::uint8_t {
-    Width,
-    Height,
-    X,
-    Y,
-    Radius,
-    ColorR,
-    ColorG,
-    ColorB,
-    ColorA,
-};
-
-struct AnimationDesc {
-    float           to{};
-    float           priority{};
-    std::uint32_t   duration{}; // Milliseconds.
-    AnimationTarget target{};
-};
-
-// Runtime state for an animation.
-struct Animation {
-    float                                 from{};
-    float                                 to{};
-    float*                                target_ptr{};
-    float                                 priority{};
-    std::uint32_t                         duration{}; // Milliseconds.
-    std::chrono::steady_clock::time_point start_time{};
-};
 
 // Application state.
 
