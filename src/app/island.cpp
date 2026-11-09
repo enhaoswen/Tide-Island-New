@@ -6,17 +6,17 @@
 // Wayland backend and renderer.
 //
 #include "app/island.hpp"
-#include "utils/struct.hpp"
-#include "utils/log.hpp"
 #include "utils/color_json.hpp"
+#include "utils/log.hpp"
+#include "utils/struct.hpp"
 
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <source_location>
+#include <utility>
 #include <glaze/json/read.hpp>
 #include <glaze/json/write.hpp>
-#include <source_location>
-#include <fstream>
-#include <filesystem>
-#include <cmath>
-#include <utility>
 
 using namespace std;
 using namespace std::filesystem;
@@ -35,13 +35,6 @@ IslandConf island{
     .radius        = 19,
     .color         = Color{0, 0, 0, 1},
 };
-
-path get_conf_path() {
-    const char* const home = getenv("HOME");
-    if (home == nullptr)
-        Log::fatal("HOME is not set");
-    return path(home) / ".config" / "Tide Island" / "config.json";
-}
 
 } // namespace
 

@@ -3,7 +3,6 @@
 #include "utils/get_type_name.hpp"
 #include "utils/log.hpp"
 
-#include <filesystem>
 #include <string>
 #include <glaze/json/read.hpp>
 #include <glaze/json/write.hpp>
@@ -11,10 +10,8 @@
 using namespace std;
 using namespace std::filesystem;
 
-namespace {
-
 template <typename T>
-string get_path(source_location l) {
+path Config::get_path(source_location l) {
     const char* const home = getenv("HOME");
     if (home == nullptr)
         Log::fatal("HOME is not set");
@@ -37,7 +34,22 @@ string get_path(source_location l) {
     return config_path.string();
 }
 
+path Config::get_path(Config::ConfigType type) {
+    const char* const home = getenv("HOME");
+    if (home == nullptr)
+        Log::fatal("HOME is not set");
 
+    filesystem::path config_path =
+        filesystem::path(home) / ".config" / "Tide Island";
+
+    if (type == Config::ConfigType::TideConfig) {
+        config_path /= "tide_config.json";
+    }
+    return config_path.string();
+}
+
+bool Config::exist(Config::ConfigType type) {
+    return filesystem::exists(get_path(type));
 }
 
 template <typename T>
@@ -73,7 +85,7 @@ bool Config::write(const T& t, source_location l) {
         config_path,
         std::string{},
         glz::opts{.prettify = true}
-    );
+        );
 
     if (error) {
         Log::fatal(
@@ -82,7 +94,7 @@ bool Config::write(const T& t, source_location l) {
             l.line(),
             config_path,
             glz::format_error(error)
-        );
+            );
 
         return false;
     }
