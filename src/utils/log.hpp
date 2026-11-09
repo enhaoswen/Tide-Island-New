@@ -86,7 +86,7 @@ inline void fatal(std::string_view msg) {
 }
 
 template <typename... Args>
-void fatal(std::format_string<Args...> fmt, Args&&... args) {
+[[noreturn]] void fatal(std::format_string<Args...> fmt, Args&&... args) {
     fatal(std::format(fmt, std::forward<Args>(args)...));
 }
 
@@ -119,7 +119,7 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     size_t msg_len{};
     size_t total_lines{};
     for (const auto& s : msgs) {
-        msg_len = std::max(s.size(), msg_len);
+        msg_len     = std::max(s.size(), msg_len);
         total_lines += s.empty() ? 1 : (s.size() + 79) / 80;
     }
     msg_len = std::min<size_t>(msg_len, 80);
@@ -139,11 +139,11 @@ inline void frame_logger(LogLevel level, Args&&... args) {
         size_t handled_char{};
         while (s.size() - handled_char > 80) {
             std::string_view line{s.substr(handled_char, 80)};
-            out_msg               += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
-            handled_char          += 80;
+            out_msg      += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
+            handled_char += 80;
         }
         std::string_view line{s.substr(handled_char)};
-        out_msg               += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
+        out_msg += std::vformat("│ {:<{}} │\n", std::make_format_args(line, msg_len));
     }
 
     out_msg += "└";
