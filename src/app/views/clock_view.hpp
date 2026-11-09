@@ -12,4 +12,4 @@ void stop();
 
 void shutdown();
 
-} // namespace ClockView
+}

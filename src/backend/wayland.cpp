@@ -178,7 +178,11 @@ constexpr wl_pointer_listener pointer_listener{
     .axis_discrete           = pointer_axis_discrete,
     .axis_value120           = nullptr,
     .axis_relative_direction = nullptr,
+#ifdef WL_POINTER_WARP_SINCE_VERSION
+    .warp = nullptr,
+#endif
 };
+
 
 void seat_capabilities(
     void*,
@@ -506,6 +510,7 @@ void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int3
         Log::fatal("Wayland roundtrip failed");
     }
 
+    // clangd says infinity loop, but actually not.
     while (!surface_configured) {
         if (wl_display_dispatch(display.get()) == -1) {
             Log::fatal("Failed to wait for initial layer surface configure");

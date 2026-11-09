@@ -68,9 +68,10 @@ void Context::release_node(uint16_t i) {
     if (!grow_.empty())
         grow_.erase(i);
 
+    const uint16_t next_gen = static_cast<uint16_t>(n.gen + 1);
+
     n          = Node{};
-    n.gen      = n.gen++;
-    n.flags    = 0;
+    n.gen      = next_gen;
     n.next     = free_head_;
     free_head_ = i;
     --live_;
