@@ -29,14 +29,34 @@
 
 namespace {
 
+Island::IslandState     island_state;
 StateManager::Resources resources;
 Object::Context         ctx{};
 Object::Handle          root{};
-
+Object::Handle          bg{};
 }
 
 void StateManager::init(const Resources& arg_resources) {
-    resources = arg_resources;
+    island_state = Island::get_island();
+    resources    = arg_resources;
+
+    root = ctx.create_root(island_state.island_width, island_state.island_height);
+
+    bg = ctx.create_rect(root, Object::RectDesc{
+        .frame = Frame{
+            .x      = 0.f,
+            .y      = 0.f,
+            .width  = static_cast<float>(island_state.island_width),
+            .height = static_cast<float>(island_state.island_height),
+        },
+
+        .color  = island_state.color,
+        .radius = island_state.radius,
+    });
+
+    ctx.set_layout(root, Object::LayoutData{});
+    ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Grow);
+    ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Grow);
 }
 
 Object::Context& StateManager::context() {
@@ -59,12 +79,12 @@ void StateManager::switch_state(StateType state) {
 
     if (state == StateType::Clock) {
         API::resize(140, 38);
-        root = ctx.create_root(140.0f, 38.0f);
-        ClockView::start(root, resources.main_font);
+        ctx.set_size(root, 140, 38);
+        ClockView::start(bg, resources.main_font);
     }
     else if (state == StateType::MusicPLayer) {
         API::resize(410, 165);
-        root = ctx.create_root(410.0f, 165.0f);
+        ctx.set_size(root, 410, 165);
     }
 
     Island::request_redraw(true);
@@ -77,10 +97,5 @@ void StateManager::stop() {
         break;
     default:
         break;
-    }
-
-    if (root) {
-        ctx.destroy(root);
-        root = {};
     }
 }

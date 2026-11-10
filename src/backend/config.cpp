@@ -22,7 +22,7 @@ path Config::get_path(source_location l) {
         filesystem::path(home) / ".config" / "Tide Island";
 
     if constexpr (same_as<T, IslandConfig>) {
-        config_path /= "tide_config.json";
+        config_path /= "island_config.json";
     }
     else {
         Log::fatal(
@@ -45,7 +45,7 @@ path Config::get_path(Config::ConfigType type) {
         filesystem::path(home) / ".config" / "Tide Island";
 
     if (type == Config::ConfigType::IslandConfig) {
-        config_path /= "tide_config.json";
+        config_path /= "island_config.json";
     }
     return config_path.string();
 }

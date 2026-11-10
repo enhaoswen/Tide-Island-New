@@ -18,11 +18,10 @@ bool               running{};
 string             last{};
 
 void update() {
-    const auto now = chrono::system_clock::now();
-    auto&      ctx = StateManager::context();
+    const auto now  = chrono::system_clock::now();
+    auto&      ctx  = StateManager::context();
     auto       view = ctx.text(time_text);
 
-    // Re-rasterize only when the string actually changes.
     const string s{format("{:%H:%M}", chrono::current_zone()->to_local(now))};
     if (s != last) {
         last = s;
@@ -52,13 +51,13 @@ void schedule_next_tick() {
 
 } // namespace
 
-void ClockView::start(Object::Handle root, FontHandle font, std::source_location l) {
+void ClockView::start(Object::Handle bg, FontHandle font, std::source_location l) {
     if (!font.id) {
         Log::logger(Log::Error, "{}:{}: Invalid font id", l.file_name(), l.line());
         return;
     }
 
-    if (!root) {
+    if (!bg) {
         Log::logger(Log::Error, "{}:{}: Invalid root", l.file_name(), l.line());
         return;
     }
@@ -67,13 +66,13 @@ void ClockView::start(Object::Handle root, FontHandle font, std::source_location
 
     auto& ctx = StateManager::context();
 
+    time_text = ctx.create_text(bg, {});
+    ctx.text(time_text).set_font(font).set_color(Color::White);
+
     Object::LayoutData layout{};
     layout.align   = Object::Alignment::Center;
     layout.justify = Object::Justify::Center;
-    ctx.set_layout(root, layout);
-
-    time_text = ctx.create_text(root, {});
-    ctx.text(time_text).set_font(font).set_color(Color::White);
+    ctx.set_layout(bg, layout);
 
     last    = {};
     running = true;
