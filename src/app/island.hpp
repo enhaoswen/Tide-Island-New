@@ -1,7 +1,9 @@
 #pragma once
 
+#include "utils/color.hpp"
 #include "utils/struct.hpp"
 
+#include <cstdint>
 #include <source_location>
 
 // ============================================================================
@@ -13,7 +15,21 @@
 
 namespace Island {
 
-const IslandConf& get_island();
+struct IslandState {
+    std::uint16_t island_width{};
+    std::uint16_t island_height{};
+    std::int16_t  zone{-1};
+    std::int16_t  anchor_top{};
+    float         animation_scale{1};
+    float         radius{};
+    float         current_priority{};
+    Color         color{};
+    bool          need_redraw{true};
+    bool          is_running{true};
+    StateType     state{StateType::Clock};
+};
+
+const IslandState& get_island();
 
 void init();
 

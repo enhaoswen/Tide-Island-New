@@ -1,5 +1,7 @@
 #include "config.hpp"
+#include "utils/struct.hpp"
 
+#include "utils/color_json.hpp"
 #include "utils/get_type_name.hpp"
 #include "utils/log.hpp"
 
@@ -19,7 +21,7 @@ path Config::get_path(source_location l) {
     filesystem::path config_path =
         filesystem::path(home) / ".config" / "Tide Island";
 
-    if constexpr (same_as<T, Config::TideConfig>) {
+    if constexpr (same_as<T, IslandConfig>) {
         config_path /= "tide_config.json";
     }
     else {
@@ -42,7 +44,7 @@ path Config::get_path(Config::ConfigType type) {
     filesystem::path config_path =
         filesystem::path(home) / ".config" / "Tide Island";
 
-    if (type == Config::ConfigType::TideConfig) {
+    if (type == Config::ConfigType::IslandConfig) {
         config_path /= "tide_config.json";
     }
     return config_path.string();
@@ -54,7 +56,7 @@ bool Config::exist(Config::ConfigType type) {
 
 template <typename T>
 bool Config::read(T& t, source_location l) {
-    string config_path = get_path<T>();
+    string config_path = get_path<T>(l);
 
     const auto error = glz::read_file_json(
         t,
@@ -63,8 +65,9 @@ bool Config::read(T& t, source_location l) {
         );
 
     if (error) {
-        Log::fatal(
-            "{}:{}: Failed to load config.\npath={},error={}",
+        Log::logger(
+            Log::Error,
+            "{}:{}: Failed to load config.\n\tpath={},error={}",
             l.file_name(),
             l.line(),
             config_path,
@@ -78,18 +81,18 @@ bool Config::read(T& t, source_location l) {
 
 template <typename T>
 bool Config::write(const T& t, source_location l) {
-    const string config_path = get_path<T>();
+    const string config_path = get_path<T>(l);
 
-    const auto error = glz::write_file_json(
+    const auto error = glz::write_file_json<glz::opts{.prettify = true}>(
         t,
         config_path,
-        std::string{},
-        glz::opts{.prettify = true}
+        std::string{}
         );
 
     if (error) {
-        Log::fatal(
-            "{}:{}: Failed to save config.\npath={}, error={}",
+        Log::logger(
+            Log::Error,
+            "{}:{}: Failed to save config.\n\tpath={}, error={}",
             l.file_name(),
             l.line(),
             config_path,
@@ -101,3 +104,7 @@ bool Config::write(const T& t, source_location l) {
 
     return true;
 }
+
+template std::filesystem::path Config::get_path<Config::IslandConfig>(std::source_location);
+template bool Config::read<Config::IslandConfig>(Config::IslandConfig&, std::source_location);
+template bool Config::write<Config::IslandConfig>(const Config::IslandConfig&, std::source_location);

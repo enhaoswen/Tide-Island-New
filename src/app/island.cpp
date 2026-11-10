@@ -6,13 +6,13 @@
 // Wayland backend and renderer.
 //
 #include "app/island.hpp"
+#include "backend/config.hpp"
 #include "utils/color_json.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 
 #include <cmath>
 #include <filesystem>
-#include <fstream>
 #include <source_location>
 #include <utility>
 #include <glaze/json/read.hpp>
@@ -27,7 +27,7 @@ using namespace std::filesystem;
 
 namespace {
 
-IslandConf island{
+Island::IslandState island{
     .island_width  = 140,
     .island_height = 38,
     .zone          = 40,
@@ -36,99 +36,55 @@ IslandConf island{
     .color         = Color{0, 0, 0, 1},
 };
 
-} // namespace
+Config::IslandConfig to_config() {
+    Config::IslandConfig config;
+    config.island_width  = island.island_width;
+    config.island_height = island.island_height;
+    config.zone          = island.zone;
+    config.anchor_top    = island.anchor_top;
+    config.radius        = island.radius;
+    config.color         = island.color;
+    return config;
+}
+
+}
 
 // ============================================================================
 // [Public API Implementation]
 // ============================================================================
 
-const IslandConf& Island::get_island() {
+const Island::IslandState& Island::get_island() {
     return island;
 }
 
 void Island::init() {
-    const auto conf_path = get_conf_path();
+    const auto conf_path = Config::get_path(Config::ConfigType::IslandConfig);
 
     if (conf_path.has_parent_path()) {
         create_directories(conf_path.parent_path());
     }
 
-    const auto write_default = [&] {
-        string json{};
-
-        const auto error = glz::write<glz::opts{.prettify = true}>(
-            island,
-            json
-            );
-
-        if (error) {
-            Log::logger(
-                Log::Error,
-                "Failed to serialize island configuration: {}",
-                glz::format_error(error, json)
-                );
-            return false;
-        }
-
-        ofstream out(conf_path, ios::trunc);
-
-        if (!out) {
-            Log::logger(
-                Log::Error,
-                "Failed to open configuration file for writing: {}",
-                conf_path.string()
-                );
-            return false;
-        }
-
-        out << json;
-        return true;
-    };
-
     if (!exists(conf_path)) {
-        write_default();
+        Config::write(to_config());
         return;
     }
 
-    ifstream in(conf_path, ios::binary);
+    Config::IslandConfig config;
 
-    if (!in) {
-        Log::logger(
-            Log::Error,
-            "Failed to open configuration file: {}",
-            conf_path.string()
-            );
-        return;
-    }
+    Config::read(config);
 
-    string json{
-        istreambuf_iterator<char>{in},
-        istreambuf_iterator<char>{}
-    };
-
-    if (json.empty()) {
-        write_default();
-        return;
-    }
-
-    auto loaded = island;
-    const auto error  = glz::read_json(loaded, json);
-
-    if (error) {
-        Log::logger(
-            Log::Error,
-            "Failed to parse island configuration: {}",
-            glz::format_error(error, json)
-            );
-        return;
-    }
-    if (loaded.island_width == 0 || loaded.island_height == 0 ||
-        !isfinite(loaded.animation_scale) || loaded.animation_scale <= 0 ||
-        !isfinite(loaded.radius) || loaded.radius < 0 || !isfinite(loaded.current_priority)) {
+    if (config.island_width == 0 || config.island_height == 0 ||
+        !isfinite(config.radius) || config.radius < 0) {
         Log::logger(Log::Error, "Invalid island dimensions, animation scale, radius, or priority");
         return;
     }
-    island = loaded;
+
+    island.island_width  = config.island_width;
+    island.island_height = config.island_height;
+    island.zone          = config.zone;
+    island.anchor_top    = config.anchor_top;
+    island.radius        = config.radius;
+    island.color         = config.color;
 }
 
 void Island::set_anchor_top(std::int32_t distance) {

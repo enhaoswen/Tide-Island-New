@@ -16,7 +16,7 @@ using namespace std::chrono;
 
 namespace {
 
-const IslandConf* island{};
+const Island::IslandState* island{};
 
 Renderer::GpuRenderer renderer{};
 
@@ -65,7 +65,7 @@ void API::unload_font(FontHandle font) {
     Text::unload_font(font);
 }
 
-const IslandConf& API::get_island() {
+const Island::IslandState& API::get_island() {
     return *island;
 }
 
