@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -153,14 +154,16 @@ struct ImageData {
 };
 
 struct TextData {
-    Texture    texture{};
-    FontHandle font{};
-    Color      color{};
+    Texture     texture{};
+    FontHandle  font{};
+    Color       color{};
+    std::string text{};
 
     void reset() {
         texture.reset();
         font  = {};
         color = {};
+        text.clear();
     }
 };
 

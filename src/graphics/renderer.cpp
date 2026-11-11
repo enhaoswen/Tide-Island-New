@@ -329,6 +329,10 @@ Texture Renderer::prepare_image(string_view path) {
     return texture;
 }
 
+float Renderer::text_scale() {
+    return Wayland::get_scale();
+}
+
 Texture Renderer::prepare_text(string_view text, FontHandle font) {
     const float        scale{Wayland::get_scale()};
     const Text::Bitmap bitmap{Text::draw(text, font, scale)};
@@ -403,7 +407,17 @@ void Renderer::GpuRenderer::draw_text(const Frame& frame, const Texture& texture
     if (!texture.valid())
         return;
 
-    const ImgVert vertices{image_vertices(frame)};
+    // Snap the origin to the physical pixel grid. At fractional scales a
+    // half-pixel offset resamples every glyph and makes text look blurry.
+    const auto  surface = Wayland::get_surface_size();
+    const auto  buffer  = Wayland::get_buffer_size();
+    const float scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
+    const float scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
+    Frame       snapped{frame};
+    snapped.x = round(frame.x * scale_x) / scale_x;
+    snapped.y = round(frame.y * scale_y) / scale_y;
+
+    const ImgVert vertices{image_vertices(snapped)};
     const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
     if (sg_query_buffer_overflow(image_vertex_buffer)) {
         Log::fatal("Text vertex buffer overflow");

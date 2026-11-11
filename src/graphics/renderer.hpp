@@ -23,6 +23,9 @@ void end_frame();
 // can recover logical dimensions for layout.
 Texture prepare_image(std::string_view path);
 
+// Rasterization scale for text (physical pixels per logical pixel).
+float text_scale();
+
 Texture prepare_text(std::string_view text, FontHandle font);
 
 // Satisfies Object::Renderer (see scene/render.hpp). Stateless: all GL state is

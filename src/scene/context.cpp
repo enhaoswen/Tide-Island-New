@@ -556,9 +556,33 @@ bool Context::animate(TAnimDesc desc) {
 
 void Context::update(float dt) {
     const bool animated = anim_.update(*this, dt);
+    refresh_text(Renderer::text_scale());
     const bool laid_out = layout();
     if (animated || laid_out)
         update_hover();
+}
+
+bool Context::refresh_text(float scale) {
+    if (!(scale > 0.0f))
+        return false;
+
+    bool changed{};
+    for (uint16_t i{}; i < nodes_.size(); ++i) {
+        Node& n = nodes_[i];
+        if (n.kind != Kind::Text)
+            continue;
+
+        TextData& data = texts_[n.data];
+        // An invalid texture has nothing to rescale, and retrying every frame
+        // would only repeat the failure that produced it.
+        if (data.text.empty() || !data.texture.valid() || data.texture.scale() == scale)
+            continue;
+
+        data.texture = Renderer::prepare_text(data.text, data.font);
+        mark_dirty(i);
+        changed = true;
+    }
+    return changed;
 }
 
 ImageView& ImageView::set_image(std::string_view path) {
@@ -571,7 +595,8 @@ ImageView& ImageView::set_image(std::string_view path) {
 
 TextView& TextView::set_text(std::string_view s) {
     if (auto* d = data()) {
-        d->texture = Renderer::prepare_text(s, d->font);
+        d->text     = s;
+        d->texture  = Renderer::prepare_text(s, d->font);
         ctx_->mark_dirty(h_.id);
     }
     return *this;

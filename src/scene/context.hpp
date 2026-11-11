@@ -104,7 +104,7 @@ public:
     [[nodiscard]] explicit operator bool() const;
 
     TextView& set_texture(Texture t); // text is rendered to a texture by the caller
-    TextView& set_text(std::string_view s); // rasterizes with the stored font; no string stored
+    TextView& set_text(std::string_view s); // rasterizes with the stored font; keeps the string for scale changes
     TextView& set_font(FontHandle f);
 
     TextView& set_color(const Color& c);
@@ -292,6 +292,9 @@ private:
 
     uint16_t unlink(uint16_t child);
     void     mark_dirty(uint16_t i);
+
+    // Re-rasterize text bitmaps whose texture was rendered for another scale.
+    bool refresh_text(float scale);
 
     void set_flag(Handle h, uint16_t bit, bool on);
 

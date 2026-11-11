@@ -49,7 +49,7 @@ void schedule_next_tick() {
     next_tick       = API::push_event(duration_cast<microseconds>(next - now), on_tick, 0);
 }
 
-} // namespace
+}
 
 void ClockView::start(Object::Handle bg, FontHandle font, std::source_location l) {
     if (!font.id) {
