@@ -22,4 +22,4 @@ void stop();
 
 [[nodiscard]] Object::Context& context();
 
-} // namespace StateManager
+}

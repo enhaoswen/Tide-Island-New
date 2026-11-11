@@ -68,7 +68,7 @@ void Context::release_node(uint16_t i) {
     if (!grow_.empty())
         grow_.erase(i);
 
-    const uint16_t next_gen = static_cast<uint16_t>(n.gen + 1);
+    const auto next_gen = static_cast<uint16_t>(n.gen + 1);
 
     n          = Node{};
     n.gen      = next_gen;
@@ -573,8 +573,6 @@ bool Context::refresh_text(float scale) {
             continue;
 
         TextData& data = texts_[n.data];
-        // An invalid texture has nothing to rescale, and retrying every frame
-        // would only repeat the failure that produced it.
         if (data.text.empty() || !data.texture.valid() || data.texture.scale() == scale)
             continue;
 

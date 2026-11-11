@@ -57,6 +57,7 @@ void StateManager::init(const Resources& arg_resources) {
     ctx.set_layout(root, Object::LayoutData{});
     ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Grow);
     ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Grow);
+    ctx.set_clickable(bg,true);
 }
 
 Object::Context& StateManager::context() {

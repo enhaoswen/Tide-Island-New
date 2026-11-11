@@ -13,8 +13,6 @@ namespace Timer {
 
 namespace Detail {
 
-// Indexed min-heap: O(log n) push/cancel/pop, O(1) validation/top.
-// Storage is reused; cancellation removes an entry immediately, without tombstones.
 class EventQueue {
 public:
     using Clock = std::chrono::steady_clock;

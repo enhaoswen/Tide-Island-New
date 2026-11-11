@@ -1,21 +1,24 @@
 #include "scene/context.hpp"
 
 #include <algorithm>
+#include <ranges>
+
+using namespace std;
 
 namespace Object {
 
 namespace {
 
 [[nodiscard]] bool contains(float fx, float fy, float fw, float fh, float radius,
-                            float px, float py) noexcept {
+    float                         px, float py) {
     if (fw <= 0.f || fh <= 0.f || px < fx || px > fx + fw || py < fy || py > fy + fh)
         return false;
     if (radius <= 0.f)
         return true;
 
-    radius = std::min(radius, std::min(fw, fh) * .5f);
-    const float dx = px - std::clamp(px, fx + radius, fx + fw - radius);
-    const float dy = py - std::clamp(py, fy + radius, fy + fh - radius);
+    radius         = min(radius, std::min(fw, fh) * .5f);
+    const float dx = px - clamp(px, fx + radius, fx + fw - radius);
+    const float dy = py - clamp(py, fy + radius, fy + fh - radius);
     return dx * dx + dy * dy <= radius * radius;
 }
 
@@ -49,15 +52,15 @@ uint16_t Context::hit_node(uint16_t i, float x, float y, float ox, float oy) con
 }
 
 Handle Context::hit_test(float x, float y) const {
-    for (auto it = roots_.rbegin(); it != roots_.rend(); ++it) {
-        const uint16_t hit = hit_node(it->id, x, y, 0.f, 0.f);
+    for (const auto [id, gen] : views::reverse(roots_)) {
+        const uint16_t hit = hit_node(id, x, y, 0.f, 0.f);
         if (hit != kNone)
             return handle_of(hit);
     }
     return {};
 }
 
-void Context::emit(Handle target, EventType type, Button b, float dx, float dy) {
+void Context::emit(const Handle target, const EventType type, const Button b, const float dx, const float dy) {
     const Node* n = node(target);
     events_.push_back(Event{target, n ? n->tag : 0u, px_, py_, dx, dy, type, b});
 }
@@ -94,9 +97,9 @@ void Context::pointer_move(float x, float y) {
 
     const float dx = x - px_;
     const float dy = y - py_;
-    px_          = x;
-    py_          = y;
-    has_pointer_ = true;
+    px_            = x;
+    py_            = y;
+    has_pointer_   = true;
 
     if (pressed_) {
         if (dragging_) {
@@ -104,8 +107,7 @@ void Context::pointer_move(float x, float y) {
             return;
         }
 
-        const Node* n = node(pressed_);
-        if (n && (n->flags & flag::draggable)) {
+        if (const Node* n = node(pressed_); n && (n->flags & flag::draggable)) {
             const float tx = x - press_x_;
             const float ty = y - press_y_;
             if (tx * tx + ty * ty >= drag_threshold_ * drag_threshold_) {
@@ -129,8 +131,7 @@ void Context::pointer_button(Button b, bool down) {
             return;
 
         update_hover();
-        const Node* n = node(hovered_);
-        if (!n || !(n->flags & (flag::clickable | flag::draggable)))
+        if (const Node* n = node(hovered_); !n || !(n->flags & (flag::clickable | flag::draggable)))
             return;
 
         pressed_        = hovered_;

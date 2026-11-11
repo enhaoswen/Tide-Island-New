@@ -80,7 +80,7 @@ inline void logger(LogLevel level, std::string_view msg) {
     }
 }
 
-inline void fatal(std::string_view msg) {
+[[noreturn]] inline void fatal(std::string_view msg) {
     logger(LogLevel::Error, msg);
     std::exit(EXIT_FAILURE);
 }
@@ -154,4 +154,4 @@ inline void frame_logger(LogLevel level, Args&&... args) {
     print("{}", out_msg);
 }
 
-} // namespace Log
+}
