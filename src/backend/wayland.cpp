@@ -77,13 +77,53 @@ float    surface_scale{1.0f};
 float pointer_x{};
 float pointer_y{};
 bool  pointer_inside{};
+bool  pointer_motion_pending{};
+bool  pointer_has_frames{}; // wl_pointer >= v5 groups events with wl_pointer.frame
 bool  wayland_needs_redraw{false};
 
 int wayland_fd{-1};
 
-void (*report_click)(float x, float y, bool left){};
+Wayland::PointerCallbacks pointer_callbacks{};
 
-// --- Wayland Registry Listeners ---
+// --- Pointer Listeners ---
+
+void flush_pointer_motion() {
+    if (exchange(pointer_motion_pending, false) && pointer_callbacks.motion) {
+        pointer_callbacks.motion(pointer_x, pointer_y);
+    }
+}
+
+void queue_pointer_motion(wl_fixed_t surface_x, wl_fixed_t surface_y) {
+    pointer_x              = static_cast<float>(wl_fixed_to_double(surface_x));
+    pointer_y              = static_cast<float>(wl_fixed_to_double(surface_y));
+    pointer_motion_pending = true;
+    if (!pointer_has_frames) {
+        flush_pointer_motion();
+    }
+}
+
+void release_pointer_focus() {
+    if (!exchange(pointer_inside, false)) {
+        return;
+    }
+    pointer_motion_pending = false;
+    if (pointer_callbacks.leave) {
+        pointer_callbacks.leave();
+    }
+}
+
+Wayland::PointerButton to_pointer_button(uint32_t button) {
+    switch (button) {
+    case BTN_LEFT:
+        return Wayland::PointerButton::Left;
+    case BTN_RIGHT:
+        return Wayland::PointerButton::Right;
+    case BTN_MIDDLE:
+        return Wayland::PointerButton::Middle;
+    default:
+        return Wayland::PointerButton::Other;
+    }
+}
 
 void pointer_enter(
     void*,
@@ -98,9 +138,7 @@ void pointer_enter(
     }
 
     pointer_inside = true;
-    pointer_x      = static_cast<float>(wl_fixed_to_double(surface_x));
-    pointer_y      = static_cast<float>(wl_fixed_to_double(surface_y));
-
+    queue_pointer_motion(surface_x, surface_y);
 }
 
 void pointer_leave(
@@ -110,7 +148,7 @@ void pointer_leave(
     wl_surface* left_surface
     ) {
     if (left_surface == surface.get()) {
-        pointer_inside = false;
+        release_pointer_focus();
     }
 }
 
@@ -121,8 +159,9 @@ void pointer_motion(
     wl_fixed_t surface_x,
     wl_fixed_t surface_y
     ) {
-    pointer_x = static_cast<float>(wl_fixed_to_double(surface_x));
-    pointer_y = static_cast<float>(wl_fixed_to_double(surface_y));
+    if (pointer_inside) {
+        queue_pointer_motion(surface_x, surface_y);
+    }
 }
 
 void pointer_button(
@@ -133,16 +172,15 @@ void pointer_button(
     uint32_t button,
     uint32_t state
     ) {
-    if (report_click == nullptr)
-        Log::fatal("Func report_click is not initilized");
-    if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
-        if (button == BTN_LEFT && report_click) {
-            report_click(pointer_x, pointer_y, true);
-        }
+    if (!pointer_inside) {
+        return;
+    }
 
-        else if (button == BTN_RIGHT && report_click) {
-            report_click(pointer_x, pointer_y, false);
-        }
+    // The press must be hit-tested at the position it happened at.
+    flush_pointer_motion();
+
+    if (pointer_callbacks.button) {
+        pointer_callbacks.button(to_pointer_button(button), state == WL_POINTER_BUTTON_STATE_PRESSED);
     }
 }
 
@@ -155,6 +193,7 @@ void pointer_axis(
 }
 
 void pointer_frame(void*, wl_pointer*) {
+    flush_pointer_motion();
 }
 
 void pointer_axis_source(void*, wl_pointer*, uint32_t) {
@@ -204,10 +243,11 @@ void seat_capabilities(
             nullptr) == -1) {
             Log::fatal("Failed to add Wayland pointer listener");
         }
+        pointer_has_frames = wl_pointer_get_version(pointer.get()) >= WL_POINTER_FRAME_SINCE_VERSION;
     }
     else if (!has_pointer && pointer) {
+        release_pointer_focus();
         pointer.reset();
-        pointer_inside = false;
     }
 }
 
@@ -689,8 +729,8 @@ void Wayland::apply_config(
     logger(Log::Debug, "Applyed config: {}*{}", width, height);
 }
 
-void Wayland::set_report_click(void (*callback)(float x, float y, bool left)) {
-    report_click = callback;
+void Wayland::set_pointer_callbacks(const PointerCallbacks& callbacks) {
+    pointer_callbacks = callbacks;
 }
 
 void Wayland::handle_events(short revents) {

@@ -22,7 +22,89 @@ namespace {
     return dx * dx + dy * dy <= radius * radius;
 }
 
+// Interaction flags a node needs for the pointer state machine to emit the types in `m`.
+[[nodiscard]] constexpr uint16_t required_flags(EventMask m, uint16_t current) noexcept {
+    uint16_t f = 0;
+    if (m.has(EventType::Click))
+        f |= flag::clickable;
+    if (m.any(EventType::HoverEnter | EventType::HoverLeave))
+        f |= flag::hoverable;
+    if (m.any(EventType::DragStart | EventType::Drag | EventType::DragEnd))
+        f |= flag::draggable;
+    // Press / Release are emitted for clickable and draggable nodes alike.
+    if (m.any(EventType::Press | EventType::Release) && !((current | f) & (flag::clickable | flag::draggable)))
+        f |= flag::clickable;
+    return f;
 }
+
+}
+
+// ============================================================================
+// Callback binding & dispatch
+// ============================================================================
+
+EventCallback Context::listener(const Node& n, const EventType type) const {
+    for (uint16_t i = n.listeners; i != kNone; i = listeners_[i].next)
+        if (listeners_[i].mask.has(type))
+            return listeners_[i].callback;
+    return {};
+}
+
+void Context::unbind(Node& n, const EventMask mask) {
+    uint16_t* link = &n.listeners;
+    while (*link != kNone) {
+        Listener& l = listeners_[*link];
+        l.mask      = l.mask.without(mask);
+        if (l.mask) {
+            link = &l.next;
+            continue;
+        }
+        const uint16_t dead = *link;
+        *link               = l.next;
+        listeners_.release(dead); // only touches the free list; `link` stays valid
+    }
+}
+
+bool Context::on(const Handle h, const EventMask mask, const EventCallback cb) {
+    Node* n = node(h);
+    if (!n || !mask)
+        return false;
+
+    unbind(*n, mask);
+    if (!cb)
+        return true;
+
+    const uint16_t l = listeners_.acquire(Listener{cb, n->listeners, mask});
+    if (l == kNone)
+        return false;
+
+    n->listeners = l;
+    n->flags     |= required_flags(mask, n->flags);
+    return true;
+}
+
+void Context::off(const Handle h, const EventMask mask) {
+    if (Node* n = node(h))
+        unbind(*n, mask);
+}
+
+bool Context::dispatch_events() {
+    bool  ran = false;
+    Event e;
+    while (poll_event(e)) {
+        // Resolved now rather than at emit time, so earlier callbacks may unbind later ones.
+        // The callback is copied out, so it may destroy its own node / binding.
+        if (const EventCallback cb = listener(nodes_[e.target.id], e.type)) {
+            cb(e);
+            ran = true;
+        }
+    }
+    return ran;
+}
+
+// ============================================================================
+// Pointer state machine
+// ============================================================================
 
 uint16_t Context::hit_node(uint16_t i, float x, float y, float ox, float oy) const {
     const Node& n = nodes_[i];
@@ -62,7 +144,21 @@ Handle Context::hit_test(float x, float y) const {
 
 void Context::emit(const Handle target, const EventType type, const Button b, const float dx, const float dy) {
     const Node* n = node(target);
-    events_.push_back(Event{target, n ? n->tag : 0u, px_, py_, dx, dy, type, b});
+    if (!n || !listener(*n, type))
+        return; // nobody listens: don't queue
+
+    // Pointer motion can outpace the frame loop; fold consecutive undispatched drags into one.
+    if (type == EventType::Drag && event_head_ < events_.size()) {
+        if (Event& last = events_.back(); last.type == EventType::Drag && last.target == target) {
+            last.x  = px_;
+            last.y  = py_;
+            last.dx += dx;
+            last.dy += dy;
+            return;
+        }
+    }
+
+    events_.push_back(Event{target, n->tag, px_, py_, dx, dy, type, b});
 }
 
 void Context::validate_input() {

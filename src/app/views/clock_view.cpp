@@ -1,8 +1,8 @@
 #include "app/views/clock_view.hpp"
-#include "utils/log.hpp"
 #include "app/API.hpp"
 #include "app/state_manager.hpp"
 #include "backend/timer.hpp"
+#include "utils/log.hpp"
 
 #include <chrono>
 #include <format>

@@ -65,6 +65,8 @@ void Context::release_node(uint16_t i) {
     if (n.layout != kNone)
         layouts_.release(n.layout);
 
+    unbind(n, EventMask::all());
+
     if (!grow_.empty())
         grow_.erase(i);
 

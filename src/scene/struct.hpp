@@ -2,8 +2,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
+#include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -41,6 +44,10 @@ enum class EventType : uint8_t {
     DragEnd,
 };
 
+inline constexpr unsigned kEventTypeCount = static_cast<unsigned>(EventType::DragEnd) + 1;
+
+// x / y are surface coordinates of the pointer when the event was generated.
+// dx / dy: pointer delta for Drag, total offset from the press for DragStart, zero otherwise.
 struct Event {
     Handle    target;
     uint32_t  tag{};
@@ -48,6 +55,106 @@ struct Event {
     float     dx{}, dy{};
     EventType type{};
     Button    button{Button::None};
+};
+
+// A set of EventTypes. Implicitly built from a single type, so `EventType::Click` and
+// `EventType::HoverEnter | EventType::HoverLeave` are both valid masks.
+class EventMask {
+public:
+    constexpr EventMask() noexcept = default;
+
+    constexpr EventMask(EventType t) noexcept // NOLINT(google-explicit-constructor)
+        : bits_(static_cast<uint8_t>(1u << static_cast<unsigned>(t))) {
+    }
+
+    [[nodiscard]] static constexpr EventMask all() noexcept { return from_bits((1u << kEventTypeCount) - 1u); }
+
+    [[nodiscard]] constexpr bool has(EventType t) const noexcept { return (bits_ & EventMask{t}.bits_) != 0; }
+    [[nodiscard]] constexpr bool any(EventMask m) const noexcept { return (bits_ & m.bits_) != 0; }
+
+    [[nodiscard]] constexpr EventMask without(EventMask m) const noexcept { return from_bits(bits_ & ~m.bits_); }
+
+    [[nodiscard]] constexpr explicit operator bool() const noexcept { return bits_ != 0; }
+
+    [[nodiscard]] friend constexpr EventMask operator|(EventMask a, EventMask b) noexcept {
+        return from_bits(a.bits_ | b.bits_);
+    }
+
+    constexpr bool operator==(const EventMask&) const = default;
+
+private:
+    [[nodiscard]] static constexpr EventMask from_bits(unsigned bits) noexcept {
+        EventMask m;
+        m.bits_ = static_cast<uint8_t>(bits);
+        return m;
+    }
+
+    uint8_t bits_ = 0;
+};
+
+static_assert(kEventTypeCount <= 8, "EventMask stores one bit per EventType in a uint8_t");
+
+[[nodiscard]] constexpr EventMask operator|(EventType a, EventType b) noexcept { return EventMask{a} | b; }
+
+// Non-owning, trivially copyable callable: two pointers, never allocates.
+//
+//   EventCallback{on_click}                       free function `void(const Event&)`
+//   EventCallback{[](const Event& e) { ... }}     capture-less lambda
+//   EventCallback::bind<&View::on_click>(view)    member function, called on `view`
+//   EventCallback::bind<&on_click>(state)         free function `void(State&, const Event&)`
+//
+// A bound object must outlive the binding (unbind it with Context::off, or destroy the node).
+class EventCallback {
+public:
+    using Fn = void (*)(const Event&);
+
+    constexpr EventCallback() noexcept = default;
+
+    template <class F>
+        requires std::is_convertible_v<F, Fn>
+    EventCallback(F&& f) noexcept // NOLINT(google-explicit-constructor, bugprone-forwarding-reference-overload)
+        : thunk_(&call_fn) {
+        data_.fn = static_cast<Fn>(f);
+        if (!data_.fn)
+            thunk_ = nullptr;
+    }
+
+    template <auto F, class T>
+        requires std::is_invocable_v<decltype(F), T&, const Event&>
+    [[nodiscard]] static EventCallback bind(T& obj) noexcept {
+        EventCallback c;
+        c.data_.obj = const_cast<void*>(static_cast<const void*>(std::addressof(obj)));
+        c.thunk_    = [](Data d, const Event& e) { std::invoke(F, *static_cast<T*>(d.obj), e); };
+        return c;
+    }
+
+    [[nodiscard]] constexpr explicit operator bool() const noexcept { return thunk_ != nullptr; }
+
+    void operator()(const Event& e) const { thunk_(data_, e); }
+
+private:
+    union Data {
+        void* obj;
+        Fn    fn;
+    };
+
+    using Thunk = void (*)(Data, const Event&);
+
+    static void call_fn(Data d, const Event& e) { d.fn(e); }
+
+    Thunk thunk_ = nullptr;
+    Data  data_{.obj = nullptr};
+};
+
+static_assert(sizeof(EventCallback) == 2 * sizeof(void*));
+static_assert(std::is_trivially_copyable_v<EventCallback>);
+
+// One entry in a node's singly linked listener list. A (node, EventType) pair is bound to at
+// most one listener, so dispatch is a short walk (nodes rarely carry more than two entries).
+struct Listener {
+    EventCallback callback{};
+    uint16_t      next = kNone;
+    EventMask     mask{};
 };
 
 
@@ -133,10 +240,13 @@ struct Node {
     uint16_t gen     = 0;
     uint16_t flags   = flag::visible | flag::dirty;
     uint16_t data    = kNone;
-    uint16_t layout  = kNone;
-    uint8_t  opacity = 255;
-    Kind     kind    = Kind::Group;
+    uint16_t layout    = kNone;
+    uint16_t listeners = kNone; // head of the Listener list
+    uint8_t  opacity   = 255;
+    Kind     kind      = Kind::Group;
 };
+
+static_assert(sizeof(Node) == 44, "Node is hot during layout / hit testing; keep it compact");
 
 struct RectData {
     Color color{};

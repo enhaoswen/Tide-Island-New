@@ -252,12 +252,33 @@ public:
 
     bool layout();
 
+    // ---- Event callbacks ----------------------------------------------------
+    //
+    // Events go to the top-most interactive node under the pointer only (no bubbling).
+    // Each (node, EventType) pair holds at most one callback: binding replaces what was bound
+    // to those types, and an empty callback unbinds them. Binding also turns on the interaction
+    // flag the types need (Click -> clickable, Hover* -> hoverable, Drag* -> draggable,
+    // Press / Release -> clickable unless already clickable or draggable). Unbinding leaves
+    // flags alone, so a node made clickable keeps blocking clicks to whatever is beneath it.
+    // Bindings die with the node.
+    bool on(Handle h, EventMask mask, EventCallback cb);
+
+    bool on_click(Handle h, EventCallback cb) { return on(h, EventType::Click, cb); }
+
+    void off(Handle h, EventMask mask = EventMask::all());
+
+    // Runs the callbacks for queued events, in order. Call it outside input handling; callbacks
+    // may freely create, destroy, rebind or animate nodes (including their own target).
+    // Returns whether any callback ran.
+    bool dispatch_events();
+
+    // ---- Pointer input (surface coordinates) --------------------------------
+    // Only events that have a bound callback are queued, so unhandled input costs nothing.
     void pointer_move(float x, float y);
 
     void pointer_button(Button b, bool down);
 
-    void                 pointer_cancel();                 // window focus lost etc.
-    [[nodiscard]] bool   poll_event(Event& out);           // call until false, every frame
+    void                 pointer_cancel();                 // pointer left the surface, focus lost etc.
     [[nodiscard]] Handle hit_test(float x, float y) const; // top-most interactive node
     [[nodiscard]] Handle hovered() const { return hovered_; }
     void                 set_drag_threshold(float px) { drag_threshold_ = px; }
@@ -318,6 +339,12 @@ private:
 
     void emit(Handle target, EventType type, Button b, float dx, float dy);
 
+    [[nodiscard]] bool poll_event(Event& out);
+
+    [[nodiscard]] EventCallback listener(const Node& n, EventType type) const;
+
+    void unbind(Node& n, EventMask mask);
+
     std::vector<Node>   nodes_;
     uint16_t            free_head_ = kNone;
     std::size_t         live_      = 0;
@@ -327,6 +354,7 @@ private:
     SlotVec<ImageData>  images_;
     SlotVec<TextData>   texts_;
     SlotVec<LayoutData> layouts_;
+    SlotVec<Listener>   listeners_;
     std::unordered_map<uint16_t, GrowData> grow_;
 
     Animator anim_;

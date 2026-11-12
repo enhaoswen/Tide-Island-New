@@ -20,11 +20,32 @@ const Island::IslandState* island{};
 
 Renderer::GpuRenderer renderer{};
 
-// Wayland reports pointer presses as (x, y, is-left). Forward them to the scene.
-void handle_click(float x, float y, bool left) {
-    auto& ctx = StateManager::context();
-    ctx.pointer_move(x, y);
-    ctx.pointer_button(left ? Object::Button::Left : Object::Button::Right, true);
+// Wayland input only feeds the scene's state machine and queues events; callbacks run later
+// from API::run via dispatch_events(), outside Wayland dispatch.
+void on_pointer_motion(float x, float y) {
+    StateManager::context().pointer_move(x, y);
+}
+
+void on_pointer_button(Wayland::PointerButton button, bool pressed) {
+    Object::Button b{};
+    switch (button) {
+    case Wayland::PointerButton::Left:
+        b = Object::Button::Left;
+        break;
+    case Wayland::PointerButton::Right:
+        b = Object::Button::Right;
+        break;
+    case Wayland::PointerButton::Middle:
+        b = Object::Button::Middle;
+        break;
+    case Wayland::PointerButton::Other:
+        return;
+    }
+    StateManager::context().pointer_button(b, pressed);
+}
+
+void on_pointer_leave() {
+    StateManager::context().pointer_cancel();
 }
 
 }
@@ -52,7 +73,11 @@ void API::init() {
     Timer::init();
     Log::logger(Log::Debug, "Timer initialized successfully");
 
-    Wayland::set_report_click(handle_click);
+    Wayland::set_pointer_callbacks({
+        .motion = on_pointer_motion,
+        .button = on_pointer_button,
+        .leave  = on_pointer_leave,
+    });
 
     Log::logger(Log::Debug, "Initialization completed successfully");
 }
@@ -88,7 +113,8 @@ void API::clear_status() {
 }
 
 void API::run() {
-    auto last = steady_clock::now();
+    auto  last = steady_clock::now();
+    auto& ctx  = StateManager::context();
 
     while (island->is_running) {
 
@@ -99,16 +125,23 @@ void API::run() {
             const float dt_ms = static_cast<float>(duration_cast<microseconds>(now - last).count()) / 1000.0f;
             last              = now;
 
-            auto& ctx = StateManager::context();
             StateManager::update(); // center the root on the surface
             ctx.update(dt_ms);      // step animations, then layout
+
+            // Animation / layout can move nodes under a still pointer (hover changes). Lay out
+            // again if callbacks ran so their changes make it into this frame.
+            if (ctx.dispatch_events())
+                ctx.layout();
 
             Renderer::begin_frame();
             Object::draw(ctx, renderer);
             Renderer::end_frame();
         }
 
-        Island::request_redraw(Timer::wait(StateManager::context().animating()) || island->need_redraw);
+        const bool redraw = Timer::wait(ctx.animating());
+        // Pointer input gathered during the wait; callbacks usually change something visible.
+        const bool handled = ctx.dispatch_events();
+        Island::request_redraw(redraw || handled || island->need_redraw);
     }
 }
 
