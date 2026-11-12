@@ -7,6 +7,7 @@
 #include <cstring>
 #include <limits>
 #include <time.h>
+#include <utility>
 
 using namespace std;
 
@@ -124,7 +125,7 @@ int Mpris::async(Call kind, Player* player, const char* destination, const char*
         result = sd_bus_call_method_async(bus_, &call->slot, destination, path, interface, method,
             &Mpris::reply_callback, call.get(), argument ? "s" : "", argument);
     }
-    if (result >= 0) pending_.push_back(move(call));
+    if (result >= 0) pending_.push_back(std::move(call));
     return result;
 }
 
@@ -217,7 +218,7 @@ int Mpris::read_metadata(sd_bus_message* message, Player& player) {
         if ((result = sd_bus_message_exit_container(message)) < 0) return result;
     }
     if (result < 0) return result;
-    if (player.inline_lyrics.empty()) player.inline_lyrics = move(comment);
+    if (player.inline_lyrics.empty()) player.inline_lyrics = std::move(comment);
     // Hash large embedded lyrics once per metadata update, not on volume,
     // playback or seek events while the UI is active.
     player.lyrics_hash = hash<string_view>{}(player.inline_lyrics);
@@ -435,7 +436,7 @@ optional<Clock::time_point> Mpris::deadline() const noexcept {
 }
 
 optional<Error> Mpris::take_error() {
-    auto result = move(error_);
+    auto result = std::move(error_);
     error_.reset();
     return result;
 }

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <utility>
 
 using namespace std;
 
@@ -24,7 +25,7 @@ struct Http::Transfer {
     string body{};
     CURL* easy = curl_easy_init();
     size_t max_bytes{};
-    explicit Transfer(HttpRequest job, size_t limit) : request(move(job)), max_bytes(limit) {}
+    explicit Transfer(HttpRequest job, size_t limit) : request(std::move(job)), max_bytes(limit) {}
     ~Transfer() { if (easy) curl_easy_cleanup(easy); }
 };
 
@@ -102,14 +103,14 @@ size_t Http::write_callback(char* data, size_t size, size_t count, void* user) n
 bool Http::enqueue(HttpRequest request) {
     // A provider's candidate fanout is bounded independently of body limits.
     if (queue_.size() + active_.size() >= 16) return false;
-    queue_.push_back(move(request));
+    queue_.push_back(std::move(request));
     pump();
     return true;
 }
 
 void Http::pump() {
     while (active_.size() < max_connections_ && !queue_.empty()) {
-        auto transfer = make_unique<Transfer>(move(queue_.front()), max_bytes_);
+        auto transfer = make_unique<Transfer>(std::move(queue_.front()), max_bytes_);
         queue_.pop_front();
         if (!transfer->easy) {
             failures_.push_back({transfer->request.id, {}, CURLE_OUT_OF_MEMORY, 0});
@@ -144,7 +145,7 @@ void Http::pump() {
             failures_.push_back({transfer->request.id, {}, CURLE_FAILED_INIT, 0});
             continue;
         }
-        active_.push_back(move(transfer));
+        active_.push_back(std::move(transfer));
     }
     if (!failures_.empty()) deadline_ = Clock::now();
 }
@@ -167,7 +168,7 @@ expected<vector<HttpResponse>, Error> Http::process(span<const pollfd> ready, Cl
         if (code != CURLM_OK) return unexpected(multi_error(code));
     }
     if (callback_failed_) return unexpected(Error{ErrorCode::Network, 0, "HTTP socket registration failed"});
-    vector<HttpResponse> responses = move(failures_);
+    vector<HttpResponse> responses = std::move(failures_);
     failures_.clear();
     int remaining{};
     while (auto* message = curl_multi_info_read(multi_, &remaining)) {
@@ -177,7 +178,7 @@ expected<vector<HttpResponse>, Error> Http::process(span<const pollfd> ready, Cl
         if (at == active_.end()) continue;
         long status{};
         curl_easy_getinfo(message->easy_handle, CURLINFO_RESPONSE_CODE, &status);
-        responses.push_back({(*at)->request.id, move((*at)->body), message->data.result, status});
+        responses.push_back({(*at)->request.id, std::move((*at)->body), message->data.result, status});
         curl_multi_remove_handle(multi_, message->easy_handle);
         active_.erase(at);
     }

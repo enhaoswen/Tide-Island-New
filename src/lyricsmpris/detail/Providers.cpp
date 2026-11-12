@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 using namespace std;
 
@@ -88,7 +89,7 @@ expected<vector<Candidate>, string> response(
         if (candidate.synced.empty() && candidate.plain.empty()
             && candidate.resource_id.empty() && !candidate.instrumental) return;
         candidate.provider = provider;
-        result.push_back(move(candidate));
+        result.push_back(std::move(candidate));
     };
     extract(document, append);
     return result;
@@ -310,7 +311,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         candidate.provider = provider;
         candidate.synced = payload;
         candidate.trusted = false;
-        result.push_back(move(candidate));
+        result.push_back(std::move(candidate));
         return result;
     }
     if (trim(payload).empty()) return unexpected("Empty JSON response");
@@ -384,7 +385,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
             candidate.synced = scalar_string(row.lyric);
             if (candidate.synced.find('[') == candidate.synced.npos) {
                 if (auto decoded = decode_base64(candidate.synced); !decoded.empty() && valid_utf8(decoded))
-                    candidate.synced = move(decoded);
+                    candidate.synced = std::move(decoded);
             }
             return candidate;
         });
@@ -415,7 +416,7 @@ expected<vector<Candidate>, string> parse_candidates(string_view payload, Provid
         return direct_response<KugouDownload>(payload, provider, [](const auto& row) {
             Candidate candidate{};
             candidate.synced = scalar_string(row.content);
-            if (auto decoded = decode_base64(candidate.synced); !decoded.empty()) candidate.synced = move(decoded);
+            if (auto decoded = decode_base64(candidate.synced); !decoded.empty()) candidate.synced = std::move(decoded);
             return candidate;
         });
     case Stage::MusixmatchSubtitle:

@@ -3,6 +3,7 @@
 #include "graphics/renderer.hpp"
 
 #include <algorithm>
+#include <utility>
 
 using namespace std;
 
@@ -130,14 +131,14 @@ Handle Context::create_rect(Handle parent, const RectDesc& d) {
 }
 
 Handle Context::create_image(Handle parent, ImageDesc d) {
-    const uint16_t data = images_.acquire(ImageData{move(d.texture), d.radius});
+    const uint16_t data = images_.acquire(ImageData{std::move(d.texture), d.radius});
     if (data == kNone)
         return {};
     return spawn(Kind::Image, data, d.frame, parent);
 }
 
 Handle Context::create_text(Handle parent, TextDesc d) {
-    const uint16_t data = texts_.acquire(TextData{move(d.texture), d.font, d.color});
+    const uint16_t data = texts_.acquire(TextData{std::move(d.texture), d.font, d.color});
     if (data == kNone)
         return {};
     return spawn(Kind::Text, data, d.frame, parent);

@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <memory>
 #include <utf8proc.h>
+#include <utility>
 
 using namespace std;
 
@@ -202,7 +203,7 @@ vector<string> tokens(string_view value) {
     vector<string> result{};
     string run{};
     const auto flush = [&] {
-        if (!run.empty() && run != "the" && run != "and" && run != "a" && run != "an") result.push_back(move(run));
+        if (!run.empty() && run != "the" && run != "and" && run != "a" && run != "an") result.push_back(std::move(run));
         run.clear();
     };
     while (!value.empty()) {
