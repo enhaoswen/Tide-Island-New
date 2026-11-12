@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <tuple>
+#include <utility>
 
 using namespace std;
 
@@ -69,7 +70,7 @@ struct Client::Impl {
     optional<Clock::time_point> resync_at{};
     optional<Error> poll_error{};
 
-    explicit Impl(Options value) : options(move(value)) {}
+    explicit Impl(Options value) : options(std::move(value)) {}
 
     const detail::Player* choose() const {
         const auto players = mpris->players();
@@ -128,12 +129,12 @@ struct Client::Impl {
         const auto revision = state.track_revision + (new_track ? 1 : 0);
         const auto search = state.lyrics_search;
         const auto line = state.current_line;
-        auto error = move(state.last_error);
+        auto error = std::move(state.last_error);
         state = incoming;
         state.track_revision = revision;
         state.lyrics_search = search;
         state.current_line = line;
-        state.last_error = move(error);
+        state.last_error = std::move(error);
         player_instance = player->instance;
         inline_hash = hash;
         const bool restart_query{changed_query && !resolver->document().synced()};
@@ -162,7 +163,7 @@ struct Client::Impl {
     }
 };
 
-Client::Client(unique_ptr<Impl> impl) noexcept : impl_(move(impl)) {}
+Client::Client(unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
 Client::~Client() = default;
 Client::Client(Client&&) noexcept = default;
 Client& Client::operator=(Client&&) noexcept = default;
@@ -173,16 +174,16 @@ expected<Client, Error> Client::create(Options options) {
     vector<Provider> providers{};
     for (const auto provider : options.providers)
         if (find(providers.begin(), providers.end(), provider) == providers.end()) providers.push_back(provider);
-    options.providers = move(providers);
-    auto impl = make_unique<Impl>(move(options));
+    options.providers = std::move(providers);
+    auto impl = make_unique<Impl>(std::move(options));
     auto mpris = detail::Mpris::create(impl->options);
-    if (!mpris) return unexpected(move(mpris.error()));
-    impl->mpris = move(*mpris);
+    if (!mpris) return unexpected(std::move(mpris.error()));
+    impl->mpris = std::move(*mpris);
     auto resolver = detail::Resolver::create(impl->options);
-    if (!resolver) return unexpected(move(resolver.error()));
-    impl->resolver = move(*resolver);
+    if (!resolver) return unexpected(std::move(resolver.error()));
+    impl->resolver = std::move(*resolver);
     impl->fds.reserve(1 + impl->options.max_connections * 2);
-    return Client(move(impl));
+    return Client(std::move(impl));
 }
 
 const State& Client::state() const noexcept { return impl_->state; }
@@ -200,7 +201,7 @@ string_view Client::current_lyric() const noexcept {
 span<const pollfd> Client::poll_fds() {
     impl_->fds.clear();
     if (auto fd = impl_->mpris->poll_fd()) impl_->fds.push_back(*fd);
-    else impl_->poll_error = move(fd.error());
+    else impl_->poll_error = std::move(fd.error());
     const auto http_fds = impl_->resolver->poll_fds();
     impl_->fds.insert(impl_->fds.end(), http_fds.begin(), http_fds.end());
     return impl_->fds;
@@ -246,7 +247,7 @@ expected<Changes, Error> Client::process(span<const pollfd> ready, Clock::time_p
     auto& self = *impl_;
     if (self.poll_error) return unexpected(*self.poll_error);
     Changes changes{Changes::None};
-    if (auto result = self.mpris->process(); !result) return unexpected(move(result.error()));
+    if (auto result = self.mpris->process(); !result) return unexpected(std::move(result.error()));
     const bool retry{self.retry_requested || self.resolver->retry_due(now)};
     if (self.retry_requested) self.resolver->reset_attempts();
     if (self.selection_dirty || retry || self.bus_revision != self.mpris->revision()) {
@@ -259,7 +260,7 @@ expected<Changes, Error> Client::process(span<const pollfd> ready, Clock::time_p
         self.mpris->request_position(self.state.service);
         self.resync_at = now + self.options.position_resync_interval;
     }
-    if (auto result = self.resolver->process(ready, now); !result) return unexpected(move(result.error()));
+    if (auto result = self.resolver->process(ready, now); !result) return unexpected(std::move(result.error()));
     if (self.document_revision != self.resolver->document_revision()) {
         self.document_revision = self.resolver->document_revision();
         mark(changes, Changes::Lyrics | Changes::Line);
@@ -275,7 +276,7 @@ expected<Changes, Error> Client::process(span<const pollfd> ready, Clock::time_p
         mark(changes, Changes::Line);
     }
     for (auto error : {self.mpris->take_error(), self.resolver->take_error()}) {
-        if (error) { self.state.last_error = move(error); mark(changes, Changes::Error); }
+        if (error) { self.state.last_error = std::move(error); mark(changes, Changes::Error); }
     }
     return changes;
 }

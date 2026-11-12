@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 using namespace std;
 
@@ -114,7 +115,7 @@ expected<Lyrics, ParseError> parse_lyrics(string_view text, string_view provider
         }
     }
     result.synced_ = !result.lines_.empty();
-    if (!result.synced_) result.lines_ = move(plain);
+    if (!result.synced_) result.lines_ = std::move(plain);
     else {
         for (auto& entry : result.lines_) {
             if (offset_ms > 0 && entry.time_ms > numeric_limits<int64_t>::max() - offset_ms)
