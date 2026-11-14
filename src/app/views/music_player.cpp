@@ -5,7 +5,7 @@
 #include "app/state_manager.hpp"
 #include "backend/media.hpp"
 #include "backend/timer.hpp"
-#include "graphics/renderer.hpp"
+#include "graphics/texture.hpp"
 #include "utils/log.hpp"
 
 #include <algorithm>
@@ -47,8 +47,6 @@ constexpr array<float, 3> kSlotCenter{0.2425f, 0.4675f, 0.6925f};
 constexpr auto kTick         = milliseconds{64};
 constexpr auto kProgressTick = milliseconds{500};
 
-const Timing kBarPlayingAnim{120.f, Ease::InOutQuad};
-const Timing kBarPausedAnim{260.f, Ease::InOutQuad};
 const Timing kProgressAnim{500.f, Ease::OutCubic};
 
 struct Nodes {
@@ -103,16 +101,15 @@ void set_text_cached(Handle h, string& cache, const string& s) {
     return levels[static_cast<size_t>(i)];
 }
 
-void animate_bars(bool use_playing) {
+// Heights are set directly (no tween): one frame per tick instead of a
+// never-ending 60 fps animation while playing.
+void set_bars(bool use_playing) {
     auto& c = ctx();
     for (int i = 0; i < kBarCount; ++i) {
-        const float level = use_playing ? playing_level(i) : paused_level(i);
-        const float h     = kBarMinH + (kBarMaxH - kBarMinH) * level;
-        (void)c.animate(Object::TAnimDesc{
-            .h = n.bars[static_cast<size_t>(i)], .to                    = h,
-            .t = use_playing ? kBarPlayingAnim : kBarPausedAnim, .delay = 0.f, .p = Prop::H,
-        });
-        c.rect(n.bars[static_cast<size_t>(i)]).set_color(use_playing ? kBarPlaying : kBarPaused);
+        const Handle bar   = n.bars[static_cast<size_t>(i)];
+        const float  level = use_playing ? playing_level(i) : paused_level(i);
+        c.set_size(bar, kBarW, kBarMinH + (kBarMaxH - kBarMinH) * level);
+        c.rect(bar).set_color(use_playing ? kBarPlaying : kBarPaused);
     }
 }
 
@@ -154,7 +151,7 @@ void on_tick() {
     phase += 0.18f;
     if (phase > 2.f * numbers::pi_v<float>)
         phase -= 2.f * numbers::pi_v<float>;
-    animate_bars(true);
+    set_bars(true);
 
     if (steady_clock::now() - last_progress >= kProgressTick)
         update_progress(true);
@@ -207,13 +204,15 @@ void refresh(bool track_changed_hint) {
     if (now_playing != playing) {
         playing = now_playing;
         if (!playing)
-            animate_bars(false);
+            set_bars(false);
     }
     schedule_tick();
 }
 
 void refresh_artwork() {
-    Texture    tex   = Renderer::decode_image(Media::artwork());
+    Texture tex{};
+    if (const Image::Pixels* p = Media::artwork())
+        tex.upload(p->width, p->height, Texture::Format::RGBA8, p->rgba);
     const bool valid = tex.valid();
     ctx().image(n.art).set_texture(std::move(tex));
     ctx().set_visible(n.art, valid);
@@ -222,11 +221,17 @@ void refresh_artwork() {
 void on_media(Media::Update u) {
     if (!running)
         return;
-    if (Media::contains(u, Media::Update::State))
+    bool shown = false; // lyrics-only updates are not displayed here: no frame for them
+    if (Media::contains(u, Media::Update::State)) {
         refresh(false);
-    if (Media::contains(u, Media::Update::Artwork))
+        shown = true;
+    }
+    if (Media::contains(u, Media::Update::Artwork)) {
         refresh_artwork();
-    Island::request_redraw(true);
+        shown = true;
+    }
+    if (shown)
+        Island::request_redraw(true);
 }
 
 // ---- Buttons ----------------------------------------------------------------

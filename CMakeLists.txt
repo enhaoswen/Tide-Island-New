@@ -53,6 +53,7 @@ set(SRC
         src/scene/render.hpp
         src/backend/input.cpp
         src/backend/media.cpp
+        src/graphics/image.cpp
         src/backend/media.hpp
 )
 

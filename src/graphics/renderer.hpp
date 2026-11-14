@@ -4,8 +4,6 @@
 #include "utils/color.hpp"
 #include "utils/struct.hpp"
 
-#include <cstdint>
-#include <span>
 #include <string_view>
 
 namespace Renderer {
@@ -24,9 +22,6 @@ void end_frame();
 // Text is rasterized at the surface scale and tagged with it so the scene graph
 // can recover logical dimensions for layout.
 Texture prepare_image(std::string_view path);
-// Decodes an encoded image (jpeg / png / ...) from memory. Returns an invalid
-// texture on failure instead of aborting, since the bytes come from outside.
-Texture decode_image(std::span<const std::uint8_t> encoded);
 
 // Rasterization scale for text (physical pixels per logical pixel).
 float text_scale();

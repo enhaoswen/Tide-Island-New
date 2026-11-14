@@ -2,6 +2,8 @@
 
 #include "lyricsmpris/Client.hpp"
 
+#include "graphics/image.hpp"
+
 #include <chrono>
 #include <cstdint>
 #include <optional>
@@ -13,8 +15,9 @@ namespace Media {
 
 enum class Update : std::uint8_t {
     None    = 0,
-    State   = 1,
-    Artwork = 2,
+    State   = 1, // track, playback, position, capabilities, errors
+    Artwork = 2, // artwork() changed (possibly to none)
+    Lyrics  = 4, // lyrics document / current line / search state
 };
 
 [[nodiscard]] constexpr Update operator|(Update a, Update b) noexcept {
@@ -35,7 +38,10 @@ void shutdown();
 
 [[nodiscard]] lyricsmpris::Milliseconds position();
 
-[[nodiscard]] std::span<const std::uint8_t> artwork();
+// Current cover, center-cropped and downscaled to at most kArtworkSide square.
+// nullptr when there is none (yet).
+inline constexpr int kArtworkSide = 120;
+[[nodiscard]] const Image::Pixels* artwork();
 
 void play_pause();
 
@@ -49,6 +55,8 @@ void append_poll_fds(std::vector<pollfd>& out);
 
 [[nodiscard]] std::optional<std::chrono::steady_clock::time_point> next_deadline();
 
-bool process(std::span<const pollfd> ready);
+// Changes are reported through the listener only; whoever reacts to them
+// requests a redraw, so updates nobody displays cost no frame.
+void process(std::span<const pollfd> ready);
 
 }

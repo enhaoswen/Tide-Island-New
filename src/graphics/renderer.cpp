@@ -329,26 +329,6 @@ Texture Renderer::prepare_image(string_view path) {
     return texture;
 }
 
-Texture Renderer::decode_image(span<const uint8_t> encoded) {
-    if (encoded.empty() || encoded.size() > static_cast<size_t>(numeric_limits<int>::max()))
-        return {};
-
-    int                                                         width{}, height{}, channels{};
-    const unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels{
-        stbi_load_from_memory(encoded.data(), static_cast<int>(encoded.size()), &width, &height, &channels, 4),
-        &stbi_image_free
-    };
-    if (!pixels) {
-        Log::logger(Log::Warning, "Failed to decode image: {}", stbi_failure_reason());
-        return {};
-    }
-    const size_t size{static_cast<size_t>(width) * static_cast<size_t>(height) * 4};
-
-    Texture texture{};
-    texture.upload(width, height, Texture::Format::RGBA8, {pixels.get(), size});
-    return texture;
-}
-
 float Renderer::text_scale() {
     return Wayland::get_scale();
 }

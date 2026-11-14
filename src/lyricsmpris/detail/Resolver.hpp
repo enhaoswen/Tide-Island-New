@@ -32,6 +32,8 @@ public:
 private:
     struct Job { Stage stage{}; Candidate metadata{}; };
     explicit Resolver(const Options& options) : options_(options) {}
+    bool ensure_http();
+    void release_idle_http() noexcept;
     void schedule(Stage stage, Candidate candidate = {});
     void next_provider();
     void complete();

@@ -66,13 +66,26 @@ bool search_stage(Stage stage) noexcept {
 } // namespace
 
 expected<unique_ptr<Resolver>, Error> Resolver::create(const Options& options) {
-    auto resolver = unique_ptr<Resolver>(new Resolver(options));
-    if (!options.providers.empty()) {
-        auto http = Http::create(options);
-        if (!http) return unexpected(std::move(http.error()));
-        resolver->http_ = std::move(*http);
+    // Http (curl + TLS, ~1 MiB once a connection exists) is created per search
+    // and released when the search ends; see ensure_http / release_idle_http.
+    return unique_ptr<Resolver>(new Resolver(options));
+}
+
+bool Resolver::ensure_http() {
+    if (http_) return true;
+    if (options_.providers.empty()) return false;
+    auto http = Http::create(options_);
+    if (!http) {
+        error_ = std::move(http.error());
+        had_error_ = true;
+        return false;
     }
-    return resolver;
+    http_ = std::move(*http);
+    return true;
+}
+
+void Resolver::release_idle_http() noexcept {
+    if (state_ != SearchState::Searching) http_.reset();
 }
 
 void Resolver::set_document(Lyrics document) {
@@ -81,7 +94,7 @@ void Resolver::set_document(Lyrics document) {
 }
 
 void Resolver::clear() {
-    if (http_) http_->cancel();
+    http_.reset();
     jobs_.clear();
     query_ = {};
     set_document({});
@@ -142,8 +155,9 @@ void Resolver::start(TrackQuery query, string_view inline_lyrics, string_view me
     if (direct(inline_lyrics, "mpris")) return;
     if (options_.local_lyrics) local(media_url);
     if (state_ == SearchState::Finished) return;
-    if (trim(query_.title).empty() || !http_) complete();
+    if (trim(query_.title).empty() || !ensure_http()) complete();
     else next_provider();
+    release_idle_http();
 }
 
 void Resolver::schedule(Stage stage, Candidate candidate) {
@@ -280,6 +294,7 @@ expected<void, Error> Resolver::process(span<const pollfd> ready, Clock::time_po
         error_ = responses.error();
         had_error_ = true;
         complete();
+        release_idle_http();
         return {};
     }
     for (auto& response : *responses) receive(std::move(response));
@@ -296,6 +311,7 @@ expected<void, Error> Resolver::process(span<const pollfd> ready, Clock::time_po
             schedule(stage, std::move(candidate));
         } else next_provider();
     }
+    release_idle_http();
     return {};
 }
 

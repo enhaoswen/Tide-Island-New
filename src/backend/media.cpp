@@ -21,8 +21,8 @@ unique_ptr<lyricsmpris::detail::Http> http{};
 
 void (*listener)(Media::Update) = nullptr;
 
-string          artwork_url{};
-vector<uint8_t> artwork_bytes{};
+string                  artwork_url{};
+optional<Image::Pixels> artwork_pixels{}; // downscaled; encoded bytes are dropped after decoding
 uint64_t        artwork_request{};
 uint64_t        next_request_id{1};
 
@@ -92,24 +92,24 @@ uint64_t        next_request_id{1};
     return true;
 }
 
+// Returns whether artwork_pixels changed synchronously.
 bool fetch_artwork(const string& url) {
     if (url == artwork_url)
         return false;
 
     artwork_url     = url;
     artwork_request = 0;
-    if (http)
-        http->cancel();
+    http.reset(); // drops any in-flight download together with its connection
 
-    const bool had_bytes = !artwork_bytes.empty();
-    artwork_bytes.clear();
+    const bool had = artwork_pixels.has_value();
+    artwork_pixels.reset();
 
     if (url.starts_with("file://")) {
         const string path = file_url_to_path(url);
         if (!path.empty())
-            artwork_bytes = read_file(path);
-        if (artwork_bytes.empty())
-            Log::logger(Log::Warning, "Failed to read album art: {}", url);
+            artwork_pixels = Image::decode_square(read_file(path), Media::kArtworkSide);
+        if (!artwork_pixels)
+            Log::logger(Log::Warning, "Failed to load album art: {}", url);
         return true;
     }
 
@@ -117,8 +117,10 @@ bool fetch_artwork(const string& url) {
         const uint64_t id = next_request_id++;
         if (http->enqueue({.id = id, .url = url, .referer = {}}))
             artwork_request = id;
+        else
+            http.reset();
     }
-    return had_bytes;
+    return had;
 }
 
 bool process_http(span<const pollfd> ready, steady_clock::time_point now) {
@@ -142,9 +144,13 @@ bool process_http(span<const pollfd> ready, steady_clock::time_point now) {
             Log::logger(Log::Warning, "Album art download failed (status {}): {}", r.status, artwork_url);
             continue;
         }
-        artwork_bytes.assign(r.body.begin(), r.body.end());
+        artwork_pixels = Image::decode_square(
+            {reinterpret_cast<const uint8_t*>(r.body.data()), r.body.size()}, Media::kArtworkSide);
         changed = true;
     }
+    // One cover per track: release curl + the TLS connection (~1 MiB) once idle.
+    if (!http->busy())
+        http.reset();
     return changed;
 }
 
@@ -171,7 +177,7 @@ void Media::shutdown() {
     http.reset();
     client.reset();
     artwork_url.clear();
-    artwork_bytes.clear();
+    artwork_pixels.reset();
     artwork_request = 0;
 }
 
@@ -187,8 +193,8 @@ lyricsmpris::Milliseconds Media::position() {
     return client ? client->position() : lyricsmpris::Milliseconds{};
 }
 
-span<const uint8_t> Media::artwork() {
-    return artwork_bytes;
+const Image::Pixels* Media::artwork() {
+    return artwork_pixels ? &*artwork_pixels : nullptr;
 }
 
 namespace {
@@ -248,21 +254,28 @@ optional<steady_clock::time_point> Media::next_deadline() {
     return deadline;
 }
 
-bool Media::process(span<const pollfd> ready) {
+void Media::process(span<const pollfd> ready) {
     if (!client)
-        return false;
+        return;
 
     const auto now     = steady_clock::now();
     const auto changes = client->process(ready, now);
     if (!changes) {
         Log::logger(Log::Error, "MPRIS client failed, media disabled: {}", changes.error().message);
         shutdown();
-        return true;
+        return;
     }
 
+    using lyricsmpris::Changes;
+    constexpr auto state_changes = Changes::Player | Changes::Track | Changes::Playback | Changes::Position
+        | Changes::Capabilities | Changes::Error;
+    constexpr auto lyric_changes = Changes::Lyrics | Changes::Line | Changes::Search;
+
     Update update = Update::None;
-    if (*changes != lyricsmpris::Changes::None)
-        update = Update::State;
+    if (lyricsmpris::contains(*changes, state_changes))
+        update = update | Update::State;
+    if (lyricsmpris::contains(*changes, lyric_changes))
+        update = update | Update::Lyrics;
 
     const auto& s = client->state();
     if (fetch_artwork(s.has_player ? s.artwork_url : string{}))
@@ -271,5 +284,4 @@ bool Media::process(span<const pollfd> ready) {
         update = update | Update::Artwork;
 
     notify(update);
-    return update != Update::None;
 }

@@ -24,6 +24,9 @@ namespace {
 
 int timer_fd{-1};
 int wayland_fd{-1};
+// Cleared once stdin hits EOF / hangs up (e.g. started with stdin = /dev/null),
+// otherwise poll would report it readable forever and the loop would spin.
+bool stdin_open{true};
 
 Timer::Detail::EventQueue timer_queue{};
 
@@ -136,7 +139,8 @@ bool Timer::wait(bool animating) {
     fds.clear();
     fds.push_back({.fd = wayland_fd, .events = wayland_events, .revents = 0});
     fds.push_back({.fd = timer_fd, .events = POLLIN, .revents = 0});
-    fds.push_back({.fd = STDIN_FILENO, .events = POLLIN, .revents = 0});
+    // A negative fd is ignored by poll and keeps the slot layout fixed.
+    fds.push_back({.fd = stdin_open ? STDIN_FILENO : -1, .events = POLLIN, .revents = 0});
     Media::append_poll_fds(fds);
 
     int timeout_ms{animating ? 16 : -1};
@@ -166,12 +170,13 @@ bool Timer::wait(bool animating) {
             );
     }
 
-    bool media_changed = false;
+    // Media reports through its listener; the view requests a redraw only for
+    // what it shows, so e.g. lyric line ticks while collapsed draw nothing.
     {
         const span<const pollfd> media_fds{fds.begin() + kFixed, fds.end()};
         const bool ready = any_of(media_fds.begin(), media_fds.end(), [](const pollfd& p) { return p.revents != 0; });
         if (ready || (media_deadline && steady_clock::now() >= *media_deadline))
-            media_changed = Media::process(media_fds);
+            Media::process(media_fds);
     }
 
     if (fds[1].revents & POLLIN) {
@@ -179,12 +184,16 @@ bool Timer::wait(bool animating) {
         return true;
     }
 
-    if (fds[2].revents & POLLIN) {
+    if (fds[2].revents & (POLLIN | POLLHUP | POLLERR)) {
         string cmd{};
-        getline(cin, cmd);
-        Command::handle_command(cmd);
+        if (getline(cin, cmd))
+            Command::handle_command(cmd);
+        else
+            stdin_open = false;
     }
 
     const bool wayland_redraw{Wayland::get_wayland_redraw()};
-    return result == 0 || wayland_redraw || animating || media_changed;
+    // A timeout only means "next animation frame" or a media deadline; the
+    // latter does not need a frame by itself.
+    return wayland_redraw || animating;
 }
