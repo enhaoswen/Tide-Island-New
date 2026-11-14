@@ -46,6 +46,8 @@ bool is_expended(StateType type) {
     case StateType::ControlCenter:
         return true;
     }
+
+    return false;
 }
 
 void on_bg_click(const Object::Event& e) {
