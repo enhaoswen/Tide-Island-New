@@ -1,20 +1,20 @@
 #pragma once
 
-#include "app/views/music_player.hpp"
 #include "scene/context.hpp"
 #include "utils/struct.hpp"
 
 namespace StateManager {
 
 struct Resources {
-    FontHandle             main_font{};
-    MusicPlayerView::Fonts player_fonts{};
+    FontHandle main_font{};
+    FontHandle title{};
+    FontHandle artist{};
+    FontHandle time{};
+    FontHandle icon{};
 };
 
 void init(const Resources& resources);
 
-// Center the root on the surface; run every frame before layout so resize
-// animations stay centered.
 void update();
 
 void switch_state(StateType state);

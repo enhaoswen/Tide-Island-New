@@ -358,7 +358,6 @@ void build(const MusicPlayerView::Fonts& f) {
         });
     }
 
-    // Progress: elapsed | track | total
     const Handle progress = c.create_group(bg, Frame{.x = 0, .y = 0, .width = 0, .height = 16.f});
     c.set_size_mode(progress, Object::Axis::Horizontal, Object::SizeMode::Grow);
     c.set_layout(progress, row(12.f));
@@ -392,7 +391,6 @@ void build(const MusicPlayerView::Fonts& f) {
         b = c.create_rect(n.pause_icon, Object::RectDesc{.frame = {0, 0, 6.f, 24.f}, .color = Color::White, .radius = 1.f});
     c.set_visible(n.pause_icon, false);
 
-    // Favorite slot (kContentW * 0.9175) left empty on purpose.
 }
 
 }

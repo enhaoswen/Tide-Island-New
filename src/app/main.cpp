@@ -41,17 +41,15 @@ int main() {
 
     // prepare resource
 
-    const auto main_font = API::load_font("Sans Serif", 18);
-
-    const MusicPlayerView::Fonts player_fonts{
-        .title  = API::load_font("Sans Serif", 16),
-        .artist = API::load_font("Sans Serif", 14),
-        .time   = API::load_font("Sans Serif", 12),
-        .icon   = API::load_font("Sans Serif", 22),
+    const StateManager::Resources resources{
+        .main_font = API::load_font("Sans Serif", 18),
+        .title     = API::load_font("Sans Serif", 16),
+        .artist    = API::load_font("Sans Serif", 14),
+        .time      = API::load_font("Sans Serif", 12),
+        .icon      = API::load_font("Sans Serif", 22),
     };
 
-    StateManager::init({main_font, player_fonts});
-
+    StateManager::init(resources);
     StateManager::switch_state(StateType::Clock);
 
     API::run();

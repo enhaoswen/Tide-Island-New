@@ -674,6 +674,7 @@ void Wayland::request_resize(
     // we add 1 pixel to avoid the issue
     // Widen before adding so a configured size of 65535 does not wrap to zero.
 
+    // plus another 1 for the sake of safety
     ++++width;
     ++height;
 

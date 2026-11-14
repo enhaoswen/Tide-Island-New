@@ -4,6 +4,7 @@
 #include "island.hpp"
 #include "backend/wayland.hpp"
 #include "views/clock_view.hpp"
+#include "views/music_player.hpp"
 
 // Tide Island QS size
 
@@ -106,7 +107,14 @@ void StateManager::switch_state(const StateType state) {
     else if (state == StateType::MusicPLayer) {
         API::resize(410, 165);
         ctx.set_size(root, 410, 165);
-        MusicPlayerView::start(bg, resources.player_fonts);
+        MusicPlayerView::start(
+            bg,
+            {
+                .title  = resources.title,
+                .artist = resources.artist,
+                .time   = resources.time,
+                .icon   = resources.icon,
+            });
     }
 
     Island::request_redraw(true);
