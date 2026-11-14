@@ -5,6 +5,7 @@
 #include "app/state_manager.hpp"
 #include "backend/media.hpp"
 #include "backend/timer.hpp"
+#include "graphics/text.hpp"
 #include "graphics/texture.hpp"
 #include "utils/log.hpp"
 
@@ -44,16 +45,15 @@ constexpr int kBarCount = 5;
 
 constexpr array<float, 3> kSlotCenter{0.2425f, 0.4675f, 0.6925f};
 
-constexpr auto kTick         = milliseconds{64};
-constexpr auto kProgressTick = milliseconds{500};
+constexpr auto kTick = milliseconds{64};
 
-const Timing kProgressAnim{500.f, Ease::OutCubic};
 
 struct Nodes {
     Handle                   art{};
     Handle                   title{}, artist{};
     array<Handle, kBarCount> bars{};
     Handle                   time_l{},    time_r{};
+    Handle                   time_l_box{}, time_r_box{};
     Handle                   track{},     fill{};
     Handle                   prev{},      play{},      next{};
     Handle                   prev_icon{}, play_icon{}, next_icon{};
@@ -67,10 +67,10 @@ bool                     running{};
 bool                     playing{};
 float                    phase{};
 Timer::EventHandle       ticker{};
-steady_clock::time_point last_progress{};
 
 string shown_title, shown_artist, shown_time_l, shown_time_r;
-string shown_track_id;
+string shown_time_shape; // e.g. "0:00" / "00:00" / "0:00:00", sizes the time boxes
+FontHandle time_font{};
 
 Object::Context& ctx() { return StateManager::context(); }
 
@@ -101,8 +101,6 @@ void set_text_cached(Handle h, string& cache, const string& s) {
     return levels[static_cast<size_t>(i)];
 }
 
-// Heights are set directly (no tween): one frame per tick instead of a
-// never-ending 60 fps animation while playing.
 void set_bars(bool use_playing) {
     auto& c = ctx();
     for (int i = 0; i < kBarCount; ++i) {
@@ -113,8 +111,33 @@ void set_bars(bool use_playing) {
     }
 }
 
-// Elapsed / total labels and the progress fill. `animate` = ease the fill.
-void update_progress(bool animate) {
+void fit_time_boxes(const string& longest) {
+    string shape = longest;
+    for (char& ch : shape)
+        if (ch >= '0' && ch <= '9')
+            ch = '0';
+    if (shape == shown_time_shape)
+        return;
+    shown_time_shape = shape;
+
+    float w = 0.f;
+    for (char d = '0'; d <= '9'; ++d) {
+        string sample = shape;
+        for (char& ch : sample)
+            if (ch == '0')
+                ch = d;
+        const Text::Bitmap b = Text::draw(sample, time_font, 1.f);
+        w                    = max({w, static_cast<float>(b.width), b.advance_x});
+    }
+    w = ceil(w) + 1.f;
+
+    auto& c = ctx();
+    c.set_size(n.time_l_box, w, c.frame(n.time_l_box).height);
+    c.set_size(n.time_r_box, w, c.frame(n.time_r_box).height);
+    c.layout(); // the fill below needs the new track width this frame
+}
+
+void update_progress() {
     const auto*  s = Media::state();
     milliseconds pos{}, len{};
     if (s && s->has_player) {
@@ -122,23 +145,17 @@ void update_progress(bool animate) {
         len = s->duration.value_or(milliseconds{});
     }
 
+    const string total = format_time(len);
+    fit_time_boxes(format_time(max(pos, len)));
     set_text_cached(n.time_l, shown_time_l, format_time(pos));
-    set_text_cached(n.time_r, shown_time_r, format_time(len));
+    set_text_cached(n.time_r, shown_time_r, total);
 
     auto&       c        = ctx();
     const float track_w  = c.frame(n.track).width;
     const float fraction = len.count() > 0
         ? clamp(static_cast<float>(pos.count()) / static_cast<float>(len.count()), 0.f, 1.f)
         : 0.f;
-    const float w = track_w * fraction;
-
-    if (animate)
-        (void)c.animate(Object::TAnimDesc{.h = n.fill, .to = w, .t = kProgressAnim, .delay = 0.f, .p = Prop::W});
-    else {
-        c.cancel_animation(n.fill, Prop::W);
-        c.set_size(n.fill, w, c.frame(n.fill).height);
-    }
-    last_progress = steady_clock::now();
+    c.set_size(n.fill, track_w * fraction, c.frame(n.fill).height);
 }
 
 void schedule_tick();
@@ -152,9 +169,7 @@ void on_tick() {
     if (phase > 2.f * numbers::pi_v<float>)
         phase -= 2.f * numbers::pi_v<float>;
     set_bars(true);
-
-    if (steady_clock::now() - last_progress >= kProgressTick)
-        update_progress(true);
+    update_progress();
 
     Island::request_redraw(true);
     schedule_tick();
@@ -170,8 +185,7 @@ void set_enabled(Handle button, bool enabled) {
     ctx().set_opacity(button, enabled ? 1.f : kDimOpacity);
 }
 
-// Pull everything from Media into the scene.
-void refresh(bool track_changed_hint) {
+void refresh() {
     auto&       c           = ctx();
     const auto* s           = Media::state();
     const bool  has         = s && s->has_player;
@@ -196,10 +210,7 @@ void refresh(bool track_changed_hint) {
     c.set_visible(n.play_icon, !now_playing);
     c.set_visible(n.pause_icon, now_playing);
 
-    const string track_id  = has ? s->track_id + '\n' + s->title : string{};
-    const bool   new_track = track_changed_hint || track_id != shown_track_id;
-    shown_track_id         = track_id;
-    update_progress(!new_track);
+    update_progress();
 
     if (now_playing != playing) {
         playing = now_playing;
@@ -223,7 +234,7 @@ void on_media(Media::Update u) {
         return;
     bool shown = false; // lyrics-only updates are not displayed here: no frame for them
     if (Media::contains(u, Media::Update::State)) {
-        refresh(false);
+        refresh();
         shown = true;
     }
     if (Media::contains(u, Media::Update::Artwork)) {
@@ -351,9 +362,14 @@ void build(const MusicPlayerView::Fonts& f) {
     const Handle progress = c.create_group(bg, Frame{.x = 0, .y = 0, .width = 0, .height = 16.f});
     c.set_size_mode(progress, Object::Axis::Horizontal, Object::SizeMode::Grow);
     c.set_layout(progress, row(12.f));
-    n.time_l = c.create_text(progress, {});
-    n.track  = c.create_rect(progress, Object::RectDesc{.frame = {0, 0, 0, 6.f}, .color = kTrack, .radius = 3.f});
-    n.time_r = c.create_text(progress, {});
+    n.time_l_box = c.create_group(progress, Frame{.x = 0, .y = 0, .width = 0, .height = 16.f});
+    n.track      = c.create_rect(progress, Object::RectDesc{.frame = {0, 0, 0, 6.f}, .color = kTrack, .radius = 3.f});
+    n.time_r_box = c.create_group(progress, Frame{.x = 0, .y = 0, .width = 0, .height = 16.f});
+    c.set_layout(n.time_l_box, row(0.f, Object::Alignment::Center, Object::Justify::Start));
+    c.set_layout(n.time_r_box, row(0.f, Object::Alignment::Center, Object::Justify::End));
+    n.time_l  = c.create_text(n.time_l_box, {});
+    n.time_r  = c.create_text(n.time_r_box, {});
+    time_font = f.time;
     c.set_size_mode(n.track, Object::Axis::Horizontal, Object::SizeMode::Grow);
     c.text(n.time_l).set_font(f.time).set_color(kSecondary);
     c.text(n.time_r).set_font(f.time).set_color(kSecondary);
@@ -398,10 +414,10 @@ void MusicPlayerView::start(Handle arg_bg, const Fonts& fonts) {
     shown_artist.clear();
     shown_time_l.clear();
     shown_time_r.clear();
-    shown_track_id.clear();
+    shown_time_shape.clear();
 
     ctx().layout();
-    refresh(true);
+    refresh();
     refresh_artwork();
     Media::set_listener(on_media);
 }

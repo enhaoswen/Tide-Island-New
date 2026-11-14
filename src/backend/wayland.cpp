@@ -674,7 +674,7 @@ void Wayland::request_resize(
     // we add 1 pixel to avoid the issue
     // Widen before adding so a configured size of 65535 does not wrap to zero.
 
-    ++width;
+    ++++width;
     ++height;
 
     zwlr_layer_surface_v1_set_size(layer_surface.get(), width, height);
