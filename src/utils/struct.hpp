@@ -29,5 +29,6 @@ enum struct StateType : std::uint8_t {
     Clock,
     Lyrics,
     MusicPLayer,
+    ControlCenter,
 };
 

@@ -2,6 +2,7 @@
 #include "backend/wayland.hpp"
 #include "graphics/renderer.hpp"
 #include "backend/timer.hpp"
+#include "backend/media.hpp"
 #include "app/island.hpp"
 #include "app/views/clock_view.hpp"
 #include "app/state_manager.hpp"
@@ -72,6 +73,9 @@ void API::init() {
 
     Timer::init();
     Log::logger(Log::Debug, "Timer initialized successfully");
+
+    Media::init();
+    Log::logger(Log::Debug, "Media initialized (available: {})", Media::available());
 
     Wayland::set_pointer_callbacks({
         .motion = on_pointer_motion,
@@ -148,6 +152,7 @@ void API::run() {
 void API::shutdown() {
     ClockView::shutdown();
     StateManager::stop();
+    Media::shutdown();
     Timer::shutdown();
     Text::shutdown();
     Renderer::shutdown();

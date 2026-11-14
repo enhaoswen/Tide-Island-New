@@ -201,6 +201,12 @@ int Mpris::read_metadata(sd_bus_message* message, Player& player) {
             int64_t length{};
             if ((result = sd_bus_message_read(message, "x", &length)) < 0) return result;
             if (length > 0) state.duration = Milliseconds{length / 1000};
+        } else if (name == "mpris:length" && strcmp(signature, "t") == 0) {
+            // The spec says int64, but Spotify (and others) send uint64.
+            uint64_t length{};
+            if ((result = sd_bus_message_read(message, "t", &length)) < 0) return result;
+            if (length > 0 && length <= static_cast<uint64_t>(numeric_limits<int64_t>::max()))
+                state.duration = Milliseconds{static_cast<int64_t>(length / 1000)};
         } else if ((name == "xesam:artist" || name == "xesam:comment") && strcmp(signature, "as") == 0) {
             if ((result = sd_bus_message_enter_container(message, 'a', "s")) < 0) return result;
             const char* item{};

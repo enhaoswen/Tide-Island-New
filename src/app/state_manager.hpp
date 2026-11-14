@@ -1,12 +1,14 @@
 #pragma once
 
+#include "app/views/music_player.hpp"
 #include "scene/context.hpp"
 #include "utils/struct.hpp"
 
 namespace StateManager {
 
 struct Resources {
-    FontHandle main_font{};
+    FontHandle             main_font{};
+    MusicPlayerView::Fonts player_fonts{};
 };
 
 void init(const Resources& resources);

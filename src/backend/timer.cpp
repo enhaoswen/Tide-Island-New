@@ -1,17 +1,21 @@
 #include "backend/timer.hpp"
+#include "command.hpp"
 #include "backend/event_queue.hpp"
+#include "backend/media.hpp"
 #include "backend/wayland.hpp"
 #include "utils/log.hpp"
-#include "command.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <iostream>
-#include <algorithm>
-#include <cmath>
+#include <limits>
 #include <poll.h>
-#include <sys/timerfd.h>
+#include <span>
 #include <unistd.h>
+#include <vector>
+#include <sys/timerfd.h>
 
 using namespace std;
 using namespace std::chrono;
@@ -127,30 +131,25 @@ void Timer::handle_events(std::source_location) {
 bool Timer::wait(bool animating) {
     const short wayland_events = Wayland::prepare_events();
 
-    pollfd fds[] = {
-        {
-            .fd      = wayland_fd,
-            .events  = wayland_events,
-            .revents = 0,
-        },
-        {
-            .fd      = timer_fd,
-            .events  = POLLIN,
-            .revents = 0,
-        },
-        {
-            .fd      = STDIN_FILENO,
-            .events  = POLLIN,
-            .revents = 0,
-        },
-    };
+    constexpr size_t kFixed = 3;
+    static vector<pollfd> fds;
+    fds.clear();
+    fds.push_back({.fd = wayland_fd, .events = wayland_events, .revents = 0});
+    fds.push_back({.fd = timer_fd, .events = POLLIN, .revents = 0});
+    fds.push_back({.fd = STDIN_FILENO, .events = POLLIN, .revents = 0});
+    Media::append_poll_fds(fds);
+
+    int timeout_ms{animating ? 16 : -1};
+    const auto media_deadline = Media::next_deadline();
+    if (media_deadline) {
+        const auto left = ceil<milliseconds>(*media_deadline - steady_clock::now()).count();
+        const int  ms   = static_cast<int>(std::clamp<long long>(left, 0, numeric_limits<int>::max()));
+        timeout_ms      = timeout_ms < 0 ? ms : min(timeout_ms, ms);
+    }
 
     int result{};
-    // Keep frames advancing while animations run; sleep indefinitely when idle.
-    const int timeout_ms{animating ? 16 : -1};
-
     do {
-        result = poll(fds, 3, timeout_ms);
+        result = poll(fds.data(), fds.size(), timeout_ms);
     } while (result == -1 && errno == EINTR);
 
     if (result == -1) {
@@ -167,6 +166,14 @@ bool Timer::wait(bool animating) {
             );
     }
 
+    bool media_changed = false;
+    {
+        const span<const pollfd> media_fds{fds.begin() + kFixed, fds.end()};
+        const bool ready = any_of(media_fds.begin(), media_fds.end(), [](const pollfd& p) { return p.revents != 0; });
+        if (ready || (media_deadline && steady_clock::now() >= *media_deadline))
+            media_changed = Media::process(media_fds);
+    }
+
     if (fds[1].revents & POLLIN) {
         handle_events();
         return true;
@@ -179,5 +186,5 @@ bool Timer::wait(bool animating) {
     }
 
     const bool wayland_redraw{Wayland::get_wayland_redraw()};
-    return result == 0 || wayland_redraw || animating;
+    return result == 0 || wayland_redraw || animating || media_changed;
 }

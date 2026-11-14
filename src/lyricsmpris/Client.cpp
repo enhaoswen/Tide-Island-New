@@ -52,7 +52,7 @@ detail::TrackQuery query_for(const State& state) {
     return query;
 }
 
-} // namespace
+}
 
 struct Client::Impl {
     Options options{};

@@ -34,6 +34,26 @@ StateManager::Resources resources;
 Object::Context         ctx{};
 Object::Handle          root{};
 Object::Handle          bg{};
+
+bool is_expended(StateType type) {
+    switch (type) {
+    case StateType::Clock:
+    case StateType::Lyrics:
+        return false;
+
+    case StateType::MusicPLayer:
+    case StateType::ControlCenter:
+        return true;
+    }
+}
+
+void on_bg_click(const Object::Event& e) {
+    if (e.button == Object::Button::Left) {
+        StateManager::switch_state(
+            is_expended(Island::get_state()) ? StateType::Clock : StateType::MusicPLayer
+            );
+    }
+}
 }
 
 void StateManager::init(const Resources& arg_resources) {
@@ -57,7 +77,7 @@ void StateManager::init(const Resources& arg_resources) {
     ctx.set_layout(root, Object::LayoutData{});
     ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Grow);
     ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Grow);
-    ctx.set_clickable(bg,true);
+    ctx.on_click(bg, on_bg_click);
 }
 
 Object::Context& StateManager::context() {
@@ -73,7 +93,7 @@ void StateManager::update() {
     ctx.set_pos(root, (static_cast<float>(size[0]) - frame.width) * 0.5f, 0.0f);
 }
 
-void StateManager::switch_state(StateType state) {
+void StateManager::switch_state(const StateType state) {
     stop();
 
     Island::set_state(state);
@@ -86,6 +106,7 @@ void StateManager::switch_state(StateType state) {
     else if (state == StateType::MusicPLayer) {
         API::resize(410, 165);
         ctx.set_size(root, 410, 165);
+        MusicPlayerView::start(bg, resources.player_fonts);
     }
 
     Island::request_redraw(true);
@@ -95,6 +116,9 @@ void StateManager::stop() {
     switch (Island::get_state()) {
     case StateType::Clock:
         ClockView::stop();
+        break;
+    case StateType::MusicPLayer:
+        MusicPlayerView::stop();
         break;
     default:
         break;

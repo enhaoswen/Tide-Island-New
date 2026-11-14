@@ -52,6 +52,8 @@ set(SRC
         src/scene/layout.cpp
         src/scene/render.hpp
         src/backend/input.cpp
+        src/backend/media.cpp
+        src/backend/media.hpp
 )
 
 add_executable(Tide-island ${SRC})
@@ -77,6 +79,7 @@ target_link_libraries(Tide-island PRIVATE
         OpenGL::EGL
         Freetype::Freetype
         lyricsmpris_glaze
+        LyricsMpris::LyricsMpris
 )
 
 target_compile_options(Tide-island PRIVATE -Wall -Wextra)

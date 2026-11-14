@@ -1,13 +1,19 @@
-//
-// Created by swen on 2026/10/25.
-//
+#pragma once
 
-#ifndef TIDE_ISLAND_MUSIC_PLAYER_H
-#define TIDE_ISLAND_MUSIC_PLAYER_H
+#include "scene/context.hpp"
+#include "utils/struct.hpp"
 
+namespace MusicPlayerView {
 
-class music_player {
+struct Fonts {
+    FontHandle title{};
+    FontHandle artist{};
+    FontHandle time{};
+    FontHandle icon{};
 };
 
+void start(Object::Handle bg, const Fonts& fonts);
 
-#endif //TIDE_ISLAND_MUSIC_PLAYER_H
+void stop();
+
+}
