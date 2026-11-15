@@ -34,7 +34,8 @@ struct SAnimDesc {
     float         to{};
     const Spring& s;
     float         delay{};
-    Prop          p;
+    Prop          p{};
+    AnimCallback  on_done{};
 };
 
 struct TAnimDesc {
@@ -42,7 +43,8 @@ struct TAnimDesc {
     float         to{};
     const Timing& t;
     float         delay{};
-    Prop          p;
+    Prop          p{};
+    AnimCallback  on_done{};
 };
 
 class Context;
@@ -79,7 +81,7 @@ public:
 
     [[nodiscard]] explicit operator bool() const;
 
-    ImageView& set_texture(Texture t); // may change the Fit size -> re-layout
+    ImageView& set_texture(Texture t);           // may change the Fit size -> re-layout
     ImageView& set_image(std::string_view path); // loads then set_texture; no path stored
     ImageView& set_radius(float r);
 
@@ -103,7 +105,7 @@ public:
 
     [[nodiscard]] explicit operator bool() const;
 
-    TextView& set_texture(Texture t); // text is rendered to a texture by the caller
+    TextView& set_texture(Texture t);       // text is rendered to a texture by the caller
     TextView& set_text(std::string_view s); // rasterizes with the stored font; keeps the string for scale changes
     TextView& set_font(FontHandle f);
 
@@ -312,7 +314,8 @@ private:
     void link_first(uint16_t parent, uint16_t child);
 
     uint16_t unlink(uint16_t child);
-    void     mark_dirty(uint16_t i);
+
+    void mark_dirty(uint16_t i);
 
     // Re-rasterize text bitmaps whose texture was rendered for another scale.
     bool refresh_text(float scale);
@@ -350,11 +353,11 @@ private:
     std::size_t         live_      = 0;
     std::vector<Handle> roots_; // back-to-front
 
-    SlotVec<RectData>   rects_;
-    SlotVec<ImageData>  images_;
-    SlotVec<TextData>   texts_;
-    SlotVec<LayoutData> layouts_;
-    SlotVec<Listener>   listeners_;
+    SlotVec<RectData>                      rects_;
+    SlotVec<ImageData>                     images_;
+    SlotVec<TextData>                      texts_;
+    SlotVec<LayoutData>                    layouts_;
+    SlotVec<Listener>                      listeners_;
     std::unordered_map<uint16_t, GrowData> grow_;
 
     Animator anim_;

@@ -69,6 +69,8 @@ uint32_t current_width{};
 uint32_t current_height{};
 uint32_t requested_width{};
 uint32_t requested_height{};
+uint32_t asked_width{};
+uint32_t asked_height{};
 uint32_t buffer_width{};
 uint32_t buffer_height{};
 bool     surface_configured{false};
@@ -387,11 +389,38 @@ void update_buffer_size() {
     Log::logger(Log::Debug, "EGL buffer: {}*{}", buffer_width, buffer_height);
 }
 
+uint32_t fit_extent(uint32_t v, bool even) {
+    const float scale{viewport && fractional_scale ? surface_scale : 1.0f};
+    for (uint32_t c = v; c < v + 240; ++c) {
+        const float physical{static_cast<float>(c) * scale};
+        const float rounded{round(physical)};
+        if (abs(physical - rounded) < 1e-3f && (!even || static_cast<uint32_t>(rounded) % 2 == 0)) {
+            return c;
+        }
+    }
+    return v;
+}
+
+void apply_size() {
+    const uint32_t width{fit_extent(asked_width, true)};
+    const uint32_t height{fit_extent(asked_height, false)};
+    if (width == requested_width && height == requested_height) {
+        return;
+    }
+    zwlr_layer_surface_v1_set_size(layer_surface.get(), width, height);
+    requested_width  = width;
+    requested_height = height;
+    current_width    = width;
+    current_height   = height;
+    update_buffer_size();
+}
+
 void preferred_scale(void*, wp_fractional_scale_v1*, uint32_t scale) {
     surface_scale        = static_cast<float>(scale) / 120.0f;
     wayland_needs_redraw = true;
     if (surface_configured) {
         update_buffer_size();
+        apply_size();
     }
 }
 
@@ -410,13 +439,11 @@ void layer_surface_configure(
     ) {
     zwlr_layer_surface_v1_ack_configure(surface, serial);
 
-    if (width != 0 && width != requested_width) {
-        logger(Log::Warning, "Did not receive expected width {} (requested: {})", width, requested_width);
+    if (surface_configured) {
+        return;
     }
-    current_width = width != 0 ? width : requested_width;
-    if (height != 0 && height != requested_height) {
-        logger(Log::Warning, "Did not receive expected height {} (requested: {})", height, requested_height);
-    }
+
+    current_width      = width != 0 ? width : requested_width;
     current_height     = height != 0 ? height : requested_height;
     surface_configured = true;
     update_buffer_size();
@@ -451,6 +478,8 @@ void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int3
 
     requested_width    = width;
     requested_height   = height;
+    asked_width        = width;
+    asked_height       = height;
     surface_configured = false;
 
     // 1. Establish Wayland Connection & Registry
@@ -675,13 +704,9 @@ void Wayland::request_resize(
     // Widen before adding so a configured size of 65535 does not wrap to zero.
 
     // plus another 1 for the sake of safety
-    ++++width;
-    ++height;
-
-    zwlr_layer_surface_v1_set_size(layer_surface.get(), width, height);
-    requested_width  = width;
-    requested_height = height;
-    wl_surface_commit(surface.get());
+    asked_width  = static_cast<uint32_t>(width) + 1;
+    asked_height = static_cast<uint32_t>(height) + 1;
+    apply_size();
 
 }
 
@@ -708,6 +733,8 @@ void Wayland::apply_config(
     }
     requested_width  = width;
     requested_height = height;
+    current_width    = width;
+    current_height   = height;
     zwlr_layer_surface_v1_set_size(
         layer_surface.get(),
         width,
@@ -725,7 +752,7 @@ void Wayland::apply_config(
         0, 0, 0
         );
 
-    wl_surface_commit(surface.get());
+    update_buffer_size();
 
     logger(Log::Debug, "Applyed config: {}*{}", width, height);
 }

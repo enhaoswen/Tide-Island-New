@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 using namespace std;
 
@@ -103,7 +104,8 @@ Animator::Entry* Animator::acquire(Object::Context& ctx, Object::Handle h, Prop 
     return &entries_.back();
 }
 
-bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Spring& s, float delay) {
+bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Spring& s, float delay,
+    AnimCallback                                                       on_done) {
     Entry* e = acquire(ctx, h, p);
     if (!e)
         return false;
@@ -113,11 +115,13 @@ bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, c
     e->mode   = Mode::Spring;
     e->target = to;
     e->delay  = std::max(delay, 0.f);
+    e->on_done = std::move(on_done);
     e->spring = {s.stiffness, s.damping, s.mass};
     return true;
 }
 
-bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Timing& t, float delay) {
+bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Timing& t, float delay,
+    AnimCallback                                                       on_done) {
     Entry* e = acquire(ctx, h, p);
     if (!e)
         return false;
@@ -127,6 +131,7 @@ bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, c
     e->velocity = 0.f;
     e->target   = to;
     e->delay    = std::max(delay, 0.f);
+    e->on_done  = std::move(on_done);
     e->timed    = {e->value, t.duration, 0.f};
     return true;
 }
@@ -189,9 +194,13 @@ bool Animator::update(Object::Context& ctx, float dt_ms) {
     dt_ms        = max(dt_ms, 0.f);
     bool stepped = false;
 
+    // Callbacks run after the loop: they may start/cancel animations and mutate entries_.
+    vector<AnimCallback> done;
+
     for (size_t i = 0; i < entries_.size();) {
         Entry& e        = entries_[i];
         bool   finished = !ctx.alive(e.h);
+        bool   reached  = false;
 
         if (!finished) {
             float step_dt = dt_ms;
@@ -206,12 +215,17 @@ bool Animator::update(Object::Context& ctx, float dt_ms) {
             }
 
             finished = step(e, step_dt);
+            reached  = finished;
             stepped  = true;
-            if (!ctx.set_prop(e.h, e.prop, e.value))
+            if (!ctx.set_prop(e.h, e.prop, e.value)) {
                 finished = true;
+                reached  = false;
+            }
         }
 
         if (finished) {
+            if (reached && e.on_done)
+                done.push_back(std::move(e.on_done));
             e = entries_.back();
             entries_.pop_back();
         }
@@ -219,5 +233,9 @@ bool Animator::update(Object::Context& ctx, float dt_ms) {
             ++i;
         }
     }
+
+    for (auto& cb : done)
+        cb();
+
     return stepped;
 }

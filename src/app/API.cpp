@@ -12,6 +12,8 @@
 #include "backend/egl_vendor.hpp"
 #include "scene/render.hpp"
 
+#include <algorithm>
+
 using namespace std;
 using namespace std::chrono;
 
@@ -62,7 +64,7 @@ void API::init() {
         island->island_height,
         island->zone,
         island->anchor_top
-    );
+        );
     Log::logger(Log::Debug, "Wayland initialized successfully");
 
     Text::init();
@@ -98,11 +100,6 @@ const Island::IslandState& API::get_island() {
     return *island;
 }
 
-void API::resize(std::uint16_t width, std::uint16_t height) {
-    Wayland::request_resize(width, height);
-    Island::set_size(width, height);
-}
-
 Timer::EventHandle API::push_event(microseconds duration, void (*callback)(), float priority) {
     return Timer::push(duration, callback, priority);
 }
@@ -126,12 +123,12 @@ void API::run() {
             Island::request_redraw(false);
 
             const auto  now   = steady_clock::now();
-            const float dt_ms = static_cast<float>(duration_cast<microseconds>(now - last).count()) / 1000.0f;
-            last              = now;
+            const float dt_ms = std::min(
+                static_cast<float>(duration_cast<microseconds>(now - last).count()) / 1000.0f, 33.f);
+            last = now;
 
-            StateManager::update(); // center the root on the surface
-            ctx.update(dt_ms);      // step animations, then layout
-
+            ctx.update(dt_ms);
+            StateManager::update();
             // Animation / layout can move nodes under a still pointer (hover changes). Lay out
             // again if callbacks ran so their changes make it into this frame.
             if (ctx.dispatch_events())
@@ -142,7 +139,7 @@ void API::run() {
             Renderer::end_frame();
         }
 
-        const bool redraw = Timer::wait(ctx.animating());
+        const bool redraw  = Timer::wait(ctx.animating());
         // Pointer input gathered during the wait; callbacks usually change something visible.
         const bool handled = ctx.dispatch_events();
         Island::request_redraw(redraw || handled || island->need_redraw);

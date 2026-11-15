@@ -7,19 +7,14 @@
 //
 #include "app/island.hpp"
 #include "backend/config.hpp"
-#include "utils/color_json.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 
 #include <cmath>
-#include <filesystem>
 #include <source_location>
 #include <utility>
-#include <glaze/json/read.hpp>
-#include <glaze/json/write.hpp>
 
 using namespace std;
-using namespace std::filesystem;
 
 // ============================================================================
 // [Internal Details]
@@ -58,20 +53,14 @@ const Island::IslandState& Island::get_island() {
 }
 
 void Island::init() {
-    const auto conf_path = Config::get_path(Config::ConfigType::IslandConfig);
-
-    if (conf_path.has_parent_path()) {
-        create_directories(conf_path.parent_path());
-    }
-
-    if (!exists(conf_path)) {
+    if (!Config::exists()) {
         Config::write(to_config());
         return;
     }
 
-    Config::IslandConfig config;
-
-    Config::read(config);
+    Config::IslandConfig config = to_config();
+    if (!Config::read(config))
+        return;
 
     if (config.island_width == 0 || config.island_height == 0 ||
         !isfinite(config.radius) || config.radius < 0) {

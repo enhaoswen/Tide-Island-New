@@ -1,79 +1,50 @@
 #include "config.hpp"
-#include "utils/struct.hpp"
 
 #include "utils/color_json.hpp"
-#include "utils/get_type_name.hpp"
 #include "utils/log.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <string>
+#include <system_error>
+#include <utility>
+#include <vector>
 #include <glaze/json/read.hpp>
 #include <glaze/json/write.hpp>
 
 using namespace std;
 using namespace std::filesystem;
 
-template <typename T>
-path Config::get_path(source_location l) {
+namespace {
+
+using Entries = vector<pair<string, glz::raw_json>>;
+
+void report(const char* what, const string& path, const string& error, source_location l) {
+    Log::logger(Log::Error, "{}:{}: Failed to {} config.\n\tpath={}, error={}",
+        l.file_name(), l.line(), what, path, error);
+}
+
+}
+
+path Config::get_path() {
     const char* const home = getenv("HOME");
     if (home == nullptr)
         Log::fatal("HOME is not set");
 
-    filesystem::path config_path =
-        filesystem::path(home) / ".config" / "Tide Island";
-
-    if constexpr (same_as<T, IslandConfig>) {
-        config_path /= "island_config.json";
-    }
-    else {
-        Log::fatal(
-            "{}:{}: Tide Island does not support this type, type={}",
-            l.file_name(),
-            l.line(),
-            Log::type_name<T>()
-            );
-    }
-
-    return config_path.string();
+    return path(home) / ".config" / "Tide Island" / "config.json";
 }
 
-path Config::get_path(Config::ConfigType type) {
-    const char* const home = getenv("HOME");
-    if (home == nullptr)
-        Log::fatal("HOME is not set");
-
-    filesystem::path config_path =
-        filesystem::path(home) / ".config" / "Tide Island";
-
-    if (type == Config::ConfigType::IslandConfig) {
-        config_path /= "island_config.json";
-    }
-    return config_path.string();
-}
-
-bool Config::exist(Config::ConfigType type) {
-    return filesystem::exists(get_path(type));
+bool Config::exists() {
+    error_code ec;
+    return filesystem::exists(get_path(), ec);
 }
 
 template <typename T>
 bool Config::read(T& t, source_location l) {
-    string config_path = get_path<T>(l);
+    const string config_path = get_path().string();
 
-    const auto error = glz::read_file_json(
-        t,
-        config_path,
-        std::string{}
-        );
-
-    if (error) {
-        Log::logger(
-            Log::Error,
-            "{}:{}: Failed to load config.\n\tpath={},error={}",
-            l.file_name(),
-            l.line(),
-            config_path,
-            glz::format_error(error)
-            );
-
+    if (const auto error = glz::read_file_json<glz::opts{.error_on_unknown_keys = false}>(t, config_path, string{})) {
+        report("load", config_path, glz::format_error(error), l);
         return false;
     }
     return true;
@@ -81,30 +52,45 @@ bool Config::read(T& t, source_location l) {
 
 template <typename T>
 bool Config::write(const T& t, source_location l) {
-    const string config_path = get_path<T>(l);
+    const path   config_path = get_path();
+    const string path_str    = config_path.string();
 
-    const auto error = glz::write_file_json<glz::opts{.prettify = true}>(
-        t,
-        config_path,
-        std::string{}
-        );
+    Entries entries;
+    if (exists()) {
+        if (const auto error = glz::read_file_json(entries, path_str, string{})) {
+            report("load", path_str, glz::format_error(error), l);
+            return false;
+        }
+    }
 
-    if (error) {
-        Log::logger(
-            Log::Error,
-            "{}:{}: Failed to save config.\n\tpath={}, error={}",
-            l.file_name(),
-            l.line(),
-            config_path,
-            glz::format_error(error)
-            );
+    string  json;
+    Entries own;
+    if (const auto error = glz::write_json(t, json)) {
+        report("serialize", path_str, glz::format_error(error), l);
+        return false;
+    }
+    (void)glz::read_json(own, json);
 
+    for (auto& [key, value] : own) {
+        if (auto it = ranges::find(entries, key, &pair<string, glz::raw_json>::first); it != entries.end())
+            it->second = std::move(value);
+        else
+            entries.emplace_back(key, std::move(value));
+    }
+
+    error_code ec;
+    create_directories(config_path.parent_path(), ec);
+    if (ec) {
+        report("create directory for", path_str, ec.message(), l);
         return false;
     }
 
+    if (const auto error = glz::write_file_json<glz::opts{.prettify = true}>(entries, path_str, string{})) {
+        report("save", path_str, glz::format_error(error), l);
+        return false;
+    }
     return true;
 }
 
-template std::filesystem::path Config::get_path<Config::IslandConfig>(std::source_location);
-template bool Config::read<Config::IslandConfig>(Config::IslandConfig&, std::source_location);
-template bool Config::write<Config::IslandConfig>(const Config::IslandConfig&, std::source_location);
+template bool Config::read<Config::IslandConfig>(Config::IslandConfig&, source_location);
+template bool Config::write<Config::IslandConfig>(const Config::IslandConfig&, source_location);

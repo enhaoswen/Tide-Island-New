@@ -550,11 +550,11 @@ TextView Context::text(Handle h) {
 }
 
 bool Context::animate(SAnimDesc desc) {
-    return anim_.start(*this, desc.h, desc.p, desc.to, desc.s, desc.delay);
+    return anim_.start(*this, desc.h, desc.p, desc.to, desc.s, desc.delay, std::move(desc.on_done));
 }
 
 bool Context::animate(TAnimDesc desc) {
-    return anim_.start(*this, desc.h, desc.p, desc.to, desc.t, desc.delay);
+    return anim_.start(*this, desc.h, desc.p, desc.to, desc.t, desc.delay, std::move(desc.on_done));
 }
 
 void Context::update(float dt) {

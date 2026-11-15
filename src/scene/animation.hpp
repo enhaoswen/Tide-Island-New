@@ -3,6 +3,7 @@
 #include "struct.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace Object {
@@ -16,6 +17,10 @@ enum class Prop : uint8_t {
     ColorR, ColorG, ColorB, ColorA,
 };
 
+// Fired once when an animation reaches its target. Not fired if it is cancelled,
+// replaced by a new animation on the same (handle, prop), or its handle dies.
+using AnimCallback = std::function<void()>;
+
 enum class Ease : uint8_t { Linear, InQuad, OutQuad, InOutQuad, OutCubic, InOutCubic };
 
 struct Spring {
@@ -23,6 +28,15 @@ struct Spring {
     float damping   = 32.f;
     float mass      = 1.f;
 };
+
+namespace Springs {
+
+inline constexpr Spring Smooth{280.f, 28.f, 1.f};
+inline constexpr Spring Snappy{400.f, 32.f, 1.f};
+inline constexpr Spring Bouncy{300.f, 18.f, 1.f};
+inline constexpr Spring Gentle{200.f, 24.f, 1.f};
+
+}
 
 struct Timing {
     float duration = 250.f; // milliseconds
@@ -32,8 +46,11 @@ struct Timing {
 
 class Animator {
 public:
-    bool start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Spring& s, float delay);
-    bool start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Timing& t, float delay);
+    bool start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Spring& s, float delay,
+               AnimCallback on_done = {});
+
+    bool start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Timing& t, float delay,
+               AnimCallback on_done = {});
 
     void cancel(Object::Handle h, Prop p); // stops where it is
     void cancel_all(Object::Handle h);
@@ -64,6 +81,7 @@ private:
         float          velocity{};
         float          target{};
         float          delay{}; // ms
+        AnimCallback   on_done{};
         union {
             SpringParams spring;
             TimedParams  timed;
