@@ -359,34 +359,87 @@ constexpr wl_registry_listener registry_listener{
 
 // --- Fractional Scale Listener ---
 
-void update_buffer_size() {
-    if (current_width == 0 || current_height == 0 ||
-        current_width > static_cast<uint32_t>(numeric_limits<int32_t>::max()) ||
-        current_height > static_cast<uint32_t>(numeric_limits<int32_t>::max())) {
-        Log::fatal("Invalid logical surface size: {}*{}", current_width, current_height);
-    }
-    // A viewport maps the pixel buffer back to the logical surface size.
-    const float scale{viewport && fractional_scale ? surface_scale : 1.0f};
-    const float width{round(static_cast<float>(current_width) * scale)};
-    const float height{round(static_cast<float>(current_height) * scale)};
-    if (width < 1 || height < 1 ||
-        width >= static_cast<float>(numeric_limits<int>::max()) ||
-        height >= static_cast<float>(numeric_limits<int>::max())) {
-        Log::fatal("Invalid EGL buffer size: {}*{}", width, height);
-    }
-    buffer_width  = static_cast<uint32_t>(width);
-    buffer_height = static_cast<uint32_t>(height);
+// Surface geometry changes are staged, not applied directly.
+//
+// wl_egl_window_resize() only tells the EGL driver which size the *next* buffer
+// should have; the driver decides when it actually reallocates. Mesa does it on
+// the next draw, NVIDIA's egl-wayland after the following eglSwapBuffers. The
+// viewport destination and layer size, however, are plain double-buffered
+// surface state committed by that very swap. If they get ahead of the driver,
+// the compositor scales a stale-size buffer into the new destination and the
+// whole island visibly shrinks/stretches for a frame.
+//
+// So the EGL window is resized right away, but the logical size, viewport and
+// layer size are only switched (in Wayland::sync_surface) once the EGL surface
+// reports the new buffer size. Until then frames keep the old geometry, which
+// is consistent with the buffer they are drawn into.
+uint32_t pending_width{};
+uint32_t pending_height{};
+uint32_t pending_buffer_width{};
+uint32_t pending_buffer_height{};
+bool     has_pending{false};
+int      pending_frames{0};
 
+// Upper bound on frames to wait for the driver before applying anyway.
+constexpr int max_pending_frames{4};
+
+void apply_pending() {
+    if (!has_pending) {
+        return;
+    }
+    if (layer_surface && (pending_width != current_width || pending_height != current_height)) {
+        zwlr_layer_surface_v1_set_size(layer_surface.get(), pending_width, pending_height);
+    }
     if (viewport) {
         wl_surface_set_buffer_scale(surface.get(), 1);
-        wp_viewport_set_destination(viewport.get(), static_cast<int>(current_width), static_cast<int>(current_height));
+        wp_viewport_set_destination(viewport.get(), static_cast<int>(pending_width), static_cast<int>(pending_height));
     }
-    if (egl_window) {
-        wl_egl_window_resize(egl_window.get(), static_cast<int>(buffer_width), static_cast<int>(buffer_height), 0, 0);
-    }
+    current_width        = pending_width;
+    current_height       = pending_height;
+    buffer_width         = pending_buffer_width;
+    buffer_height        = pending_buffer_height;
+    has_pending          = false;
+    pending_frames       = 0;
     wayland_needs_redraw = true;
     Log::logger(Log::Debug, "Surface scale: {:.3f}", surface_scale);
     Log::logger(Log::Debug, "EGL buffer: {}*{}", buffer_width, buffer_height);
+}
+
+void stage_size(uint32_t width, uint32_t height) {
+    if (width == 0 || height == 0 ||
+        width > static_cast<uint32_t>(numeric_limits<int32_t>::max()) ||
+        height > static_cast<uint32_t>(numeric_limits<int32_t>::max())) {
+        Log::fatal("Invalid logical surface size: {}*{}", width, height);
+    }
+    // A viewport maps the pixel buffer back to the logical surface size.
+    const float scale{viewport && fractional_scale ? surface_scale : 1.0f};
+    const float buf_w{round(static_cast<float>(width) * scale)};
+    const float buf_h{round(static_cast<float>(height) * scale)};
+    if (buf_w < 1 || buf_h < 1 ||
+        buf_w >= static_cast<float>(numeric_limits<int>::max()) ||
+        buf_h >= static_cast<float>(numeric_limits<int>::max())) {
+        Log::fatal("Invalid EGL buffer size: {}*{}", buf_w, buf_h);
+    }
+    pending_width         = width;
+    pending_height        = height;
+    pending_buffer_width  = static_cast<uint32_t>(buf_w);
+    pending_buffer_height = static_cast<uint32_t>(buf_h);
+    has_pending           = true;
+    pending_frames        = 0;
+
+    if (egl_window) {
+        wl_egl_window_resize(egl_window.get(), static_cast<int>(pending_buffer_width), static_cast<int>(pending_buffer_height), 0, 0);
+    }
+    // Nothing renders yet: there is no driver state to wait for.
+    if (egl_surface == EGL_NO_SURFACE) {
+        apply_pending();
+    }
+    wayland_needs_redraw = true;
+}
+
+// The size the surface is heading to: staged if a change is in flight.
+array<uint32_t, 2> target_size() {
+    return has_pending ? array{pending_width, pending_height} : array{current_width, current_height};
 }
 
 uint32_t fit_extent(uint32_t v, bool even) {
@@ -407,20 +460,24 @@ void apply_size() {
     if (width == requested_width && height == requested_height) {
         return;
     }
-    zwlr_layer_surface_v1_set_size(layer_surface.get(), width, height);
     requested_width  = width;
     requested_height = height;
-    current_width    = width;
-    current_height   = height;
-    update_buffer_size();
+    stage_size(width, height);
 }
 
 void preferred_scale(void*, wp_fractional_scale_v1*, uint32_t scale) {
     surface_scale        = static_cast<float>(scale) / 120.0f;
     wayland_needs_redraw = true;
     if (surface_configured) {
-        update_buffer_size();
-        apply_size();
+        if (asked_width != 0 && asked_height != 0) {
+            // Re-fit to the new scale; force restaging even if the fit is unchanged.
+            requested_width = requested_height = 0;
+            apply_size();
+        }
+        else {
+            const auto [width, height] = target_size();
+            stage_size(width, height);
+        }
     }
 }
 
@@ -446,7 +503,7 @@ void layer_surface_configure(
     current_width      = width != 0 ? width : requested_width;
     current_height     = height != 0 ? height : requested_height;
     surface_configured = true;
-    update_buffer_size();
+    stage_size(current_width, current_height);
 }
 
 void layer_surface_closed(void*, zwlr_layer_surface_v1*) {
@@ -733,13 +790,6 @@ void Wayland::apply_config(
     }
     requested_width  = width;
     requested_height = height;
-    current_width    = width;
-    current_height   = height;
-    zwlr_layer_surface_v1_set_size(
-        layer_surface.get(),
-        width,
-        height
-        );
 
     zwlr_layer_surface_v1_set_exclusive_zone(
         layer_surface.get(),
@@ -752,7 +802,8 @@ void Wayland::apply_config(
         0, 0, 0
         );
 
-    update_buffer_size();
+    // The layer size is set together with the buffer once the driver catches up.
+    stage_size(width, height);
 
     logger(Log::Debug, "Applyed config: {}*{}", width, height);
 }
@@ -857,6 +908,40 @@ void Wayland::shutdown() {
         egl_display = EGL_NO_DISPLAY;
         egl_config  = nullptr;
     }
+}
+
+bool Wayland::sync_surface() {
+    if (!has_pending) {
+        return false;
+    }
+    EGLint width{};
+    EGLint height{};
+    const bool queried{
+        egl_surface != EGL_NO_SURFACE &&
+        eglQuerySurface(egl_display, egl_surface, EGL_WIDTH, &width) &&
+        eglQuerySurface(egl_display, egl_surface, EGL_HEIGHT, &height)
+    };
+    const bool ready{
+        queried &&
+        static_cast<uint32_t>(width) == pending_buffer_width &&
+        static_cast<uint32_t>(height) == pending_buffer_height
+    };
+    if (!ready && queried && ++pending_frames <= max_pending_frames) {
+        // The driver still hands out the old-size buffer: draw this frame with the
+        // old geometry and check again on the next one.
+        wayland_needs_redraw = true;
+        return false;
+    }
+    if (!ready) {
+        Log::logger(Log::Warning, "EGL surface is {}*{}, expected {}*{}; applying resize anyway",
+            width, height, pending_buffer_width, pending_buffer_height);
+    }
+    apply_pending();
+    return true;
+}
+
+bool Wayland::resize_pending() {
+    return has_pending;
 }
 
 bool Wayland::get_wayland_redraw() {

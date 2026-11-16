@@ -14,6 +14,11 @@ namespace Wayland {
 
 void init(std::uint16_t width, std::uint16_t height, int32_t exclusive_zone, int32_t margin_top);
 void request_resize(std::uint16_t width, std::uint16_t height);
+// Call once per frame right before drawing. Applies a staged resize once the EGL
+// driver hands out buffers of the new size; returns true if the surface size changed.
+bool sync_surface();
+// True while a resize is staged but not yet applied.
+bool resize_pending();
 std::array<std::uint32_t, 2> get_surface_size();
 std::array<std::uint32_t, 2> get_buffer_size();
 float get_scale();

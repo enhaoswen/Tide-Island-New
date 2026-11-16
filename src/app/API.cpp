@@ -127,16 +127,18 @@ void API::run() {
                 static_cast<float>(duration_cast<microseconds>(now - last).count()) / 1000.0f, 33.f);
             last = now;
 
-            ctx.update(dt_ms);
-            StateManager::update();
+            ctx.update(dt_ms * island->animation_scale);
             // Animation / layout can move nodes under a still pointer (hover changes). Lay out
             // again if callbacks ran so their changes make it into this frame.
             if (ctx.dispatch_events())
                 ctx.layout();
+            StateManager::sync_surface();
 
+            StateManager::trace_frame("frame(draw)");
             Renderer::begin_frame();
             Object::draw(ctx, renderer);
             Renderer::end_frame();
+            StateManager::trace_frame("frame(swapped)");
         }
 
         const bool redraw  = Timer::wait(ctx.animating());

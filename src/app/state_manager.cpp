@@ -1,9 +1,12 @@
 #include "state_manager.hpp"
 
+#include <string_view>
+
 #include "API.hpp"
 #include "island.hpp"
 #include "backend/wayland.hpp"
 #include "scene/animation.hpp"
+#include "utils/log.hpp"
 #include "views/clock_view.hpp"
 #include "views/music_player.hpp"
 
@@ -36,6 +39,10 @@ StateManager::Resources resources;
 Object::Context         ctx{};
 Object::Handle          root{};
 Object::Handle          bg{};
+int                     trace_left{0};
+// Root size to switch to once the Wayland surface has actually been resized.
+float                   root_width{};
+float                   root_height{};
 
 bool is_expended(StateType type) {
     switch (type) {
@@ -60,14 +67,18 @@ void on_bg_click(const Object::Event& e) {
 }
 
 void resize(const uint32_t width, const uint32_t height, bool expended) {
-    ctx.set_size(root, static_cast<float>(width), static_cast<float>(height));
 
     AnimCallback on_done{};
     if (!expended) {
         on_done = [width, height] {
             if (!ctx.is_animating(bg, Prop::W) && !ctx.is_animating(bg, Prop::H)) {
+                StateManager::trace_frame("on_done(before resize)");
+                trace_left = 6;
                 Wayland::request_resize(width, height);
+                root_width  = static_cast<float>(width);
+                root_height = static_cast<float>(height);
                 Island::request_redraw(true);
+                StateManager::trace_frame("on_done(after resize)");
             }
         };
     }
@@ -78,7 +89,7 @@ void resize(const uint32_t width, const uint32_t height, bool expended) {
         .s       = Springs::Smooth,
         .delay   = 0,
         .p       = Prop::W,
-        .on_done = nullptr,
+        .on_done = on_done,
     });
 
     ctx.animate(Object::SAnimDesc{
@@ -92,6 +103,8 @@ void resize(const uint32_t width, const uint32_t height, bool expended) {
 
     if (expended) {
         Wayland::request_resize(width, height);
+        root_width  = static_cast<float>(width);
+        root_height = static_cast<float>(height);
     }
 }
 
@@ -101,7 +114,9 @@ void StateManager::init(const Resources& arg_resources) {
     island_state = Island::get_island();
     resources    = arg_resources;
 
-    root = ctx.create_root(island_state.island_width, island_state.island_height);
+    root        = ctx.create_root(island_state.island_width, island_state.island_height);
+    root_width  = static_cast<float>(island_state.island_width);
+    root_height = static_cast<float>(island_state.island_height);
 
     bg = ctx.create_rect(root, Object::RectDesc{
         .frame = Frame{
@@ -133,6 +148,30 @@ void StateManager::update() {
     if (!root)
         return;
 
+}
+
+void StateManager::sync_surface() {
+    // Root follows the surface: it may only change in the frame the new buffer is used.
+    Wayland::sync_surface();
+    if (!root || Wayland::resize_pending())
+        return;
+    ctx.set_size(root, root_width, root_height);
+    ctx.layout();
+}
+
+void StateManager::trace_frame(const char* tag) {
+    if (!root || (trace_left <= 0 && std::string_view{tag}.find("on_done") == std::string_view::npos))
+        return;
+    const auto b  = ctx.frame(bg);
+    const auto r  = ctx.frame(root);
+    const auto sz = Wayland::get_surface_size();
+    const auto bf = Wayland::get_buffer_size();
+    Log::logger(Log::Debug,
+        "[trace] {} bg=({:.2f},{:.2f},{:.2f}x{:.2f}) root={:.2f}x{:.2f} surface={}x{} buffer={}x{} scale={:.3f} animW={} animH={}",
+        tag, b.x, b.y, b.width, b.height, r.width, r.height, sz[0], sz[1], bf[0], bf[1],
+        Wayland::get_scale(), ctx.is_animating(bg, Prop::W), ctx.is_animating(bg, Prop::H));
+    if (trace_left > 0 && std::string_view{tag}.find("on_done") == std::string_view::npos)
+        --trace_left;
 }
 
 void StateManager::switch_state(const StateType state) {
