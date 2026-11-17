@@ -2,6 +2,7 @@
 #include "utils/log.hpp"
 
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include <GLES3/gl3.h>
 #include <wayland-client.h>
 #include <wayland-egl.h>
@@ -81,7 +82,10 @@ std::optional<Identity> query_renderer() {
         return std::nullopt;
     }
 
-    const auto egl_display = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(display));
+    auto egl_display = eglGetPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, display, nullptr);
+    if (egl_display == EGL_NO_DISPLAY) {
+        egl_display = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(display));
+    }
     if (egl_display == EGL_NO_DISPLAY || !eglInitialize(egl_display, nullptr, nullptr) ||
         !eglBindAPI(EGL_OPENGL_ES_API)) {
         return std::nullopt;
@@ -232,6 +236,13 @@ std::vector<std::string> vendor_files() {
 } // namespace
 
 void EglVendor::select_for_wayland() {
+    // An empty override makes libglvnd load no vendor at all (eglGetDisplay then
+    // fails with EGL_BAD_PARAMETER); treat it as unset.
+    for (const char* name : {vendor_files_env, "__EGL_VENDOR_LIBRARY_DIRS"}) {
+        if (const char* value = std::getenv(name); value && *value == '\0') {
+            unsetenv(name);
+        }
+    }
     const auto* auto_select = std::getenv("TIDE_EGL_AUTO_VENDOR");
     if ((auto_select && std::string_view(auto_select) == "0") ||
         std::getenv(vendor_files_env) || std::getenv("__EGL_VENDOR_LIBRARY_DIRS") ||

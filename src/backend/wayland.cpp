@@ -13,6 +13,7 @@
 #include "viewporter-client-protocol.h"
 #include <GLES3/gl3.h>
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
 #include <linux/input-event-codes.h>
@@ -362,26 +363,21 @@ constexpr wl_registry_listener registry_listener{
 // Surface geometry changes are staged, not applied directly.
 //
 // wl_egl_window_resize() only tells the EGL driver which size the *next* buffer
-// should have; the driver decides when it actually reallocates. Mesa does it on
-// the next draw, NVIDIA's egl-wayland after the following eglSwapBuffers. The
+// should have; the driver decides when it actually reallocates (Mesa and
+// NVIDIA egl-wayland2 both do it on the first draw after the resize). The
 // viewport destination and layer size, however, are plain double-buffered
 // surface state committed by that very swap. If they get ahead of the driver,
 // the compositor scales a stale-size buffer into the new destination and the
 // whole island visibly shrinks/stretches for a frame.
 //
-// So the EGL window is resized right away, but the logical size, viewport and
-// layer size are only switched (in Wayland::sync_surface) once the EGL surface
-// reports the new buffer size. Until then frames keep the old geometry, which
-// is consistent with the buffer they are drawn into.
+// So the EGL window is resized right away, and the logical size, viewport and
+// layer size are switched together (in Wayland::sync_surface) right before the
+// next frame is drawn, so all of them land in the same commit as that buffer.
 uint32_t pending_width{};
 uint32_t pending_height{};
 uint32_t pending_buffer_width{};
 uint32_t pending_buffer_height{};
 bool     has_pending{false};
-int      pending_frames{0};
-
-// Upper bound on frames to wait for the driver before applying anyway.
-constexpr int max_pending_frames{4};
 
 void apply_pending() {
     if (!has_pending) {
@@ -399,7 +395,6 @@ void apply_pending() {
     buffer_width         = pending_buffer_width;
     buffer_height        = pending_buffer_height;
     has_pending          = false;
-    pending_frames       = 0;
     wayland_needs_redraw = true;
     Log::logger(Log::Debug, "Surface scale: {:.3f}", surface_scale);
     Log::logger(Log::Debug, "EGL buffer: {}*{}", buffer_width, buffer_height);
@@ -425,7 +420,6 @@ void stage_size(uint32_t width, uint32_t height) {
     pending_buffer_width  = static_cast<uint32_t>(buf_w);
     pending_buffer_height = static_cast<uint32_t>(buf_h);
     has_pending           = true;
-    pending_frames        = 0;
 
     if (egl_window) {
         wl_egl_window_resize(egl_window.get(), static_cast<int>(pending_buffer_width), static_cast<int>(pending_buffer_height), 0, 0);
@@ -653,9 +647,15 @@ void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int3
         Log::fatal("Failed to create wl_egl_window");
     }
 
-    egl_display = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(display.get()));
+    // Name the platform explicitly: legacy eglGetDisplay makes libglvnd guess what
+    // the native pointer is, which some vendors (NVIDIA) refuse.
+    egl_display = eglGetPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, display.get(), nullptr);
     if (egl_display == EGL_NO_DISPLAY) {
-        Log::fatal("eglGetDisplay failed");
+        Log::logger(Log::Warning, "eglGetPlatformDisplay failed (0x{:x}), falling back to eglGetDisplay", eglGetError());
+        egl_display = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(display.get()));
+    }
+    if (egl_display == EGL_NO_DISPLAY) {
+        Log::fatal("eglGetDisplay failed (0x{:x})", eglGetError());
     }
 
     EGLint major{};
@@ -719,6 +719,20 @@ void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int3
         egl_context
         )) {
         Log::fatal("eglMakeCurrent failed");
+    }
+
+    // Swap interval 0: the main loop paces frames itself (Timer::wait), so the
+    // driver must not. With interval >= 1 NVIDIA's egl-wayland2 attaches
+    // wp_fifo_v1 / wp_commit_timing_v1 to every commit; on Hyprland that lets the
+    // layer size / viewport of a resize take effect a frame before the matching
+    // buffer, so the island flashes at the wrong scale on every expand/collapse.
+    // TIDE_SWAP_INTERVAL overrides it for testing.
+    int swap_interval{0};
+    if (const char* value = getenv("TIDE_SWAP_INTERVAL"); value && *value != '\0') {
+        swap_interval = atoi(value);
+    }
+    if (!eglSwapInterval(egl_display, swap_interval)) {
+        Log::logger(Log::Warning, "eglSwapInterval({}) failed (0x{:x})", swap_interval, eglGetError());
     }
 
     const auto* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
@@ -914,28 +928,11 @@ bool Wayland::sync_surface() {
     if (!has_pending) {
         return false;
     }
-    EGLint width{};
-    EGLint height{};
-    const bool queried{
-        egl_surface != EGL_NO_SURFACE &&
-        eglQuerySurface(egl_display, egl_surface, EGL_WIDTH, &width) &&
-        eglQuerySurface(egl_display, egl_surface, EGL_HEIGHT, &height)
-    };
-    const bool ready{
-        queried &&
-        static_cast<uint32_t>(width) == pending_buffer_width &&
-        static_cast<uint32_t>(height) == pending_buffer_height
-    };
-    if (!ready && queried && ++pending_frames <= max_pending_frames) {
-        // The driver still hands out the old-size buffer: draw this frame with the
-        // old geometry and check again on the next one.
-        wayland_needs_redraw = true;
-        return false;
-    }
-    if (!ready) {
-        Log::logger(Log::Warning, "EGL surface is {}*{}, expected {}*{}; applying resize anyway",
-            width, height, pending_buffer_width, pending_buffer_height);
-    }
+    // Apply in the frame that is about to be drawn: every EGL driver seen so far
+    // (Mesa, NVIDIA egl-wayland2) reallocates the color buffer on the first draw
+    // after wl_egl_window_resize, so this frame already renders into the new size.
+    // Note: eglQuerySurface cannot be used to wait for that, NVIDIA still reports
+    // the old size until the first draw.
     apply_pending();
     return true;
 }
