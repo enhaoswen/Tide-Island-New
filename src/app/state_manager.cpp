@@ -12,25 +12,25 @@
 
 // Tide Island QS size
 
-// Size of Clock: 140*38
-// Size of Lyrics: dynamic*38 (minimum width: 220)
-// Size of Custom: dynamic*38 (minimum width: 220)
-// Size of Split: 140*38 / 220*38 / 248*38 (icon / text / progress)
-// Size of Workspace (long_capsule): 220*38
-// Size of MusicPlayer (expanded): 410*165
-// Size of BluetoothExpanded: 410*165
-// Size of ControlCenter: 420*352
-// Size of ControlCenterPowerView: 420*150
-// Size of NotificationCenter: 410*dynamic
-// Size of WallpaperPicker: 1100*260
-// Size of ApplicationLauncher: 1100*260
-// Size of FileShelf: 1100*260
-// Size of Clipboard: 520*350
-// Size of ClipboardImagePreview: 520*400
-// Size of Weather: 460*340
-// Size of Calendar: 420*340
-// Size of Notification: (272–400)*(56 or 68)
-// Size of NotificationExpanded: 520*(84–240)
+// Size of Clock: 140*38                                      radius 19
+// Size of Lyrics: dynamic*38 (minimum width: 220)            radius 19
+// Size of Custom: dynamic*38 (minimum width: 220)            radius 19
+// Size of Split: 140*38 / 220*38 / 248*38 (icon/text/progress)radius 19
+// Size of Workspace (long_capsule): 220*38                   radius 19
+// Size of MusicPlayer (expanded): 410*165                    radius 32
+// Size of BluetoothExpanded: 410*165                         radius 32
+// Size of ControlCenter: 420*352                             radius 28
+// Size of ControlCenterPowerView: 420*150                    radius 28
+// Size of NotificationCenter: 410*dynamic                    radius 28
+// Size of WallpaperPicker: 1100*260                          radius 28
+// Size of ApplicationLauncher: 1100*260                      radius 28
+// Size of FileShelf: 1100*260                                radius 28
+// Size of Clipboard: 520*350                                 radius 28
+// Size of ClipboardImagePreview: 520*400                     radius 28
+// Size of Weather: 460*340                                   radius 28
+// Size of Calendar: 420*340                                  radius 28
+// Size of Notification: (272–400)*(56 or 68)                 radius 28 (56/2) 或 34 (68/2)
+// Size of NotificationExpanded: 520*(84–240)                 radius 28
 
 namespace {
 
@@ -66,7 +66,7 @@ void on_bg_click(const Object::Event& e) {
     }
 }
 
-void resize(const uint32_t width, const uint32_t height, bool expended) {
+void resize(const uint32_t width, const uint32_t height, bool expended,float radius = -1) {
 
     AnimCallback on_done{};
     if (!expended) {
@@ -100,6 +100,17 @@ void resize(const uint32_t width, const uint32_t height, bool expended) {
         .p       = Prop::H,
         .on_done = on_done,
     });
+
+    if (radius != -1.f) {
+        ctx.animate(Object::TAnimDesc{
+            .h       = bg,
+            .to = radius,
+            .t = Timings::Smooth,
+            .delay = 0,
+            .p = Prop::Radius,
+            .on_done = nullptr,
+        });
+    }
 
     if (expended) {
         Wayland::request_resize(width, height);
@@ -180,12 +191,12 @@ void StateManager::switch_state(const StateType state) {
     Island::set_state(state);
 
     if (state == StateType::Clock) {
-        resize(140, 38, false);
+        resize(140, 38, false, 19);
         ClockView::start(bg, resources.main_font);
     }
 
     else if (state == StateType::MusicPLayer) {
-        resize(410, 165, true);
+        resize(410, 165, true, 32);
         MusicPlayerView::start(
             bg,
             {

@@ -43,6 +43,15 @@ struct Timing {
     Ease  ease     = Ease::OutCubic;
 };
 
+namespace Timings {
+
+inline constexpr Timing Instant{90.f, Ease::OutQuad};
+inline constexpr Timing Quick{140.f, Ease::OutCubic};
+inline constexpr Timing Smooth{250.f, Ease::OutCubic};
+inline constexpr Timing Gentle{400.f, Ease::InOutCubic};
+
+}
+
 
 class Animator {
 public:
