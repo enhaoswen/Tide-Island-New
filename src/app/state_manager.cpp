@@ -155,12 +155,6 @@ Object::Context& StateManager::context() {
     return ctx;
 }
 
-void StateManager::update() {
-    if (!root)
-        return;
-
-}
-
 void StateManager::sync_surface() {
     // Root follows the surface: it may only change in the frame the new buffer is used.
     Wayland::sync_surface();

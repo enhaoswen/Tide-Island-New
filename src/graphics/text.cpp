@@ -51,6 +51,7 @@ struct FaceState {
 
 struct LoadedFont {
     string family{};
+    Text::Weight weight{};
     unsigned pixel_size{};
     unsigned raster_size{};
     vector<FaceState> faces{};
@@ -65,6 +66,20 @@ struct LoadedFont {
     }
 };
 
+int fc_weight(Text::Weight weight) {
+    switch (weight) {
+    case Text::Weight::Regular:
+        return FC_WEIGHT_REGULAR;
+    case Text::Weight::Medium:
+        return FC_WEIGHT_MEDIUM;
+    case Text::Weight::DemiBold:
+        return FC_WEIGHT_DEMIBOLD;
+    case Text::Weight::Bold:
+        return FC_WEIGHT_BOLD;
+    }
+    return FC_WEIGHT_REGULAR;
+}
+
 // No Fontconfig object escapes a font lookup. Destroy the result set before
 // the configuration because result patterns can reference its font data.
 struct FontQuery {
@@ -72,7 +87,7 @@ struct FontQuery {
     FcPattern* pattern{};
     FcFontSet* matches{};
 
-    FontQuery(const string& family, unsigned pixel_size) {
+    FontQuery(const string& family, unsigned pixel_size, Text::Weight weight) {
         config = FcInitLoadConfigAndFonts();
         if (!config) {
             Log::logger(Log::Error, "Failed to initialize Fontconfig");
@@ -86,7 +101,8 @@ struct FontQuery {
         }
         if (!FcPatternAddString(pattern, FC_FAMILY,
                                 reinterpret_cast<const FcChar8*>(family.c_str())) ||
-            !FcPatternAddDouble(pattern, FC_PIXEL_SIZE, pixel_size)) {
+            !FcPatternAddDouble(pattern, FC_PIXEL_SIZE, pixel_size) ||
+            !FcPatternAddInteger(pattern, FC_WEIGHT, fc_weight(weight))) {
             Log::logger(Log::Error, "Failed to configure font pattern");
             return;
         }
@@ -324,7 +340,7 @@ void resolve_missing_faces(LoadedFont& font, const vector<Codepoint>& cps) {
 
     // One short-lived Fontconfig lookup handles every missing cluster in this
     // line. Only copied paths and face indices remain after this function.
-    const FontQuery query(font.family, font.raster_size);
+    const FontQuery query(font.family, font.raster_size, font.weight);
     if (!query.matches) return;
     for (const auto& cluster : missing) {
         if (choose_face(font, cps, cluster.begin, cluster.end) != font.faces.size())
@@ -493,7 +509,7 @@ void Text::init() {
     ft_library = library;
 }
 
-FontHandle Text::load_font(string_view family, unsigned pixel_size) {
+FontHandle Text::load_font(string_view family, unsigned pixel_size, Text::Weight weight) {
     if (!ft_library) {
         Log::logger(Log::Error, "Text is not initialized");
         return {};
@@ -505,10 +521,11 @@ FontHandle Text::load_font(string_view family, unsigned pixel_size) {
 
     auto font = make_unique<LoadedFont>();
     font->family = family;
+    font->weight = weight;
     font->pixel_size = pixel_size;
     font->raster_size = pixel_size;
     {
-        const FontQuery query(font->family, pixel_size);
+        const FontQuery query(font->family, pixel_size, weight);
         if (!query.has_matches()) return {};
         for (int i{}; i < query.matches->nfont; ++i) {
             auto source = font_source(query.matches->fonts[i]);

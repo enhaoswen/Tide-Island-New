@@ -29,13 +29,21 @@ struct Bitmap {
     Bitmap& operator=(Bitmap&&) = default;
 };
 
+enum class Weight : uint8_t {
+    Regular,
+    Medium,
+    DemiBold,
+    Bold,
+};
+
 // Call init before loading fonts; unload them before shutdown.
 // Text's font state is used from one thread at a time. A draw that first
 // encounters a missing script may perform a font lookup, so prepare lyrics
 // before they become visible.
 void init();
 // pixel_size is the logical font size; draw applies the raster scale.
-[[nodiscard]] FontHandle load_font(std::string_view family, unsigned pixel_size);
+[[nodiscard]] FontHandle load_font(std::string_view family, unsigned pixel_size,
+                                   Weight weight = Weight::Regular);
 void unload_font(FontHandle font);
 [[nodiscard]] Bitmap draw(std::string_view text, FontHandle font, float scale = 1.0f);
 void shutdown();

@@ -88,8 +88,8 @@ void API::init() {
     Log::logger(Log::Debug, "Initialization completed successfully");
 }
 
-FontHandle API::load_font(string_view family, unsigned pixel_size) {
-    return Text::load_font(family, pixel_size);
+FontHandle API::load_font(string_view family, unsigned pixel_size, Text::Weight weight) {
+    return Text::load_font(family, pixel_size, weight);
 }
 
 void API::unload_font(FontHandle font) {
