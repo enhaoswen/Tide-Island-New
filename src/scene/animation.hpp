@@ -17,7 +17,7 @@ enum class Prop : uint8_t {
     ColorR, ColorG, ColorB, ColorA,
 };
 
-// Fired once when an animation reaches its target. Not fired if it is cancelled,
+// Fired once when an animation reaches its target. Not fired if it is canceled,
 // replaced by a new animation on the same (handle, prop), or its handle dies.
 using AnimCallback = std::function<void()>;
 

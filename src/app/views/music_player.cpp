@@ -5,6 +5,7 @@
 #include "app/state_manager.hpp"
 #include "backend/media.hpp"
 #include "backend/timer.hpp"
+#include "graphics/renderer.hpp"
 #include "graphics/text.hpp"
 #include "graphics/texture.hpp"
 #include "utils/log.hpp"
@@ -14,6 +15,7 @@
 #include <chrono>
 #include <cmath>
 #include <format>
+#include <functional>
 #include <numbers>
 #include <string>
 
@@ -26,7 +28,7 @@ namespace {
 const Color kArtPlaceholder{"#2c2c2e"};
 const Color kSecondary{"#8e8e93"};
 const Color kTrack{"#333333"};
-const Color kPressed{"#888888"};
+const Color kHighlight{1.f, 1.f, 1.f, 0.14f};
 const Color kBarPlaying{"#b56cff"};
 const Color kBarPaused{"#5f4b72"};
 
@@ -40,6 +42,8 @@ constexpr float kBarMaxH    = 22.f;
 constexpr float kButtonW    = 56.f;
 constexpr float kControlsH  = 36.f;
 constexpr float kDimOpacity = 0.45f;
+constexpr float kHaloSize   = 44.f;
+constexpr float kPressedTone = 0.62f; // icon brightness while held
 
 constexpr int kBarCount = 5;
 
@@ -56,9 +60,9 @@ struct Nodes {
     Handle                   time_l_box{}, time_r_box{};
     Handle                   track{},     fill{};
     Handle                   prev{},      play{},      next{};
+    Handle                   prev_halo{}, play_halo{}, next_halo{};
     Handle                   prev_icon{}, play_icon{}, next_icon{};
     Handle                   pause_icon{};
-    array<Handle, 2>         pause_bars{};
 };
 
 Nodes                    n{};
@@ -247,26 +251,41 @@ void on_media(Media::Update u) {
 
 // ---- Buttons ----------------------------------------------------------------
 
-void tint_button(Handle button, const Color& color) {
+void animate_tone(Handle icon, float tone, const Timing& t) {
     auto& c = ctx();
-    if (button == n.prev)
-        c.text(n.prev_icon).set_color(color);
-    else if (button == n.next)
-        c.text(n.next_icon).set_color(color);
-    else if (button == n.play) {
-        c.text(n.play_icon).set_color(color);
-        for (const Handle b : n.pause_bars)
-            c.rect(b).set_color(color);
-    }
+    for (const Prop p : {Prop::ColorR, Prop::ColorG, Prop::ColorB})
+        c.animate(Object::TAnimDesc{.h = icon, .to = tone, .t = t, .delay = 0, .p = p});
+}
+
+void set_pressed(Handle button, bool pressed) {
+    Handle halo{};
+    array<Handle, 2> icons{};
+    if (button == n.prev) {
+        halo  = n.prev_halo;
+        icons = {n.prev_icon, {}};
+    } else if (button == n.next) {
+        halo  = n.next_halo;
+        icons = {n.next_icon, {}};
+    } else if (button == n.play) {
+        halo  = n.play_halo;
+        icons = {n.play_icon, n.pause_icon};
+    } else
+        return;
+
+    const Timing& t = pressed ? Timings::Instant : Timings::Gentle;
+    ctx().animate(Object::TAnimDesc{.h = halo, .to = pressed ? 1.f : 0.f, .t = t, .delay = 0, .p = Prop::Opacity});
+    for (const Handle icon : icons)
+        if (icon)
+            animate_tone(icon, pressed ? kPressedTone : 1.f, t);
 }
 
 void on_button(const Object::Event& e) {
     switch (e.type) {
     case Object::EventType::Press:
-        tint_button(e.target, kPressed);
+        set_pressed(e.target, true);
         break;
     case Object::EventType::Release:
-        tint_button(e.target, Color::White);
+        set_pressed(e.target, false);
         break;
     case Object::EventType::Click:
         if (e.button != Object::Button::Left)
@@ -283,6 +302,108 @@ void on_button(const Object::Event& e) {
     }
 }
 
+// ---- Icons ------------------------------------------------------------------
+
+struct V2 {
+    float x, y;
+};
+
+[[nodiscard]] V2    operator-(V2 a, V2 b) { return {a.x - b.x, a.y - b.y}; }
+[[nodiscard]] V2    operator+(V2 a, V2 b) { return {a.x + b.x, a.y + b.y}; }
+[[nodiscard]] V2    operator*(V2 a, float k) { return {a.x * k, a.y * k}; }
+[[nodiscard]] float dot(V2 a, V2 b) { return a.x * b.x + a.y * b.y; }
+[[nodiscard]] float cross(V2 a, V2 b) { return a.x * b.y - a.y * b.x; }
+[[nodiscard]] float len(V2 a) { return sqrt(dot(a, a)); }
+
+// Exact signed distance to a triangle (negative inside).
+[[nodiscard]] float sd_triangle(V2 p, V2 a, V2 b, V2 c) {
+    const V2    e0 = b - a, e1 = c - b, e2 = a - c;
+    const V2    v0 = p - a, v1 = p - b, v2 = p - c;
+    const V2    q0 = v0 - e0 * clamp(dot(v0, e0) / dot(e0, e0), 0.f, 1.f);
+    const V2    q1 = v1 - e1 * clamp(dot(v1, e1) / dot(e1, e1), 0.f, 1.f);
+    const V2    q2 = v2 - e2 * clamp(dot(v2, e2) / dot(e2, e2), 0.f, 1.f);
+    const float s  = cross(e0, e2) > 0.f ? 1.f : -1.f;
+    const float d  = min({dot(q0, q0), dot(q1, q1), dot(q2, q2)});
+    const float w  = min({s * cross(v0, e0), s * cross(v1, e1), s * cross(v2, e2)});
+    return -sqrt(d) * (w > 0.f ? 1.f : -1.f);
+}
+
+// Triangle with corner radius r whose outer silhouette still spans a, b, c.
+[[nodiscard]] float sd_round_triangle(V2 p, V2 a, V2 b, V2 c, float r) {
+    const float la = len(c - b), lb = len(a - c), lc = len(b - a);
+    const float per    = la + lb + lc;
+    const V2    in     = (a * la + b * lb + c * lc) * (1.f / per);
+    const float in_r   = abs(cross(b - a, c - a)) / per;
+    const float k      = max(in_r - r, 0.f) / in_r;
+    const auto  shrink = [&](V2 v) { return in + (v - in) * k; };
+    return sd_triangle(p, shrink(a), shrink(b), shrink(c)) - r;
+}
+
+[[nodiscard]] float sd_round_rect(V2 p, V2 origin, V2 size, float r) {
+    const V2 half = size * 0.5f;
+    const V2 d    = p - (origin + half);
+    const V2 q{abs(d.x) - half.x + r, abs(d.y) - half.y + r};
+    return len({max(q.x, 0.f), max(q.y, 0.f)}) + min(max(q.x, q.y), 0.f) - r;
+}
+
+// Coverage mask (R8) of `sdf` over a w x h logical box, at the output scale.
+[[nodiscard]] Texture rasterize(float w, float h, const function<float(V2)>& sdf) {
+    const float scale = max(Renderer::text_scale(), 1.f);
+    const int   pw    = static_cast<int>(ceil(w * scale));
+    const int   ph    = static_cast<int>(ceil(h * scale));
+
+    vector<uint8_t> px(static_cast<size_t>(pw) * static_cast<size_t>(ph));
+    for (int y = 0; y < ph; ++y)
+        for (int x = 0; x < pw; ++x) {
+            const V2    p{(static_cast<float>(x) + 0.5f) / scale, (static_cast<float>(y) + 0.5f) / scale};
+            const float d        = sdf(p) * scale; // in physical pixels
+            const float coverage = clamp(0.5f - d, 0.f, 1.f);
+            px[static_cast<size_t>(y) * static_cast<size_t>(pw) + static_cast<size_t>(x)] =
+                static_cast<uint8_t>(lround(coverage * 255.f));
+        }
+
+    Texture tex{};
+    tex.upload(pw, ph, Texture::Format::R8, px);
+    tex.set_scale(scale);
+    return tex;
+}
+
+constexpr float kAA = 1.f;
+enum class Glyph : uint8_t { Play, Pause, Forward, Backward };
+
+[[nodiscard]] Texture make_glyph(Glyph g) {
+    switch (g) {
+    case Glyph::Play: {
+        constexpr float h = 22.f, w = h * 0.88f, r = 2.6f, nudge = 2.f, x0 = kAA + nudge;
+        return rasterize(w + nudge + 2 * kAA, h + 2 * kAA, [=](V2 p) {
+            return sd_round_triangle(p, {x0, kAA}, {x0, kAA + h}, {x0 + w, kAA + h * 0.5f}, r);
+        });
+    }
+    case Glyph::Pause: {
+        constexpr float h = 21.f, bar = 6.f, gap = 6.f, r = 1.8f;
+        return rasterize(2 * bar + gap + 2 * kAA, h + 2 * kAA, [=](V2 p) {
+            return min(sd_round_rect(p, {kAA, kAA}, {bar, h}, r),
+                sd_round_rect(p, {kAA + bar + gap, kAA}, {bar, h}, r));
+        });
+    }
+    case Glyph::Forward:
+    case Glyph::Backward: {
+        constexpr float h = 16.f, w = 15.f, step = w - 2.5f, r = 2.f;
+        constexpr float total = step + w;
+        const bool      flip  = g == Glyph::Backward;
+        return rasterize(total + 2 * kAA, h + 2 * kAA, [=](V2 p) {
+            if (flip)
+                p.x = total + 2 * kAA - p.x;
+            float d = 1e9f;
+            for (const float x0 : {kAA, kAA + step})
+                d = min(d, sd_round_triangle(p, {x0, kAA}, {x0, kAA + h}, {x0 + w, kAA + h * 0.5f}, r));
+            return d;
+        });
+    }
+    }
+    return {};
+}
+
 // ---- Construction -----------------------------------------------------------
 
 Object::LayoutData row(float spacing, Object::Alignment align = Object::Alignment::Center,
@@ -295,6 +416,16 @@ Object::LayoutData row(float spacing, Object::Alignment align = Object::Alignmen
     return l;
 }
 
+Handle make_halo(Handle parent, float slot_center) {
+    auto&        c = ctx();
+    const Handle h = c.create_rect(parent, Object::RectDesc{
+        .frame = {kContentW * slot_center - kHaloSize * 0.5f, (kControlsH - kHaloSize) * 0.5f, kHaloSize, kHaloSize},
+        .color = kHighlight, .radius = kHaloSize * 0.5f,
+    });
+    c.set_opacity(h, 0.f);
+    return h;
+}
+
 Handle make_button(Handle parent, float slot_center) {
     auto&        c = ctx();
     const Handle b = c.create_group(parent, Frame{
@@ -305,10 +436,10 @@ Handle make_button(Handle parent, float slot_center) {
     return b;
 }
 
-Handle make_icon(Handle parent, FontHandle font, string_view glyph) {
+Handle make_icon(Handle parent, Glyph glyph) {
     auto&        c = ctx();
     const Handle t = c.create_text(parent, {});
-    c.text(t).set_font(font).set_color(Color::White).set_text(glyph);
+    c.text(t).set_color(Color::White).set_texture(make_glyph(glyph));
     return t;
 }
 
@@ -378,17 +509,18 @@ void build(const MusicPlayerView::Fonts& f) {
     const Handle controls = c.create_group(bg, Frame{.x = 0, .y = 0, .width = 0, .height = kControlsH});
     c.set_size_mode(controls, Object::Axis::Horizontal, Object::SizeMode::Grow);
 
-    n.prev      = make_button(controls, kSlotCenter[0]);
-    n.play      = make_button(controls, kSlotCenter[1]);
-    n.next      = make_button(controls, kSlotCenter[2]);
-    n.prev_icon = make_icon(n.prev, f.icon, "◀◀");
-    n.play_icon = make_icon(n.play, f.icon, "▶");
-    n.next_icon = make_icon(n.next, f.icon, "▶▶");
+    // Halos first so they draw behind the (transparent) button groups.
+    n.prev_halo = make_halo(controls, kSlotCenter[0]);
+    n.play_halo = make_halo(controls, kSlotCenter[1]);
+    n.next_halo = make_halo(controls, kSlotCenter[2]);
 
-    n.pause_icon = c.create_group(n.play, Frame{.x = 0, .y = 0, .width = 18.f, .height = 24.f});
-    c.set_layout(n.pause_icon, row(6.f));
-    for (auto& b : n.pause_bars)
-        b = c.create_rect(n.pause_icon, Object::RectDesc{.frame = {0, 0, 6.f, 24.f}, .color = Color::White, .radius = 1.f});
+    n.prev       = make_button(controls, kSlotCenter[0]);
+    n.play       = make_button(controls, kSlotCenter[1]);
+    n.next       = make_button(controls, kSlotCenter[2]);
+    n.prev_icon  = make_icon(n.prev, Glyph::Backward);
+    n.play_icon  = make_icon(n.play, Glyph::Play);
+    n.pause_icon = make_icon(n.play, Glyph::Pause);
+    n.next_icon  = make_icon(n.next, Glyph::Forward);
     c.set_visible(n.pause_icon, false);
 
 }
