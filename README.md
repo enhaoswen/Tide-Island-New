@@ -28,6 +28,17 @@ See the [RAM monitor documentation](tools/README.md) for usage, controls, and me
 
 NVIDIA compiler file-page reclamation is disabled during normal operation. Its [manual API](tools/README.md#nvidia-compiler-file-pages) remains available for explicit use.
 
+## Spotify favorites
+
+The expanded music player shows a heart for Spotify tracks: click it to add or remove the song from Liked Songs. It talks to the Spotify desktop client through a small [Spicetify](https://spicetify.app/docs/getting-started) extension, so no API key or Premium is needed.
+
+```bash
+python3 scripts/spotify-setup.py          # install the extension (Spotify may restart)
+python3 scripts/spotify-setup.py --remove # uninstall
+```
+
+The setup and protocol are the same as the original Tide Island, so an existing setup keeps working. The bridge listens on `127.0.0.1` (port from `~/.config/tide-island/spotify-bridge.json`, default `8976`) only when that file exists; it runs inside the main loop with no extra thread, process or timer.
+
 ## Contributing
 
 Issues, bug reports, design suggestions, and pull requests are all welcome.

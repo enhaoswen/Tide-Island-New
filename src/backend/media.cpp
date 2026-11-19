@@ -206,6 +206,11 @@ void report(const char* what, const expected<void, lyricsmpris::Error>& r) {
 
 }
 
+void Media::resync_position() {
+    if (client)
+        client->resync_position();
+}
+
 void Media::play_pause() {
     if (!client)
         return;

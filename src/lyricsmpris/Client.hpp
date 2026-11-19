@@ -117,6 +117,9 @@ public:
 
     [[nodiscard]] std::expected<void, Error> select_player(std::string_view service);
     void retry_lyrics();
+    // One asynchronous Get(Position) for the active player, e.g. when a progress
+    // bar becomes visible. Players do not always emit Seeked; this corrects drift.
+    void resync_position();
     void set_lyric_offset(Milliseconds offset) noexcept;
     [[nodiscard]] std::expected<void, Error> play();
     [[nodiscard]] std::expected<void, Error> pause();

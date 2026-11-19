@@ -106,6 +106,12 @@ public:
     [[nodiscard]] explicit operator bool() const;
 
     TextView& set_texture(Texture t);       // text is rendered to a texture by the caller
+    // Procedural glyph: `fn` draws it now and again whenever the output scale changes.
+    TextView& set_raster(RasterFn fn, std::uintptr_t arg);
+
+    // Logical size of the current texture (0 x 0 if none).
+    [[nodiscard]] float texture_width() const;
+    [[nodiscard]] float texture_height() const;
     TextView& set_text(std::string_view s); // rasterizes with the stored font; keeps the string for scale changes
     TextView& set_font(FontHandle f);
 
@@ -434,8 +440,19 @@ inline float ImageView::radius() const {
     return d ? d->radius : 0.f;
 }
 
+inline float TextView::texture_width() const {
+    const auto* d = data();
+    return d && d->texture.valid() ? d->texture.logical_width() : 0.f;
+}
+
+inline float TextView::texture_height() const {
+    const auto* d = data();
+    return d && d->texture.valid() ? d->texture.logical_height() : 0.f;
+}
+
 inline TextView& TextView::set_texture(Texture t) {
     if (auto* d = data()) {
+        d->raster  = nullptr;
         d->texture = std::move(t);
         ctx_->mark_dirty(h_.id);
     }

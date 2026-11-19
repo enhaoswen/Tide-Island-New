@@ -263,17 +263,24 @@ struct ImageData {
     }
 };
 
+// Draws a coverage (R8) texture for the given output scale; `arg` is caller data.
+using RasterFn = Texture (*)(float scale, std::uintptr_t arg);
+
 struct TextData {
-    Texture     texture{};
-    FontHandle  font{};
-    Color       color{};
-    std::string text{};
+    Texture        texture{};
+    FontHandle     font{};
+    Color          color{};
+    std::string    text{};
+    RasterFn       raster{}; // procedural glyph, redrawn on scale change like text
+    std::uintptr_t raster_arg{};
 
     void reset() {
         texture.reset();
         font  = {};
         color = {};
         text.clear();
+        raster     = nullptr;
+        raster_arg = 0;
     }
 };
 

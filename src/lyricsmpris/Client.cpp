@@ -243,6 +243,10 @@ optional<Clock::time_point> Client::next_deadline() const noexcept {
     return deadline;
 }
 
+void Client::resync_position() {
+    if (impl_->state.has_player) impl_->mpris->request_position(impl_->state.service);
+}
+
 expected<Changes, Error> Client::process(span<const pollfd> ready, Clock::time_point now) {
     auto& self = *impl_;
     if (self.poll_error) return unexpected(*self.poll_error);

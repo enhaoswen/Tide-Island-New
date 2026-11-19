@@ -29,6 +29,7 @@ set(SRC
         src/backend/wayland.cpp
         src/backend/egl_vendor.cpp
         src/backend/timer.cpp
+        src/backend/spotify_bridge.cpp
         src/graphics/driver_memory.cpp
         src/graphics/renderer.cpp
         src/graphics/text.cpp

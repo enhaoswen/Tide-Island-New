@@ -2,6 +2,7 @@
 #include "command.hpp"
 #include "backend/event_queue.hpp"
 #include "backend/media.hpp"
+#include "backend/spotify_bridge.hpp"
 #include "backend/wayland.hpp"
 #include "utils/log.hpp"
 
@@ -142,6 +143,8 @@ bool Timer::wait(bool animating) {
     // A negative fd is ignored by poll and keeps the slot layout fixed.
     fds.push_back({.fd = stdin_open ? STDIN_FILENO : -1, .events = POLLIN, .revents = 0});
     Media::append_poll_fds(fds);
+    const size_t media_end = fds.size();
+    SpotifyBridge::append_poll_fds(fds);
 
     int timeout_ms{animating ? 16 : -1};
     const auto media_deadline = Media::next_deadline();
@@ -173,10 +176,15 @@ bool Timer::wait(bool animating) {
     // Media reports through its listener; the view requests a redraw only for
     // what it shows, so e.g. lyric line ticks while collapsed draw nothing.
     {
-        const span<const pollfd> media_fds{fds.begin() + kFixed, fds.end()};
+        const span<const pollfd> media_fds{fds.begin() + kFixed, fds.begin() + static_cast<ptrdiff_t>(media_end)};
         const bool ready = any_of(media_fds.begin(), media_fds.end(), [](const pollfd& p) { return p.revents != 0; });
         if (ready || (media_deadline && steady_clock::now() >= *media_deadline))
             Media::process(media_fds);
+    }
+    {
+        const span<const pollfd> bridge_fds{fds.begin() + static_cast<ptrdiff_t>(media_end), fds.end()};
+        if (any_of(bridge_fds.begin(), bridge_fds.end(), [](const pollfd& p) { return p.revents != 0; }))
+            SpotifyBridge::process(bridge_fds);
     }
 
     if (fds[1].revents & POLLIN) {

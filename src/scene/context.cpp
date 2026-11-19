@@ -576,10 +576,14 @@ bool Context::refresh_text(float scale) {
             continue;
 
         TextData& data = texts_[n.data];
-        if (data.text.empty() || !data.texture.valid() || data.texture.scale() == scale)
+        if (!data.texture.valid() || data.texture.scale() == scale)
             continue;
-
-        data.texture = Renderer::prepare_text(data.text, data.font);
+        if (data.raster)
+            data.texture = data.raster(scale, data.raster_arg);
+        else if (!data.text.empty())
+            data.texture = Renderer::prepare_text(data.text, data.font);
+        else
+            continue;
         mark_dirty(i);
         changed = true;
     }
@@ -594,8 +598,19 @@ ImageView& ImageView::set_image(std::string_view path) {
     return *this;
 }
 
+TextView& TextView::set_raster(RasterFn fn, std::uintptr_t arg) {
+    if (auto* d = data()) {
+        d->raster     = fn;
+        d->raster_arg = arg;
+        d->texture    = fn(Renderer::text_scale(), arg);
+        ctx_->mark_dirty(h_.id);
+    }
+    return *this;
+}
+
 TextView& TextView::set_text(std::string_view s) {
     if (auto* d = data()) {
+        d->raster   = nullptr;
         d->text     = s;
         d->texture  = Renderer::prepare_text(s, d->font);
         ctx_->mark_dirty(h_.id);

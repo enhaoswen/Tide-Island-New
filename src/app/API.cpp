@@ -3,6 +3,7 @@
 #include "graphics/renderer.hpp"
 #include "backend/timer.hpp"
 #include "backend/media.hpp"
+#include "backend/spotify_bridge.hpp"
 #include "app/island.hpp"
 #include "app/views/clock_view.hpp"
 #include "app/state_manager.hpp"
@@ -77,6 +78,7 @@ void API::init() {
     Log::logger(Log::Debug, "Timer initialized successfully");
 
     Media::init();
+    SpotifyBridge::init();
     Log::logger(Log::Debug, "Media initialized (available: {})", Media::available());
 
     Wayland::set_pointer_callbacks({
@@ -151,6 +153,7 @@ void API::run() {
 void API::shutdown() {
     ClockView::shutdown();
     StateManager::stop();
+    SpotifyBridge::shutdown();
     Media::shutdown();
     Timer::shutdown();
     Text::shutdown();

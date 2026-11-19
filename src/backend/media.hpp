@@ -43,6 +43,10 @@ void shutdown();
 inline constexpr int kArtworkSide = 120;
 [[nodiscard]] const Image::Pixels* artwork();
 
+// Re-reads the player's position once (asynchronously); call when progress
+// becomes visible. The result arrives as an Update::State.
+void resync_position();
+
 void play_pause();
 
 void next();
