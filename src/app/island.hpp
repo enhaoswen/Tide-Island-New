@@ -24,6 +24,7 @@ struct IslandState {
     float         radius{};
     float         current_priority{};
     Color         color{};
+    bool          blur{false};
     bool          need_redraw{true};
     bool          is_running{true};
     StateType     state{StateType::Clock};

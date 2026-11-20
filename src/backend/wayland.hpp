@@ -24,6 +24,9 @@ std::array<std::uint32_t, 2> get_buffer_size();
 float get_scale();
 void swap_buffer();
 void apply_config(std::uint16_t width, std::uint16_t height, int32_t exclusive_zone, int32_t margin_top);
+
+void set_blur(bool enabled);
+void set_blur_shape(float x, float y, float width, float height, float radius);
 enum class PointerButton : std::uint8_t { Left, Right, Middle, Other };
 
 // Pointer input in surface coordinates. Motion is coalesced per wl_pointer.frame and always

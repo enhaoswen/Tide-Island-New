@@ -39,6 +39,7 @@ Config::IslandConfig to_config() {
     config.anchor_top    = island.anchor_top;
     config.radius        = island.radius;
     config.color         = island.color;
+    config.blur          = island.blur;
     return config;
 }
 
@@ -74,6 +75,7 @@ void Island::init() {
     island.anchor_top    = config.anchor_top;
     island.radius        = config.radius;
     island.color         = config.color;
+    island.blur          = config.blur;
 }
 
 void Island::set_anchor_top(std::int32_t distance) {

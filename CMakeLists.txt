@@ -38,6 +38,7 @@ set(SRC
         third_party/wayland/xdg-shell-client-protocol.c
         third_party/wayland/fractional-scale-v1-protocol.c
         third_party/wayland/viewporter-protocol.c
+        third_party/wayland/ext-background-effect-v1-protocol.c
         src/backend/command.cpp
         src/app/state_manager.cpp
         src/backend/config.cpp

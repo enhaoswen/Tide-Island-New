@@ -15,6 +15,7 @@ struct IslandConfig {
     std::int16_t  anchor_top{};
     float         radius{};
     Color         color{};
+    bool          blur{};
 };
 
 [[nodiscard]] std::filesystem::path get_path();

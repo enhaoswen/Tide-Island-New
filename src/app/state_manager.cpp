@@ -158,10 +158,18 @@ Object::Context& StateManager::context() {
 void StateManager::sync_surface() {
     // Root follows the surface: it may only change in the frame the new buffer is used.
     Wayland::sync_surface();
-    if (!root || Wayland::resize_pending())
+    if (!root)
         return;
-    ctx.set_size(root, root_width, root_height);
-    ctx.layout();
+    if (!Wayland::resize_pending()) {
+        ctx.set_size(root, root_width, root_height);
+        ctx.layout();
+    }
+
+    Wayland::set_blur(island_state.blur);
+    if (island_state.blur) {
+        const Frame f = ctx.absolute_frame(bg);
+        Wayland::set_blur_shape(f.x, f.y, f.width, f.height, ctx.rect(bg).radius());
+    }
 }
 
 void StateManager::trace_frame(const char* tag) {

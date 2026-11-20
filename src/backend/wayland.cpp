@@ -11,6 +11,7 @@
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "fractional-scale-v1-client-protocol.h"
 #include "viewporter-client-protocol.h"
+#include "ext-background-effect-v1-client-protocol.h"
 #include <GLES3/gl3.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -29,6 +30,7 @@
 #include <poll.h>
 #include <memory>
 #include <string_view>
+#include <vector>
 
 using namespace std;
 
@@ -60,6 +62,8 @@ unique_ptr<zwlr_layer_surface_v1, DeleteWayland<zwlr_layer_surface_v1_destroy> >
 unique_ptr<wl_egl_window, DeleteWayland<wl_egl_window_destroy> >                                   egl_window{nullptr};
 unique_ptr<wl_seat, DeleteWayland<wl_seat_release> >                                               seat{nullptr};
 unique_ptr<wl_pointer, DeleteWayland<wl_pointer_release> >                                         pointer{nullptr};
+unique_ptr<ext_background_effect_manager_v1, DeleteWayland<ext_background_effect_manager_v1_destroy> > effect_manager{nullptr};
+unique_ptr<ext_background_effect_surface_v1, DeleteWayland<ext_background_effect_surface_v1_destroy> > background_effect{nullptr};
 
 EGLDisplay egl_display{EGL_NO_DISPLAY};
 EGLConfig  egl_config{};
@@ -87,6 +91,94 @@ bool  wayland_needs_redraw{false};
 int wayland_fd{-1};
 
 Wayland::PointerCallbacks pointer_callbacks{};
+
+struct BlurShape {
+    float x{}, y{}, width{}, height{}, radius{};
+};
+
+bool      blur_capable{false};
+bool      blur_enabled{false};
+bool      blur_warned{false};
+BlurShape blur_shape{};
+vector<array<int32_t, 4> > blur_sent{};
+vector<array<int32_t, 4> > blur_scratch{};
+
+void effect_capabilities(void*, ext_background_effect_manager_v1*, uint32_t flags) {
+    const bool capable{(flags & EXT_BACKGROUND_EFFECT_MANAGER_V1_CAPABILITY_BLUR) != 0};
+    if (capable != blur_capable) {
+        blur_capable = capable;
+        blur_sent.clear();
+        wayland_needs_redraw = true;
+    }
+    Log::logger(Log::Debug, "Background effect capabilities: 0x{:x}", flags);
+}
+
+constexpr ext_background_effect_manager_v1_listener effect_manager_listener{
+    .capabilities = effect_capabilities,
+};
+
+void build_blur_rects(const BlurShape& shape, vector<array<int32_t, 4> >& out) {
+    out.clear();
+    if (!(shape.width > 0.f) || !(shape.height > 0.f))
+        return;
+    const float r{clamp(shape.radius, 0.f, min(shape.width, shape.height) * 0.5f)};
+    const float top_center{shape.y + r};
+    const float bottom_center{shape.y + shape.height - r};
+    const int   first_row{static_cast<int>(ceil(shape.y))};
+    const int   last_row{static_cast<int>(floor(shape.y + shape.height))};
+
+    for (int row = first_row; row < last_row; ++row) {
+        // Distance from the corner circle center to the row edge farther from it, so each strip stays inside the curve.
+        float d{0.f};
+        if (static_cast<float>(row) < top_center)
+            d = top_center - static_cast<float>(row);
+        else if (static_cast<float>(row + 1) > bottom_center)
+            d = static_cast<float>(row + 1) - bottom_center;
+        const float inset{d > 0.f ? r - sqrt(max(0.f, r * r - d * d)) : 0.f};
+        const int   left{static_cast<int>(ceil(shape.x + inset))};
+        const int   right{static_cast<int>(floor(shape.x + shape.width - inset))};
+        if (right <= left)
+            continue;
+
+        if (!out.empty()) {
+            auto& last = out.back();
+            if (last[0] == left && last[2] == right - left && last[1] + last[3] == row) {
+                ++last[3];
+                continue;
+            }
+        }
+        out.push_back({left, row, right - left, 1});
+    }
+}
+
+void flush_blur() {
+    if (!background_effect || !blur_capable)
+        return;
+
+    if (blur_enabled)
+        build_blur_rects(blur_shape, blur_scratch);
+    else
+        blur_scratch.clear();
+
+    if (blur_scratch == blur_sent)
+        return;
+
+    if (blur_scratch.empty()) {
+        ext_background_effect_surface_v1_set_blur_region(background_effect.get(), nullptr);
+    }
+    else {
+        wl_region* region{wl_compositor_create_region(compositor.get())};
+        if (!region) {
+            Log::logger(Log::Error, "Failed to create blur region");
+            return;
+        }
+        for (const auto& [x, y, w, h] : blur_scratch)
+            wl_region_add(region, x, y, w, h);
+        ext_background_effect_surface_v1_set_blur_region(background_effect.get(), region);
+        wl_region_destroy(region);
+    }
+    blur_sent.swap(blur_scratch);
+}
 
 // --- Pointer Listeners ---
 
@@ -325,6 +417,30 @@ void registry_global(
             Log::fatal("Failed to bind viewporter");
         }
         Log::logger(Log::Debug, "Viewporter bound successfully");
+    }
+    else if (interface_name == ext_background_effect_manager_v1_interface.name) {
+        effect_manager.reset(static_cast<ext_background_effect_manager_v1*>(
+            wl_registry_bind(
+                registry,
+                name,
+                &ext_background_effect_manager_v1_interface,
+                min(version, 1u)
+                )
+        ));
+
+        if (!effect_manager) {
+            Log::logger(Log::Error, "Failed to bind background effect manager, blur disabled");
+            return;
+        }
+        if (ext_background_effect_manager_v1_add_listener(
+            effect_manager.get(),
+            &effect_manager_listener,
+            nullptr) == -1) {
+            Log::logger(Log::Error, "Failed to add background effect manager listener, blur disabled");
+            effect_manager.reset();
+            return;
+        }
+        Log::logger(Log::Debug, "Background effect manager bound successfully");
     }
     else if (interface_name == wl_seat_interface.name) {
         seat.reset(static_cast<wl_seat*>(
@@ -594,6 +710,15 @@ void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int3
         }
     }
 
+    if (effect_manager) {
+        background_effect.reset(ext_background_effect_manager_v1_get_background_effect(
+            effect_manager.get(), surface.get()
+            ));
+        if (!background_effect) {
+            Log::logger(Log::Error, "Failed to create background effect object, blur disabled");
+        }
+    }
+
     layer_surface.reset(zwlr_layer_shell_v1_get_layer_surface(
         layer_shell.get(),
         surface.get(),
@@ -748,6 +873,7 @@ void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int3
 }
 
 void Wayland::swap_buffer() {
+    flush_blur();
     if (!eglSwapBuffers(egl_display, egl_surface)) {
         Log::fatal("eglSwapBuffers failed");
     }
@@ -820,6 +946,19 @@ void Wayland::apply_config(
     stage_size(width, height);
 
     logger(Log::Debug, "Applyed config: {}*{}", width, height);
+}
+
+void Wayland::set_blur(bool enabled) {
+    if (enabled && !blur_warned && (!background_effect || !blur_capable)) {
+        blur_warned = true;
+        Log::logger(Log::Warning,
+            "Compositor does not support blur via ext-background-effect-v1; background blur is disabled");
+    }
+    blur_enabled = enabled;
+}
+
+void Wayland::set_blur_shape(float x, float y, float width, float height, float radius) {
+    blur_shape = {x, y, width, height, radius};
 }
 
 void Wayland::set_pointer_callbacks(const PointerCallbacks& callbacks) {
