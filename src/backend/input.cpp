@@ -106,27 +106,27 @@ bool Context::dispatch_events() {
 // Pointer state machine
 // ============================================================================
 
-uint16_t Context::hit_node(uint16_t i, float x, float y, float ox, float oy) const {
+uint16_t Context::hit_node(uint16_t i, float x, float y, const Placed& parent) const {
     const Node& n = nodes_[i];
     if (!(n.flags & flag::visible) || n.opacity == 0)
         return kNone; // what you cannot see you cannot click
 
-    const float ax = ox + n.frame.x;
-    const float ay = oy + n.frame.y;
+    const Placed p = place(n, parent);
+    const Frame& f = p.frame;
 
     const bool  clip   = (n.flags & flag::clip) != 0;
     const bool  self   = (n.flags & flag::interactive) != 0;
-    const float radius = (clip || self) ? radius_of(n) : 0.f;
+    const float radius = (clip || self) ? radius_of(n) * p.scale : 0.f;
 
     bool inside = false;
     if (clip || self) {
-        inside = contains(ax, ay, n.frame.width, n.frame.height, radius, x, y);
+        inside = contains(f.x, f.y, f.width, f.height, radius, x, y);
         if (clip && !inside)
             return kNone;
     }
 
     for (uint16_t c = n.last; c != kNone; c = nodes_[c].prev) {
-        const uint16_t hit = hit_node(c, x, y, ax, ay);
+        const uint16_t hit = hit_node(c, x, y, p);
         if (hit != kNone)
             return hit;
     }
@@ -135,7 +135,7 @@ uint16_t Context::hit_node(uint16_t i, float x, float y, float ox, float oy) con
 
 Handle Context::hit_test(float x, float y) const {
     for (const auto [id, gen] : views::reverse(roots_)) {
-        const uint16_t hit = hit_node(id, x, y, 0.f, 0.f);
+        const uint16_t hit = hit_node(id, x, y, Placed{});
         if (hit != kNone)
             return handle_of(hit);
     }

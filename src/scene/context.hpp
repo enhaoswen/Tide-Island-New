@@ -217,6 +217,14 @@ public:
 
     void set_opacity(Handle h, float v);
 
+    // Visual only: layout ignores it; drawing and hit testing follow it.
+    void set_scale(Handle h, float s);
+
+    // Normalized point of the node that stays fixed while scaling; (0.5, 0.5) by default.
+    void set_pivot(Handle h, float x, float y);
+
+    [[nodiscard]] float scale(Handle h) const;
+
     void set_clip(Handle h, bool v);
 
     void set_tag(Handle h, uint32_t tag);
@@ -233,7 +241,7 @@ public:
 
     [[nodiscard]] Frame frame(Handle h) const;
 
-    [[nodiscard]] Frame absolute_frame(Handle h) const;
+    [[nodiscard]] Frame absolute_frame(Handle h) const; // after scaling
 
     [[nodiscard]] uint32_t tag(Handle h) const;
 
@@ -340,7 +348,13 @@ private:
 
     [[nodiscard]] float radius_of(const Node& n) const;
 
-    [[nodiscard]] uint16_t hit_node(uint16_t i, float x, float y, float ox, float oy) const;
+    [[nodiscard]] Transform& transform_of(Node& n);
+
+    [[nodiscard]] Placed place(const Node& n, const Placed& parent) const;
+
+    [[nodiscard]] Placed placed(uint16_t i) const;
+
+    [[nodiscard]] uint16_t hit_node(uint16_t i, float x, float y, const Placed& parent) const;
 
     void update_hover();
 
@@ -364,6 +378,7 @@ private:
     SlotVec<TextData>                      texts_;
     SlotVec<LayoutData>                    layouts_;
     SlotVec<Listener>                      listeners_;
+    SlotVec<Transform>                     transforms_;
     std::unordered_map<uint16_t, GrowData> grow_;
 
     Animator anim_;
@@ -393,6 +408,19 @@ inline ImageData* ImageView::data() const {
 inline TextData* TextView::data() const {
     Node* n = ctx_ ? ctx_->node(h_) : nullptr;
     return n ? &ctx_->texts_[n->data] : nullptr;
+}
+
+inline Placed Context::place(const Node& n, const Placed& parent) const {
+    Transform t{};
+    if (n.transform != kNone)
+        t = transforms_[n.transform];
+
+    const float s  = parent.scale * t.scale;
+    const float w  = n.frame.width * s;
+    const float h  = n.frame.height * s;
+    const float px = parent.frame.x + (n.frame.x + n.frame.width * t.pivot_x) * parent.scale;
+    const float py = parent.frame.y + (n.frame.y + n.frame.height * t.pivot_y) * parent.scale;
+    return {{px - w * t.pivot_x, py - h * t.pivot_y, w, h}, s};
 }
 
 inline RectView::operator bool() const { return ctx_ && ctx_->alive(h_); }

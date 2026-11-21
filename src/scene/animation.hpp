@@ -14,6 +14,7 @@ enum class Prop : uint8_t {
     X, Y, W, H,
     Radius,
     Opacity,
+    Scale,
     ColorR, ColorG, ColorB, ColorA,
 };
 

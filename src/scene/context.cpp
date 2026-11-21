@@ -68,6 +68,9 @@ void Context::release_node(uint16_t i) {
 
     unbind(n, EventMask::all());
 
+    if (n.transform != kNone)
+        transforms_.release(n.transform);
+
     if (!grow_.empty())
         grow_.erase(i);
 
@@ -412,16 +415,34 @@ Frame Context::frame(Handle h) const {
 }
 
 Frame Context::absolute_frame(Handle h) const {
-    const Node* n = node(h);
-    if (!n)
-        return {};
+    return node(h) ? placed(h.id).frame : Frame{};
+}
 
-    Frame f = n->frame;
-    for (uint16_t p = n->parent; p != kNone; p = nodes_[p].parent) {
-        f.x += nodes_[p].frame.x;
-        f.y += nodes_[p].frame.y;
+Placed Context::placed(uint16_t i) const {
+    const Node& n = nodes_[i];
+    return place(n, n.parent == kNone ? Placed{} : placed(n.parent));
+}
+
+Transform& Context::transform_of(Node& n) {
+    if (n.transform == kNone)
+        n.transform = transforms_.acquire({});
+    return transforms_[n.transform];
+}
+
+void Context::set_scale(Handle h, float s) {
+    set_prop(h, Prop::Scale, s);
+}
+
+void Context::set_pivot(Handle h, float x, float y) {
+    if (Node* n = node(h)) {
+        Transform& t = transform_of(*n);
+        t.pivot_x    = x;
+        t.pivot_y    = y;
     }
-    return f;
+}
+
+float Context::scale(Handle h) const {
+    return get_prop(h, Prop::Scale).value_or(1.f);
 }
 
 uint32_t Context::tag(Handle h) const {
@@ -456,6 +477,8 @@ optional<float> Context::get_prop(Handle h, Prop p) const {
         return n->frame.height;
     case Prop::Opacity:
         return static_cast<float>(n->opacity) * (1.f / 255.f);
+    case Prop::Scale:
+        return n->transform == kNone ? 1.f : transforms_[n->transform].scale;
     case Prop::Radius:
         if (n->kind == Kind::Rect || n->kind == Kind::Image)
             return radius_of(*n);
@@ -503,6 +526,9 @@ bool Context::set_prop(Handle h, Prop p, float v) {
         return true;
     case Prop::Opacity:
         n->opacity = quantize_opacity(v);
+        return true;
+    case Prop::Scale:
+        transform_of(*n).scale = max(v, 0.f);
         return true;
     case Prop::Radius:
         if (n->kind == Kind::Rect) {

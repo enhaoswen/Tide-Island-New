@@ -1,5 +1,6 @@
 #include "state_manager.hpp"
 
+#include <cmath>
 #include <string_view>
 
 #include "island.hpp"
@@ -64,7 +65,7 @@ int                     trace_left{0};
 float                   root_width{};
 float                   root_height{};
 
-constexpr uint32_t k_hover_outset = 1;
+constexpr float k_hover_scale = 1.03f;
 
 bool is_expended(StateType type) {
     switch (type) {
@@ -87,6 +88,12 @@ void on_bg_click(const Object::Event& e) {
     }
 }
 
+void set_surface(const uint32_t width, const uint32_t height) {
+    Wayland::request_resize(width, height);
+    root_width  = static_cast<float>(width);
+    root_height = static_cast<float>(height);
+}
+
 void resize(const uint32_t width, const uint32_t height, bool expended, float radius = -1) {
 
     AnimCallback on_done{};
@@ -95,9 +102,7 @@ void resize(const uint32_t width, const uint32_t height, bool expended, float ra
             if (!ctx.is_animating(bg, Prop::W) && !ctx.is_animating(bg, Prop::H)) {
                 StateManager::trace_frame("on_done(before resize)");
                 trace_left = 6;
-                Wayland::request_resize(width, height);
-                root_width  = static_cast<float>(width);
-                root_height = static_cast<float>(height);
+                set_surface(width, height);
                 Island::request_redraw(true);
                 StateManager::trace_frame("on_done(after resize)");
             }
@@ -133,11 +138,19 @@ void resize(const uint32_t width, const uint32_t height, bool expended, float ra
         });
     }
 
-    if (expended) {
-        Wayland::request_resize(width, height);
-        root_width  = static_cast<float>(width);
-        root_height = static_cast<float>(height);
-    }
+    if (expended)
+        set_surface(width, height);
+}
+
+void scale_bg(const float to, AnimCallback on_done = {}) {
+    ctx.animate(Object::SAnimDesc{
+        .h       = bg,
+        .to      = to,
+        .s       = Springs::Smooth,
+        .delay   = 0,
+        .p       = Prop::Scale,
+        .on_done = std::move(on_done),
+    });
 }
 
 void on_hovered(const Object::Event&) {
@@ -148,13 +161,17 @@ void on_hovered(const Object::Event&) {
     const StateSize size = size_of(state);
 
     if (ctx.hovered() == bg) {
-        resize(size.w + 2 * k_hover_outset,
-            size.h + 2 * k_hover_outset,
-            true,
-            size.r + static_cast<float>(k_hover_outset));
+        const auto grown = [](const uint32_t v) {
+            return v + static_cast<uint32_t>(ceil(static_cast<float>(v) * (k_hover_scale - 1.f)));
+        };
+        set_surface(grown(size.w), grown(size.h));
+        scale_bg(k_hover_scale);
     }
     else {
-        resize(size.w, size.h, false, size.r);
+        scale_bg(1.f, [size] {
+            set_surface(size.w, size.h);
+            Island::request_redraw(true);
+        });
     }
 }
 
@@ -188,6 +205,7 @@ void StateManager::init(const Resources& arg_resources) {
     ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Fixed);
     ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Fixed);
     ctx.on_click(bg, on_bg_click);
+    ctx.set_pivot(bg, .5f, 0.f);
     ctx.on(bg, Object::EventType::HoverEnter | Object::EventType::HoverLeave, on_hovered);
 }
 
@@ -231,6 +249,8 @@ void StateManager::switch_state(const StateType state) {
     stop();
 
     Island::set_state(state);
+    if (ctx.scale(bg) != 1.f || ctx.is_animating(bg, Prop::Scale))
+        scale_bg(1.f);
 
     if (state == StateType::Clock) {
         resize(140, 38, false, 19);

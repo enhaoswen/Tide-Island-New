@@ -242,11 +242,23 @@ struct Node {
     uint16_t data    = kNone;
     uint16_t layout    = kNone;
     uint16_t listeners = kNone; // head of the Listener list
+    uint16_t transform = kNone;
     uint8_t  opacity   = 255;
     Kind     kind      = Kind::Group;
 };
 
 static_assert(sizeof(Node) == 44, "Node is hot during layout / hit testing; keep it compact");
+
+struct Transform {
+    float scale   = 1.f;
+    float pivot_x = .5f;
+    float pivot_y = .5f;
+};
+
+struct Placed {
+    Frame frame{};
+    float scale = 1.f;
+};
 
 struct RectData {
     Color color{};

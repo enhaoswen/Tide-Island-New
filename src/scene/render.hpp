@@ -17,7 +17,7 @@ concept Renderer = requires(R& r, const Frame& f, const Color& c, const Texture&
 
 struct Drawer {
     template <class R>
-    static void node(const Context& c, R& r, uint16_t i, float ox, float oy, float alpha) {
+    static void node(const Context& c, R& r, uint16_t i, const Placed& parent, float alpha) {
         const Node& n = c.nodes_[i];
         if (!(n.flags & flag::visible))
             return;
@@ -26,9 +26,8 @@ struct Drawer {
         if (alpha <= 0.f)
             return;
 
-        Frame abs = n.frame;
-        abs.x     += ox;
-        abs.y     += oy;
+        const Placed p   = c.place(n, parent);
+        const Frame& abs = p.frame;
 
         float radius = 0.f;
         switch (n.kind) {
@@ -36,14 +35,14 @@ struct Drawer {
             break;
         case Kind::Rect: {
             const RectData& d = c.rects_[n.data];
-            radius            = d.radius;
-            r.draw_rect(abs, d.color, d.radius, alpha);
+            radius            = d.radius * p.scale;
+            r.draw_rect(abs, d.color, radius, alpha);
             break;
         }
         case Kind::Image: {
             const ImageData& d = c.images_[n.data];
-            radius             = d.radius;
-            r.draw_image(abs, d.texture, d.radius, alpha);
+            radius             = d.radius * p.scale;
+            r.draw_image(abs, d.texture, radius, alpha);
             break;
         }
         case Kind::Text: {
@@ -58,7 +57,7 @@ struct Drawer {
             r.push_clip(abs, radius);
 
         for (uint16_t ch = n.first; ch != kNone; ch = c.nodes_[ch].next)
-            node(c, r, ch, abs.x, abs.y, alpha);
+            node(c, r, ch, p, alpha);
 
         if (clip)
             r.pop_clip();
@@ -67,7 +66,7 @@ struct Drawer {
     template <class R>
     static void all(const Context& c, R& r) {
         for (const Handle root : c.roots_)
-            node(c, r, root.id, 0.f, 0.f, 1.f);
+            node(c, r, root.id, Placed{}, 1.f);
     }
 };
 
