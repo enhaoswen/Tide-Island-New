@@ -2,13 +2,14 @@
 
 #include <string_view>
 
-#include "API.hpp"
 #include "island.hpp"
 #include "backend/wayland.hpp"
 #include "scene/animation.hpp"
 #include "utils/log.hpp"
 #include "views/clock_view.hpp"
 #include "views/music_player.hpp"
+
+using namespace std;
 
 // Tide Island QS size
 
@@ -34,6 +35,25 @@
 
 namespace {
 
+struct StateSize {
+    uint32_t w, h;
+    float    r;
+};
+
+constexpr StateSize size_of(StateType t) {
+    switch (t) {
+    case StateType::Clock:
+        return {140, 38, 19};
+    case StateType::Lyrics:
+        return {220, 38, 19};
+    case StateType::MusicPLayer:
+        return {410, 165, 32};
+    case StateType::ControlCenter:
+        return {420, 352, 28};
+    }
+    return {140, 38, 19};
+}
+
 Island::IslandState     island_state;
 StateManager::Resources resources;
 Object::Context         ctx{};
@@ -43,6 +63,8 @@ int                     trace_left{0};
 // Root size to switch to once the Wayland surface has actually been resized.
 float                   root_width{};
 float                   root_height{};
+
+constexpr uint32_t k_hover_outset = 1;
 
 bool is_expended(StateType type) {
     switch (type) {
@@ -61,12 +83,11 @@ bool is_expended(StateType type) {
 void on_bg_click(const Object::Event& e) {
     if (e.button == Object::Button::Left) {
         StateManager::switch_state(
-            is_expended(Island::get_state()) ? StateType::Clock : StateType::MusicPLayer
-            );
+            is_expended(Island::get_state()) ? StateType::Clock : StateType::MusicPLayer);
     }
 }
 
-void resize(const uint32_t width, const uint32_t height, bool expended,float radius = -1) {
+void resize(const uint32_t width, const uint32_t height, bool expended, float radius = -1) {
 
     AnimCallback on_done{};
     if (!expended) {
@@ -104,10 +125,10 @@ void resize(const uint32_t width, const uint32_t height, bool expended,float rad
     if (radius != -1.f) {
         ctx.animate(Object::TAnimDesc{
             .h       = bg,
-            .to = radius,
-            .t = Timings::Smooth,
-            .delay = 0,
-            .p = Prop::Radius,
+            .to      = radius,
+            .t       = Timings::Smooth,
+            .delay   = 0,
+            .p       = Prop::Radius,
             .on_done = nullptr,
         });
     }
@@ -116,6 +137,24 @@ void resize(const uint32_t width, const uint32_t height, bool expended,float rad
         Wayland::request_resize(width, height);
         root_width  = static_cast<float>(width);
         root_height = static_cast<float>(height);
+    }
+}
+
+void on_hovered(const Object::Event&) {
+    const StateType state = Island::get_state();
+    if (is_expended(state))
+        return;
+
+    const StateSize size = size_of(state);
+
+    if (ctx.hovered() == bg) {
+        resize(size.w + 2 * k_hover_outset,
+            size.h + 2 * k_hover_outset,
+            true,
+            size.r + static_cast<float>(k_hover_outset));
+    }
+    else {
+        resize(size.w, size.h, false, size.r);
     }
 }
 
@@ -149,6 +188,7 @@ void StateManager::init(const Resources& arg_resources) {
     ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Fixed);
     ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Fixed);
     ctx.on_click(bg, on_bg_click);
+    ctx.on(bg, Object::EventType::HoverEnter | Object::EventType::HoverLeave, on_hovered);
 }
 
 Object::Context& StateManager::context() {
@@ -173,7 +213,7 @@ void StateManager::sync_surface() {
 }
 
 void StateManager::trace_frame(const char* tag) {
-    if (!root || (trace_left <= 0 && std::string_view{tag}.find("on_done") == std::string_view::npos))
+    if (!root || (trace_left <= 0 && !string_view{tag}.contains("on_done")))
         return;
     const auto b  = ctx.frame(bg);
     const auto r  = ctx.frame(root);
@@ -183,7 +223,7 @@ void StateManager::trace_frame(const char* tag) {
         "[trace] {} bg=({:.2f},{:.2f},{:.2f}x{:.2f}) root={:.2f}x{:.2f} surface={}x{} buffer={}x{} scale={:.3f} animW={} animH={}",
         tag, b.x, b.y, b.width, b.height, r.width, r.height, sz[0], sz[1], bf[0], bf[1],
         Wayland::get_scale(), ctx.is_animating(bg, Prop::W), ctx.is_animating(bg, Prop::H));
-    if (trace_left > 0 && std::string_view{tag}.find("on_done") == std::string_view::npos)
+    if (trace_left > 0 && !string_view{tag}.contains("on_done"))
         --trace_left;
 }
 

@@ -15,7 +15,7 @@ namespace {
     return static_cast<uint8_t>(v * 255.f + 0.5f);
 }
 
-}
+} // namespace
 
 Context::Context(size_t reserve_nodes) {
     nodes_.reserve(min<size_t>(reserve_nodes, kNone));
@@ -24,7 +24,7 @@ Context::Context(size_t reserve_nodes) {
 uint16_t Context::alloc_node() {
     uint16_t i;
     if (free_head_ != kNone) {
-        i          = free_head_;
+        i = free_head_;
         free_head_ = nodes_[i].next;
     }
     else {
@@ -34,10 +34,10 @@ uint16_t Context::alloc_node() {
         nodes_.emplace_back();
     }
 
-    Node&          n   = nodes_[i];
+    Node& n = nodes_[i];
     const uint16_t gen = n.gen;
-    n                  = Node{};
-    n.gen              = gen;
+    n = Node{};
+    n.gen = gen;
     ++live_;
     return i;
 }
@@ -73,9 +73,9 @@ void Context::release_node(uint16_t i) {
 
     const auto next_gen = static_cast<uint16_t>(n.gen + 1);
 
-    n          = Node{};
-    n.gen      = next_gen;
-    n.next     = free_head_;
+    n = Node{};
+    n.gen = next_gen;
+    n.next = free_head_;
     free_head_ = i;
     --live_;
 }
@@ -88,8 +88,8 @@ Handle Context::spawn(Kind kind, uint16_t data, const Frame& frame, Handle paren
     }
 
     Node& n = nodes_[i];
-    n.kind  = kind;
-    n.data  = data;
+    n.kind = kind;
+    n.data = data;
     n.frame = frame;
     if (kind == Kind::Image || kind == Kind::Text) {
         n.flags = with_size_mode(n.flags, Axis::Horizontal, SizeMode::Fit);
@@ -109,9 +109,9 @@ Handle Context::create_root(float width, float height) {
     if (i == kNone)
         return {};
 
-    Node& n        = nodes_[i];
-    n.flags        |= flag::root;
-    n.frame.width  = width;
+    Node& n = nodes_[i];
+    n.flags |= flag::root;
+    n.frame.width = width;
     n.frame.height = height;
 
     const Handle h = handle_of(i);
@@ -177,7 +177,6 @@ void Context::destroy(Handle h) {
             break;
         cur = up;
     }
-
 }
 
 void Context::clear() {
@@ -190,8 +189,8 @@ void Context::link_last(uint16_t parent, uint16_t child) {
     Node& c = nodes_[child];
 
     c.parent = parent;
-    c.next   = kNone;
-    c.prev   = p.last;
+    c.next = kNone;
+    c.prev = p.last;
     if (p.last != kNone)
         nodes_[p.last].next = child;
     else
@@ -204,8 +203,8 @@ void Context::link_first(uint16_t parent, uint16_t child) {
     Node& c = nodes_[child];
 
     c.parent = parent;
-    c.prev   = kNone;
-    c.next   = p.first;
+    c.prev = kNone;
+    c.next = p.first;
     if (p.first != kNone)
         nodes_[p.first].prev = child;
     else
@@ -214,7 +213,7 @@ void Context::link_first(uint16_t parent, uint16_t child) {
 }
 
 uint16_t Context::unlink(uint16_t child) {
-    Node&          c      = nodes_[child];
+    Node& c = nodes_[child];
     const uint16_t parent = c.parent;
     if (parent == kNone)
         return kNone;
@@ -240,7 +239,7 @@ void Context::mark_dirty(uint16_t i) {
         if (n.flags & flag::dirty)
             return;
         n.flags |= flag::dirty;
-        i       = n.parent;
+        i = n.parent;
     }
 }
 
@@ -327,7 +326,7 @@ void Context::set_pos(Handle h, float x, float y) {
 
 void Context::set_size(Handle h, float w, float hgt) {
     if (Node* n = node(h); n && (n->frame.width != w || n->frame.height != hgt)) {
-        n->frame.width  = w;
+        n->frame.width = w;
         n->frame.height = hgt;
         mark_dirty(h.id);
     }
@@ -345,13 +344,13 @@ void Context::set_grow(Handle h, Axis axis, const GrowParams& params) {
     if (!n)
         return;
 
-    GrowParams p                           = params;
-    p.weight                               = max(p.weight, 0.f);
-    p.min                                  = max(p.min, 0.f);
-    p.max                                  = max(p.max, p.min);
-    GrowData& d                            = grow_[h.id];
+    GrowParams p = params;
+    p.weight = max(p.weight, 0.f);
+    p.min = max(p.min, 0.f);
+    p.max = max(p.max, p.min);
+    GrowData& d = grow_[h.id];
     (axis == Axis::Horizontal ? d.h : d.v) = p;
-    n->flags                               = with_size_mode(n->flags, axis, SizeMode::Grow);
+    n->flags = with_size_mode(n->flags, axis, SizeMode::Grow);
     mark_dirty(h.id);
 }
 
@@ -600,9 +599,9 @@ ImageView& ImageView::set_image(std::string_view path) {
 
 TextView& TextView::set_raster(RasterFn fn, std::uintptr_t arg) {
     if (auto* d = data()) {
-        d->raster     = fn;
+        d->raster = fn;
         d->raster_arg = arg;
-        d->texture    = fn(Renderer::text_scale(), arg);
+        d->texture = fn(Renderer::text_scale(), arg);
         ctx_->mark_dirty(h_.id);
     }
     return *this;
@@ -610,12 +609,12 @@ TextView& TextView::set_raster(RasterFn fn, std::uintptr_t arg) {
 
 TextView& TextView::set_text(std::string_view s) {
     if (auto* d = data()) {
-        d->raster   = nullptr;
-        d->text     = s;
-        d->texture  = Renderer::prepare_text(s, d->font);
+        d->raster = nullptr;
+        d->text = s;
+        d->texture = Renderer::prepare_text(s, d->font);
         ctx_->mark_dirty(h_.id);
     }
     return *this;
 }
 
-}
+} // namespace Object

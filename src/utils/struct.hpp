@@ -1,8 +1,6 @@
 #pragma once
 
-#include <chrono>
 #include <cstdint>
-#include <functional>
 #include <limits>
 #include <string>
 
@@ -21,7 +19,7 @@ struct FontHandle {
 };
 
 struct Font {
-    std::string   path{};
+    std::string path;
     std::uint16_t size{};
 };
 
@@ -31,4 +29,3 @@ enum struct StateType : std::uint8_t {
     MusicPLayer,
     ControlCenter,
 };
-

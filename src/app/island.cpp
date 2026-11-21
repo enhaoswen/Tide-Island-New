@@ -23,27 +23,27 @@ using namespace std;
 namespace {
 
 Island::IslandState island{
-    .island_width  = 140,
+    .island_width = 140,
     .island_height = 38,
-    .zone          = 40,
-    .anchor_top    = 2,
-    .radius        = 19,
-    .color         = Color{0, 0, 0, 1},
+    .zone = 40,
+    .anchor_top = 2,
+    .radius = 19,
+    .color = Color{0, 0, 0, 1},
 };
 
 Config::IslandConfig to_config() {
     Config::IslandConfig config;
-    config.island_width  = island.island_width;
+    config.island_width = island.island_width;
     config.island_height = island.island_height;
-    config.zone          = island.zone;
-    config.anchor_top    = island.anchor_top;
-    config.radius        = island.radius;
-    config.color         = island.color;
-    config.blur          = island.blur;
+    config.zone = island.zone;
+    config.anchor_top = island.anchor_top;
+    config.radius = island.radius;
+    config.color = island.color;
+    config.blur = island.blur;
     return config;
 }
 
-}
+} // namespace
 
 // ============================================================================
 // [Public API Implementation]
@@ -69,13 +69,13 @@ void Island::init() {
         return;
     }
 
-    island.island_width  = config.island_width;
+    island.island_width = config.island_width;
     island.island_height = config.island_height;
-    island.zone          = config.zone;
-    island.anchor_top    = config.anchor_top;
-    island.radius        = config.radius;
-    island.color         = config.color;
-    island.blur          = config.blur;
+    island.zone = config.zone;
+    island.anchor_top = config.anchor_top;
+    island.radius = config.radius;
+    island.color = config.color;
+    island.blur = config.blur;
 }
 
 void Island::set_anchor_top(std::int32_t distance) {
@@ -121,7 +121,7 @@ void Island::set_size(std::uint16_t width, std::uint16_t height) {
         Log::logger(Log::Error, "Island width and height must be positive");
         return;
     }
-    island.island_width  = width;
+    island.island_width = width;
     island.island_height = height;
 }
 
@@ -131,7 +131,10 @@ void Island::request_redraw(bool redraw) {
 
 void Island::set_animation_scale(float scale) {
     if (!isfinite(scale) || scale <= 0) {
-        Log::logger(Log::Error, "Animation scale must be finite and positive, value={}", scale);
+        Log::logger(
+            Log::Error,
+            "Animation scale must be finite and positive, value={}",
+            scale);
         return;
     }
     island.animation_scale = scale;

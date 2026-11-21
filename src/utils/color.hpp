@@ -18,16 +18,19 @@
 // opaque red = {1.0, 0.0, 0.0, 1.0}
 
 class Color {
-private:
+  private:
     std::array<float, 4> color{0, 0, 0, 1};
 
     struct PresetTag {};
     constexpr Color(PresetTag, unsigned char r, unsigned char g, unsigned char b)
-        : color{static_cast<float>(r) / 255.0f,
-                static_cast<float>(g) / 255.0f,
-                static_cast<float>(b) / 255.0f, 1} {}
+        : color{
+              static_cast<float>(r) / 255.0f,
+              static_cast<float>(g) / 255.0f,
+              static_cast<float>(b) / 255.0f,
+              1,
+          } {}
 
-public:
+  public:
     static const Color Black;
     static const Color White;
     static const Color Gray;
@@ -49,8 +52,8 @@ public:
 
     Color() = default;
     Color(std::string_view color, std::source_location l = std::source_location::current());
-    Color(std::array<float,3> arg_color, std::source_location l = std::source_location::current());
-    Color(std::array<float,4> arg_color, std::source_location l = std::source_location::current());
+    Color(std::array<float, 3> arg_color, std::source_location l = std::source_location::current());
+    Color(std::array<float, 4> arg_color, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, float a, std::source_location l = std::source_location::current());
     Color(float r, float g, float b, std::source_location l = std::source_location::current());
     [[nodiscard]] std::string to_string() const;
