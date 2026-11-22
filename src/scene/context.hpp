@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <optional>
 #include <string_view>
@@ -262,7 +263,7 @@ public:
 
     void               cancel_animation(Handle h, Prop p) { anim_.cancel(h, p); }
     [[nodiscard]] bool is_animating(Handle h, Prop p) const { return anim_.active(h, p); }
-    [[nodiscard]] bool animating() const { return !anim_.empty(); }
+    [[nodiscard]] bool animating() const { return !anim_.empty() || settling_; }
 
     void update(float dt);
 
@@ -331,8 +332,14 @@ private:
 
     void mark_dirty(uint16_t i);
 
-    // Re-rasterize text bitmaps whose texture was rendered for another scale.
-    bool refresh_text(float scale);
+    // Re-rasterize settled text whose bitmap was rendered for another scale or zoom.
+    void refresh_text(float scale);
+
+    [[nodiscard]] float text_zoom(uint16_t i) const;
+
+    [[nodiscard]] Texture raster_text(const TextData& d, float scale) const;
+
+    [[nodiscard]] Frame text_frame(const TextData& d, const Frame& abs) const;
 
     void set_flag(Handle h, uint16_t bit, bool on);
 
@@ -382,6 +389,8 @@ private:
     std::unordered_map<uint16_t, GrowData> grow_;
 
     Animator anim_;
+    float    raster_scale_ = 1.f;
+    bool     settling_     = false;
 
     std::vector<Event> events_;
     std::size_t        event_head_ = 0;
@@ -421,6 +430,17 @@ inline Placed Context::place(const Node& n, const Placed& parent) const {
     const float px = parent.frame.x + (n.frame.x + n.frame.width * t.pivot_x) * parent.scale;
     const float py = parent.frame.y + (n.frame.y + n.frame.height * t.pivot_y) * parent.scale;
     return {{px - w * t.pivot_x, py - h * t.pivot_y, w, h}, s};
+}
+
+inline Frame Context::text_frame(const TextData& d, const Frame& abs) const {
+    if (!d.texture.valid() || !(d.natural_w > 0.f))
+        return abs;
+    const float want = raster_scale_ * abs.width / d.natural_w;
+    if (std::abs(d.texture.scale() - want) > 1e-3f * want)
+        return abs;
+    const float w = static_cast<float>(d.texture.width()) / raster_scale_;
+    const float h = static_cast<float>(d.texture.height()) / raster_scale_;
+    return {abs.x + (abs.width - w) * .5f, abs.y + (abs.height - h) * .5f, w, h};
 }
 
 inline RectView::operator bool() const { return ctx_ && ctx_->alive(h_); }
@@ -470,18 +490,19 @@ inline float ImageView::radius() const {
 
 inline float TextView::texture_width() const {
     const auto* d = data();
-    return d && d->texture.valid() ? d->texture.logical_width() : 0.f;
+    return d ? d->natural_w : 0.f;
 }
 
 inline float TextView::texture_height() const {
     const auto* d = data();
-    return d && d->texture.valid() ? d->texture.logical_height() : 0.f;
+    return d ? d->natural_h : 0.f;
 }
 
 inline TextView& TextView::set_texture(Texture t) {
     if (auto* d = data()) {
-        d->raster  = nullptr;
-        d->texture = std::move(t);
+        d->raster = nullptr;
+        d->text.clear();
+        d->set_content(std::move(t));
         ctx_->mark_dirty(h_.id);
     }
     return *this;

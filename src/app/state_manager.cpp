@@ -67,6 +67,8 @@ float                   root_height{};
 
 constexpr float k_hover_scale = 1.03f;
 
+
+
 bool is_expended(StateType type) {
     switch (type) {
     case StateType::Clock:
@@ -94,7 +96,11 @@ void set_surface(const uint32_t width, const uint32_t height) {
     root_height = static_cast<float>(height);
 }
 
+void hover(bool on);
+
 void resize(const uint32_t width, const uint32_t height, bool expended, float radius = -1) {
+
+    Island::set_priority(expended ? Island::k_priority_idle : Island::k_priority_transition);
 
     AnimCallback on_done{};
     if (!expended) {
@@ -102,7 +108,12 @@ void resize(const uint32_t width, const uint32_t height, bool expended, float ra
             if (!ctx.is_animating(bg, Prop::W) && !ctx.is_animating(bg, Prop::H)) {
                 StateManager::trace_frame("on_done(before resize)");
                 trace_left = 6;
-                set_surface(width, height);
+                Island::set_priority(Island::k_priority_idle);
+                // Hover events were dropped during the transition; catch up with the pointer.
+                if (ctx.hovered() == bg)
+                    hover(true);
+                else
+                    set_surface(width, height);
                 Island::request_redraw(true);
                 StateManager::trace_frame("on_done(after resize)");
             }
@@ -153,14 +164,10 @@ void scale_bg(const float to, AnimCallback on_done = {}) {
     });
 }
 
-void on_hovered(const Object::Event&) {
-    const StateType state = Island::get_state();
-    if (is_expended(state))
-        return;
+void hover(const bool on) {
+    const StateSize size = size_of(Island::get_state());
 
-    const StateSize size = size_of(state);
-
-    if (ctx.hovered() == bg) {
+    if (on) {
         const auto grown = [](const uint32_t v) {
             return v + static_cast<uint32_t>(ceil(static_cast<float>(v) * (k_hover_scale - 1.f)));
         };
@@ -173,6 +180,12 @@ void on_hovered(const Object::Event&) {
             Island::request_redraw(true);
         });
     }
+}
+
+void on_hovered(const Object::Event&) {
+    if (is_expended(Island::get_state()) || Island::get_island().current_priority > Island::k_priority_hover)
+        return;
+    hover(ctx.hovered() == bg);
 }
 
 }

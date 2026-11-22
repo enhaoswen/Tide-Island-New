@@ -334,7 +334,10 @@ float Renderer::text_scale() {
 }
 
 Texture Renderer::prepare_text(string_view text, FontHandle font) {
-    const float        scale{Wayland::get_scale()};
+    return prepare_text(text, font, text_scale());
+}
+
+Texture Renderer::prepare_text(string_view text, FontHandle font, float scale) {
     const Text::Bitmap bitmap{Text::draw(text, font, scale)};
     if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
         return {};
@@ -407,15 +410,23 @@ void Renderer::GpuRenderer::draw_text(const Frame& frame, const Texture& texture
     if (!texture.valid())
         return;
 
+    // Texels only map 1:1 to pixels at the natural size; when stretched, nearest sampling
+    // duplicates whole columns and snapping makes it step, so filter and place it exactly.
+    const float px_scale  = text_scale();
+    const bool  stretched = abs(frame.width * px_scale - static_cast<float>(texture.width())) > 1e-2f ||
+                            abs(frame.height * px_scale - static_cast<float>(texture.height())) > 1e-2f;
+
     // Snap the origin to the physical pixel grid. At fractional scales a
     // half-pixel offset resamples every glyph and makes text look blurry.
-    const auto  surface = Wayland::get_surface_size();
-    const auto  buffer  = Wayland::get_buffer_size();
-    const float scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
-    const float scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
-    Frame       snapped{frame};
-    snapped.x = round(frame.x * scale_x) / scale_x;
-    snapped.y = round(frame.y * scale_y) / scale_y;
+    Frame snapped{frame};
+    if (!stretched) {
+        const auto  surface = Wayland::get_surface_size();
+        const auto  buffer  = Wayland::get_buffer_size();
+        const float scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
+        const float scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
+        snapped.x = round(frame.x * scale_x) / scale_x;
+        snapped.y = round(frame.y * scale_y) / scale_y;
+    }
 
     const ImgVert vertices{image_vertices(snapped)};
     const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
@@ -426,7 +437,7 @@ void Renderer::GpuRenderer::draw_text(const Frame& frame, const Texture& texture
     sg_bindings bindings{};
     bindings.vertex_buffers[0]        = image_vertex_buffer;
     bindings.vertex_buffer_offsets[0] = offset;
-    bindings.samplers[SMP_smp]        = text_sampler;
+    bindings.samplers[SMP_smp]        = stretched ? image_sampler : text_sampler;
     bindings.views[VIEW_tex]          = sg_view(texture.view_id());
     sg_apply_pipeline(text_pipeline);
     sg_apply_bindings(&bindings);

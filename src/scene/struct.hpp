@@ -285,6 +285,17 @@ struct TextData {
     std::string    text{};
     RasterFn       raster{}; // procedural glyph, redrawn on scale change like text
     std::uintptr_t raster_arg{};
+    // Logical size from when the content was set; layout uses it so re-rasterizing at
+    // another zoom (whose hinting changes the extent slightly) never re-lays out.
+    float natural_w{};
+    float natural_h{};
+    float seen_zoom = 1.f;
+
+    void set_content(Texture t) {
+        texture   = std::move(t);
+        natural_w = texture.valid() ? texture.logical_width() : 0.f;
+        natural_h = texture.valid() ? texture.logical_height() : 0.f;
+    }
 
     void reset() {
         texture.reset();
@@ -293,6 +304,9 @@ struct TextData {
         text.clear();
         raster     = nullptr;
         raster_arg = 0;
+        natural_w  = 0.f;
+        natural_h  = 0.f;
+        seen_zoom  = 1.f;
     }
 };
 

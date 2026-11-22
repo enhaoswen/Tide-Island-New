@@ -37,8 +37,9 @@ void Context::measure(uint16_t i) {
     const SizeMode hm = size_mode(n.flags, Axis::Vertical);
 
     if (n.kind == Kind::Image || n.kind == Kind::Text) {
-        const Texture& tex = n.kind == Kind::Image ? images_[n.data].texture : texts_[n.data].texture;
-        const auto [w, h] = texture_extent(tex);
+        const auto [w, h] = n.kind == Kind::Image
+                                ? texture_extent(images_[n.data].texture)
+                                : std::pair{texts_[n.data].natural_w, texts_[n.data].natural_h};
         if (wm == SizeMode::Fit)
             n.frame.width = w;
         if (hm == SizeMode::Fit)

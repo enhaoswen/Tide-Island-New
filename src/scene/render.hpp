@@ -47,7 +47,7 @@ struct Drawer {
         }
         case Kind::Text: {
             const TextData& d = c.texts_[n.data];
-            r.draw_text(abs, d.texture, d.font, d.color, alpha);
+            r.draw_text(c.text_frame(d, abs), d.texture, d.font, d.color, alpha);
             break;
         }
         }

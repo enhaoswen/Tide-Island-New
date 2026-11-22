@@ -141,7 +141,11 @@ Handle Context::create_image(Handle parent, ImageDesc d) {
 }
 
 Handle Context::create_text(Handle parent, TextDesc d) {
-    const uint16_t data = texts_.acquire(TextData{std::move(d.texture), d.font, d.color});
+    TextData td{};
+    td.font  = d.font;
+    td.color = d.color;
+    td.set_content(std::move(d.texture));
+    const uint16_t data = texts_.acquire(std::move(td));
     if (data == kNone)
         return {};
     return spawn(Kind::Text, data, d.frame, parent);
@@ -590,29 +594,49 @@ void Context::update(float dt) {
         update_hover();
 }
 
-bool Context::refresh_text(float scale) {
-    if (!(scale > 0.0f))
-        return false;
+float Context::text_zoom(uint16_t i) const {
+    const TextData& d = texts_[nodes_[i].data];
+    const Placed    p = placed(i);
+    const float     z = d.natural_w > 0.f ? p.frame.width / d.natural_w : p.scale;
+    return z > 0.f ? z : 1.f;
+}
 
-    bool changed{};
+Texture Context::raster_text(const TextData& d, float scale) const {
+    if (d.raster)
+        return d.raster(scale, d.raster_arg);
+    if (!d.text.empty())
+        return Renderer::prepare_text(d.text, d.font, scale);
+    return {};
+}
+
+void Context::refresh_text(float scale) {
+    settling_ = false;
+    if (!(scale > 0.0f))
+        return;
+    raster_scale_ = scale;
+
     for (uint16_t i{}; i < nodes_.size(); ++i) {
         Node& n = nodes_[i];
         if (n.kind != Kind::Text)
             continue;
 
-        TextData& data = texts_[n.data];
-        if (!data.texture.valid() || data.texture.scale() == scale)
+        TextData& d = texts_[n.data];
+        if (!d.texture.valid() || (!d.raster && d.text.empty()))
             continue;
-        if (data.raster)
-            data.texture = data.raster(scale, data.raster_arg);
-        else if (!data.text.empty())
-            data.texture = Renderer::prepare_text(data.text, data.font);
-        else
+
+        const float zoom = text_zoom(i);
+        if (zoom != d.seen_zoom) {
+            d.seen_zoom = zoom;
+            settling_   = true;
             continue;
-        mark_dirty(i);
-        changed = true;
+        }
+
+        const float want = scale * zoom;
+        if (!(want > 0.f) || std::abs(d.texture.scale() - want) <= 1e-3f * want)
+            continue;
+        if (Texture t = raster_text(d, want); t.valid())
+            d.texture = std::move(t);
     }
-    return changed;
 }
 
 ImageView& ImageView::set_image(std::string_view path) {
@@ -625,9 +649,12 @@ ImageView& ImageView::set_image(std::string_view path) {
 
 TextView& TextView::set_raster(RasterFn fn, std::uintptr_t arg) {
     if (auto* d = data()) {
-        d->raster = fn;
+        d->raster     = fn;
         d->raster_arg = arg;
-        d->texture = fn(Renderer::text_scale(), arg);
+        d->text.clear();
+        const float zoom = ctx_->text_zoom(h_.id);
+        d->set_content(fn(Renderer::text_scale() * zoom, arg));
+        d->seen_zoom = zoom;
         ctx_->mark_dirty(h_.id);
     }
     return *this;
@@ -636,8 +663,10 @@ TextView& TextView::set_raster(RasterFn fn, std::uintptr_t arg) {
 TextView& TextView::set_text(std::string_view s) {
     if (auto* d = data()) {
         d->raster = nullptr;
-        d->text = s;
-        d->texture = Renderer::prepare_text(s, d->font);
+        d->text   = s;
+        const float zoom = ctx_->text_zoom(h_.id);
+        d->set_content(Renderer::prepare_text(s, d->font, Renderer::text_scale() * zoom));
+        d->seen_zoom = zoom;
         ctx_->mark_dirty(h_.id);
     }
     return *this;
