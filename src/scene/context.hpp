@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <optional>
@@ -28,6 +29,15 @@ struct TextDesc {
     Texture    texture{};
     FontHandle font{};
     Color      color{};
+};
+
+struct RingDesc {
+    Frame frame{};
+    Color color{};
+    // Unset: `color` at 25% alpha, like the dimmed track of iOS timers.
+    std::optional<Color> track{};
+    float progress{};
+    float thickness = 4.f;
 };
 
 struct SAnimDesc {
@@ -100,6 +110,34 @@ private:
     Handle   h_{};
 };
 
+class RingView {
+public:
+    RingView() = default;
+
+    [[nodiscard]] explicit operator bool() const;
+
+    RingView& set_progress(float p); // clamped to [0, 1]
+    RingView& set_thickness(float t);
+    RingView& set_color(const Color& c);
+    RingView& set_track(const Color& c);
+
+    [[nodiscard]] float progress() const;
+    [[nodiscard]] float thickness() const;
+    [[nodiscard]] Color color() const;
+    [[nodiscard]] Color track() const;
+
+private:
+    friend class Context;
+
+    RingView(Context* c, Handle h) : ctx_(c), h_(h) {
+    }
+
+    [[nodiscard]] RingData* data() const;
+
+    Context* ctx_ = nullptr;
+    Handle   h_{};
+};
+
 class TextView {
 public:
     TextView() = default;
@@ -153,6 +191,8 @@ public:
     Handle create_image(Handle parent = {}, ImageDesc desc = {});
 
     Handle create_text(Handle parent = {}, TextDesc desc = {});
+
+    Handle create_ring(Handle parent = {}, const RingDesc& desc = {});
 
     void                      destroy(Handle h); // whole subtree; stale handles become invalid
     void                      clear();           // destroy every root
@@ -257,6 +297,8 @@ public:
 
     [[nodiscard]] TextView text(Handle h);
 
+    [[nodiscard]] RingView ring(Handle h);
+
     bool animate(SAnimDesc desc);
 
     bool animate(TAnimDesc desc);
@@ -304,6 +346,7 @@ private:
     friend class RectView;
     friend class ImageView;
     friend class TextView;
+    friend class RingView;
     friend struct Drawer;
 
     [[nodiscard]] Node* node(Handle h) {
@@ -387,6 +430,7 @@ private:
     SlotVec<RectData>                      rects_;
     SlotVec<ImageData>                     images_;
     SlotVec<TextData>                      texts_;
+    SlotVec<RingData>                      rings_;
     SlotVec<LayoutData>                    layouts_;
     SlotVec<Listener>                      listeners_;
     SlotVec<Transform>                     transforms_;
@@ -422,6 +466,11 @@ inline TextData* TextView::data() const {
     return n ? &ctx_->texts_[n->data] : nullptr;
 }
 
+inline RingData* RingView::data() const {
+    Node* n = ctx_ ? ctx_->node(h_) : nullptr;
+    return n ? &ctx_->rings_[n->data] : nullptr;
+}
+
 inline Placed Context::place(const Node& n, const Placed& parent) const {
     Transform t{};
     if (n.transform != kNone)
@@ -446,6 +495,51 @@ inline Frame Context::text_frame(const TextData& d, const Frame& abs) const {
 inline RectView::operator bool() const { return ctx_ && ctx_->alive(h_); }
 inline ImageView::operator bool() const { return ctx_ && ctx_->alive(h_); }
 inline TextView::operator bool() const { return ctx_ && ctx_->alive(h_); }
+inline RingView::operator bool() const { return ctx_ && ctx_->alive(h_); }
+
+inline RingView& RingView::set_progress(float p) {
+    if (auto* d = data())
+        d->progress = std::clamp(p, 0.f, 1.f);
+    return *this;
+}
+
+inline RingView& RingView::set_thickness(float t) {
+    if (auto* d = data())
+        d->thickness = t < 0.f ? 0.f : t;
+    return *this;
+}
+
+inline RingView& RingView::set_color(const Color& c) {
+    if (auto* d = data())
+        d->color = c;
+    return *this;
+}
+
+inline RingView& RingView::set_track(const Color& c) {
+    if (auto* d = data())
+        d->track = c;
+    return *this;
+}
+
+inline float RingView::progress() const {
+    auto* d = data();
+    return d ? d->progress : 0.f;
+}
+
+inline float RingView::thickness() const {
+    auto* d = data();
+    return d ? d->thickness : 0.f;
+}
+
+inline Color RingView::color() const {
+    auto* d = data();
+    return d ? d->color : Color{};
+}
+
+inline Color RingView::track() const {
+    auto* d = data();
+    return d ? d->track : Color{};
+}
 
 inline RectView& RectView::set_color(const Color& c) {
     if (auto* d = data())

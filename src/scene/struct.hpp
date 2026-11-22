@@ -167,7 +167,7 @@ struct Listener {
 
 // ============================================================================
 
-enum class Kind : uint8_t { Group, Rect, Image, Text };
+enum class Kind : uint8_t { Group, Rect, Image, Text, Ring };
 
 enum class Axis : uint8_t { Horizontal = 0, Vertical = 1 };
 
@@ -263,6 +263,14 @@ struct Placed {
 struct RectData {
     Color color{};
     float radius{};
+};
+
+// Arc starts at 12 o'clock and runs clockwise with round caps; `track` fills the rest.
+struct RingData {
+    Color color{};
+    Color track{};
+    float progress{};
+    float thickness{};
 };
 
 struct ImageData {

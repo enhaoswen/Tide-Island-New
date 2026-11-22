@@ -67,6 +67,9 @@ sg_buffer   image_vertex_buffer{};
 
 sg_shader   text_shader{};
 sg_pipeline text_pipeline{};
+sg_shader   ring_shader{};
+sg_pipeline ring_pipeline{};
+
 sg_sampler  image_sampler{};
 sg_sampler  text_sampler{};
 
@@ -252,9 +255,20 @@ void Renderer::init() {
     enable_blending(text_pipe_desc);
     text_pipeline = sg_make_pipeline(text_pipe_desc);
 
+    ring_shader = sg_make_shader(ring_shader_desc(sg_query_backend()));
+
+    sg_pipeline_desc ring_pipe_desc{};
+    ring_pipe_desc.shader                                  = ring_shader;
+    ring_pipe_desc.layout.attrs[ATTR_ring_position].format = SG_VERTEXFORMAT_FLOAT2;
+    ring_pipe_desc.layout.attrs[ATTR_ring_coord].format    = SG_VERTEXFORMAT_FLOAT2;
+    ring_pipe_desc.primitive_type                          = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+    enable_blending(ring_pipe_desc);
+    ring_pipeline = sg_make_pipeline(ring_pipe_desc);
+
     if (sg_query_pipeline_state(rectangle_pipeline) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(image_pipeline) != SG_RESOURCESTATE_VALID ||
-        sg_query_pipeline_state(text_pipeline) != SG_RESOURCESTATE_VALID) {
+        sg_query_pipeline_state(text_pipeline) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(ring_pipeline) != SG_RESOURCESTATE_VALID) {
         Log::fatal("Renderer pipeline is invalid (shader compile error?)");
     }
 
@@ -450,6 +464,45 @@ void Renderer::GpuRenderer::draw_text(const Frame& frame, const Texture& texture
     copy(rgba.begin(), rgba.end(), params.color);
     params.color[3] *= opacity;
     sg_apply_uniforms(UB_text_params, SG_RANGE(params));
+    sg_draw(0, 4, 1);
+}
+
+void Renderer::GpuRenderer::draw_ring(const Frame& frame, const Color& color, const Color& track, float progress, float thickness, float opacity) {
+    const float diameter = min(frame.width, frame.height);
+    thickness            = min(thickness, diameter * 0.5f);
+    if (!(thickness > 0.0f))
+        return;
+
+    // Grown by a pixel so the outer edge's antialiasing is not cut off by the quad.
+    const Frame   quad{frame.x - 1.0f, frame.y - 1.0f, frame.width + 2.0f, frame.height + 2.0f};
+    const ImgVert vertices{image_vertices(quad)};
+    const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
+    if (sg_query_buffer_overflow(image_vertex_buffer)) {
+        Log::fatal("Ring vertex buffer overflow");
+    }
+
+    sg_bindings bindings{};
+    bindings.vertex_buffers[0]        = image_vertex_buffer;
+    bindings.vertex_buffer_offsets[0] = offset;
+    sg_apply_pipeline(ring_pipeline);
+    sg_apply_bindings(&bindings);
+
+    const auto project = projection();
+    sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
+
+    ring_params_t params{};
+    const auto    fg = color.to_rgba();
+    const auto    bg = track.to_rgba();
+    copy(fg.begin(), fg.end(), params.color);
+    copy(bg.begin(), bg.end(), params.track);
+    params.color[3] *= opacity;
+    params.track[3] *= opacity;
+    params.geometry[0] = frame.x + frame.width * 0.5f;
+    params.geometry[1] = frame.y + frame.height * 0.5f;
+    params.geometry[2] = (diameter - thickness) * 0.5f;
+    params.geometry[3] = thickness * 0.5f;
+    params.arc[0]      = clamp(progress, 0.0f, 1.0f);
+    sg_apply_uniforms(UB_ring_params, SG_RANGE(params));
     sg_draw(0, 4, 1);
 }
 

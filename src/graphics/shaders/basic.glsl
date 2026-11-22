@@ -111,3 +111,61 @@ void main() {
 @end
 
 @program text img_vs text_fs
+
+
+@fs ring_fs
+in vec2 Position;
+in vec2 uv;
+
+layout(binding = 0) uniform ring_params {
+    vec4 color;
+    vec4 track;
+    vec4 geometry; // center.xy, radius of the stroke's centerline, half thickness
+    vec4 arc;      // x: progress in [0, 1]
+};
+
+out vec4 frag_color;
+
+const float TAU = 6.28318530718;
+
+float coverage(float dist) {
+    float px = max(fwidth(dist) * 0.5, 1e-4);
+    return 1.0 - smoothstep(-px, px, dist);
+}
+
+void main() {
+    vec2  p      = Position - geometry.xy;
+    float radius = geometry.z;
+    float half_t = geometry.w;
+    float ring   = abs(length(p) - radius) - half_t;
+
+    // Clockwise from 12 o'clock in y-down screen space.
+    float angle = atan(p.x, -p.y);
+    if (angle < 0.0)
+        angle += TAU;
+
+    float progress = arc.x;
+    float arc_dist = 1e4;
+    if (progress >= 1.0) {
+        arc_dist = ring;
+    } else if (progress > 0.0) {
+        float end = progress * TAU;
+        if (angle <= end) {
+            arc_dist = ring;
+        } else {
+            // Round caps: past the end, distance falls back to the two cap discs.
+            vec2 start_cap = vec2(0.0, -radius);
+            vec2 end_cap   = radius * vec2(sin(end), -cos(end));
+            arc_dist = min(length(p - start_cap), length(p - end_cap)) - half_t;
+        }
+    }
+
+    float a_arc   = coverage(arc_dist) * color.a;
+    float a_track = coverage(ring) * track.a;
+    float alpha   = a_arc + a_track * (1.0 - a_arc);
+    vec3  rgb     = alpha > 0.0 ? (color.rgb * a_arc + track.rgb * a_track * (1.0 - a_arc)) / alpha : vec3(0.0);
+    frag_color = vec4(rgb, alpha);
+}
+@end
+
+@program ring img_vs ring_fs

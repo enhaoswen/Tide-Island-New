@@ -10,7 +10,7 @@ using namespace std;
 namespace {
 
 constexpr float rest_pos(Prop p) {
-    return p >= Prop::Opacity ? 0.002f : 0.05f;
+    return p >= Prop::Opacity && p != Prop::Thickness ? 0.002f : 0.05f;
 }
 
 constexpr float rest_vel(Prop p) { return rest_pos(p) * 10.f; }

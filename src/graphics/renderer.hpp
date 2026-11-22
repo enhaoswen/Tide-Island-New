@@ -39,6 +39,8 @@ struct GpuRenderer {
 
     void draw_text(const Frame& frame, const Texture& texture, FontHandle font, const Color& color, float opacity);
 
+    void draw_ring(const Frame& frame, const Color& color, const Color& track, float progress, float thickness, float opacity);
+
     void push_clip(const Frame& frame, float radius);
 
     void pop_clip();

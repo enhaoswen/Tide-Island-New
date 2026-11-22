@@ -59,6 +59,9 @@ void Context::release_data(Kind kind, uint16_t data) {
     case Kind::Text:
         texts_.release(data);
         break;
+    case Kind::Ring:
+        rings_.release(data);
+        break;
     }
 }
 
@@ -151,6 +154,16 @@ Handle Context::create_text(Handle parent, TextDesc d) {
     if (data == kNone)
         return {};
     return spawn(Kind::Text, data, d.frame, parent);
+}
+
+Handle Context::create_ring(Handle parent, const RingDesc& d) {
+    Color track = d.track.value_or(d.color);
+    if (!d.track)
+        color_channel(track, 3) *= .25f;
+    const uint16_t data = rings_.acquire(RingData{d.color, track, clamp(d.progress, 0.f, 1.f), max(d.thickness, 0.f)});
+    if (data == kNone)
+        return {};
+    return spawn(Kind::Ring, data, d.frame, parent);
 }
 
 void Context::destroy(Handle h) {
@@ -498,8 +511,18 @@ optional<float> Context::get_prop(Handle h, Prop p) const {
             return color_channel(rects_[n->data].color, ch);
         if (n->kind == Kind::Text)
             return color_channel(texts_[n->data].color, ch);
+        if (n->kind == Kind::Ring)
+            return color_channel(rings_[n->data].color, ch);
         return nullopt;
     }
+    case Prop::Progress:
+        if (n->kind == Kind::Ring)
+            return rings_[n->data].progress;
+        return nullopt;
+    case Prop::Thickness:
+        if (n->kind == Kind::Ring)
+            return rings_[n->data].thickness;
+        return nullopt;
     }
     return nullopt;
 }
@@ -559,8 +582,23 @@ bool Context::set_prop(Handle h, Prop p, float v) {
             color_channel(texts_[n->data].color, ch) = v;
             return true;
         }
+        if (n->kind == Kind::Ring) {
+            color_channel(rings_[n->data].color, ch) = v;
+            return true;
+        }
         return false;
     }
+    case Prop::Progress:
+        if (n->kind != Kind::Ring)
+            return false;
+        // Springs overshoot; clamping keeps the arc from wrapping past full or vanishing.
+        rings_[n->data].progress = clamp(v, 0.f, 1.f);
+        return true;
+    case Prop::Thickness:
+        if (n->kind != Kind::Ring)
+            return false;
+        rings_[n->data].thickness = max(v, 0.f);
+        return true;
     }
     return false;
 }
@@ -573,6 +611,11 @@ RectView Context::rect(Handle h) {
 ImageView Context::image(Handle h) {
     const Node* n = node(h);
     return n && n->kind == Kind::Image ? ImageView{this, h} : ImageView{};
+}
+
+RingView Context::ring(Handle h) {
+    const Node* n = node(h);
+    return n && n->kind == Kind::Ring ? RingView{this, h} : RingView{};
 }
 
 TextView Context::text(Handle h) {

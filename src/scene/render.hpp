@@ -11,6 +11,7 @@ concept Renderer = requires(R& r, const Frame& f, const Color& c, const Texture&
         r.draw_rect(f, c, x /*radius*/, x /*opacity*/);
         r.draw_image(f, t, x /*radius*/, x /*opacity*/);
         r.draw_text(f, t, font, c, x /*opacity*/);
+        r.draw_ring(f, c, c /*track*/, x /*progress*/, x /*thickness*/, x /*opacity*/);
         r.push_clip(f, x /*radius*/);
         r.pop_clip();
     };
@@ -48,6 +49,11 @@ struct Drawer {
         case Kind::Text: {
             const TextData& d = c.texts_[n.data];
             r.draw_text(c.text_frame(d, abs), d.texture, d.font, d.color, alpha);
+            break;
+        }
+        case Kind::Ring: {
+            const RingData& d = c.rings_[n.data];
+            r.draw_ring(abs, d.color, d.track, d.progress, d.thickness * p.scale, alpha);
             break;
         }
         }

@@ -16,6 +16,7 @@ enum class Prop : uint8_t {
     Opacity,
     Scale,
     ColorR, ColorG, ColorB, ColorA,
+    Progress, Thickness,
 };
 
 using AnimCallback = std::function<void()>;
