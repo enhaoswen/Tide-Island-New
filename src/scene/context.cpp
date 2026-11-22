@@ -1,8 +1,10 @@
 #include "context.hpp"
 
 #include "graphics/renderer.hpp"
+#include "graphics/text.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 using namespace std;
@@ -601,7 +603,13 @@ float Context::text_zoom(uint16_t i) const {
     return z > 0.f ? z : 1.f;
 }
 
-Texture Context::raster_text(const TextData& d, float scale) const {
+std::uint32_t Context::raster_key(const TextData& d, float scale) {
+    if (d.raster)
+        return static_cast<std::uint32_t>(lround(d.natural_w * scale)) + 1;
+    return Text::raster_size(d.font, scale);
+}
+
+Texture Context::raster_text(const TextData& d, float scale) {
     if (d.raster)
         return d.raster(scale, d.raster_arg);
     if (!d.text.empty())
@@ -609,8 +617,13 @@ Texture Context::raster_text(const TextData& d, float scale) const {
     return {};
 }
 
+void Context::rasterize(uint16_t i, TextData& d) {
+    const float want = Renderer::text_scale() * text_zoom(i);
+    d.set_content(raster_text(d, want));
+    d.raster_key = raster_key(d, want);
+}
+
 void Context::refresh_text(float scale) {
-    settling_ = false;
     if (!(scale > 0.0f))
         return;
     raster_scale_ = scale;
@@ -624,18 +637,14 @@ void Context::refresh_text(float scale) {
         if (!d.texture.valid() || (!d.raster && d.text.empty()))
             continue;
 
-        const float zoom = text_zoom(i);
-        if (zoom != d.seen_zoom) {
-            d.seen_zoom = zoom;
-            settling_   = true;
+        const float         want = scale * text_zoom(i);
+        const std::uint32_t key  = raster_key(d, want);
+        if (key == 0 || key == d.raster_key)
             continue;
+        if (Texture t = raster_text(d, want); t.valid()) {
+            d.texture    = std::move(t);
+            d.raster_key = key;
         }
-
-        const float want = scale * zoom;
-        if (!(want > 0.f) || std::abs(d.texture.scale() - want) <= 1e-3f * want)
-            continue;
-        if (Texture t = raster_text(d, want); t.valid())
-            d.texture = std::move(t);
     }
 }
 
@@ -652,9 +661,7 @@ TextView& TextView::set_raster(RasterFn fn, std::uintptr_t arg) {
         d->raster     = fn;
         d->raster_arg = arg;
         d->text.clear();
-        const float zoom = ctx_->text_zoom(h_.id);
-        d->set_content(fn(Renderer::text_scale() * zoom, arg));
-        d->seen_zoom = zoom;
+        ctx_->rasterize(h_.id, *d);
         ctx_->mark_dirty(h_.id);
     }
     return *this;
@@ -664,9 +671,7 @@ TextView& TextView::set_text(std::string_view s) {
     if (auto* d = data()) {
         d->raster = nullptr;
         d->text   = s;
-        const float zoom = ctx_->text_zoom(h_.id);
-        d->set_content(Renderer::prepare_text(s, d->font, Renderer::text_scale() * zoom));
-        d->seen_zoom = zoom;
+        ctx_->rasterize(h_.id, *d);
         ctx_->mark_dirty(h_.id);
     }
     return *this;

@@ -46,6 +46,8 @@ void init();
                                    Weight weight = Weight::Regular);
 void unload_font(FontHandle font);
 [[nodiscard]] Bitmap draw(std::string_view text, FontHandle font, float scale = 1.0f);
+// Font size in pixels that draw would rasterize at; 0 if the font or scale is invalid.
+[[nodiscard]] unsigned raster_size(FontHandle font, float scale);
 void shutdown();
 
 }

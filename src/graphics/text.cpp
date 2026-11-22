@@ -554,6 +554,14 @@ void Text::unload_font(FontHandle font) {
         Log::logger(Log::Warning, "Invalid text font handle {}", font.id);
 }
 
+unsigned Text::raster_size(FontHandle handle, float scale) {
+    const auto it = loaded_fonts.find(handle.id);
+    if (it == loaded_fonts.end() || !isfinite(scale) || scale <= 0.0f)
+        return 0;
+    const float size{max(1.0f, round(static_cast<float>(it->second->pixel_size) * scale))};
+    return size < static_cast<float>(numeric_limits<unsigned>::max()) ? static_cast<unsigned>(size) : 0;
+}
+
 Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale) {
     LoadedFont* const font = require_font(handle);
     Bitmap bitmap{};

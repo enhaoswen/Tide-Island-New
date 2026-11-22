@@ -289,7 +289,8 @@ struct TextData {
     // another zoom (whose hinting changes the extent slightly) never re-lays out.
     float natural_w{};
     float natural_h{};
-    float seen_zoom = 1.f;
+    // Identifies the pixels a raster at some scale would produce; equal keys never re-raster.
+    std::uint32_t raster_key{};
 
     void set_content(Texture t) {
         texture   = std::move(t);
@@ -306,7 +307,7 @@ struct TextData {
         raster_arg = 0;
         natural_w  = 0.f;
         natural_h  = 0.f;
-        seen_zoom  = 1.f;
+        raster_key = 0;
     }
 };
 

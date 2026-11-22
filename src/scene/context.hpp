@@ -263,7 +263,7 @@ public:
 
     void               cancel_animation(Handle h, Prop p) { anim_.cancel(h, p); }
     [[nodiscard]] bool is_animating(Handle h, Prop p) const { return anim_.active(h, p); }
-    [[nodiscard]] bool animating() const { return !anim_.empty() || settling_; }
+    [[nodiscard]] bool animating() const { return !anim_.empty(); }
 
     void update(float dt);
 
@@ -332,12 +332,16 @@ private:
 
     void mark_dirty(uint16_t i);
 
-    // Re-rasterize settled text whose bitmap was rendered for another scale or zoom.
+    // Re-rasterize text whose bitmap no longer matches its output scale times zoom.
     void refresh_text(float scale);
 
     [[nodiscard]] float text_zoom(uint16_t i) const;
 
-    [[nodiscard]] Texture raster_text(const TextData& d, float scale) const;
+    [[nodiscard]] static std::uint32_t raster_key(const TextData& d, float scale);
+
+    [[nodiscard]] static Texture raster_text(const TextData& d, float scale);
+
+    void rasterize(uint16_t i, TextData& d);
 
     [[nodiscard]] Frame text_frame(const TextData& d, const Frame& abs) const;
 
@@ -390,7 +394,6 @@ private:
 
     Animator anim_;
     float    raster_scale_ = 1.f;
-    bool     settling_     = false;
 
     std::vector<Event> events_;
     std::size_t        event_head_ = 0;
@@ -433,10 +436,7 @@ inline Placed Context::place(const Node& n, const Placed& parent) const {
 }
 
 inline Frame Context::text_frame(const TextData& d, const Frame& abs) const {
-    if (!d.texture.valid() || !(d.natural_w > 0.f))
-        return abs;
-    const float want = raster_scale_ * abs.width / d.natural_w;
-    if (std::abs(d.texture.scale() - want) > 1e-3f * want)
+    if (!d.texture.valid() || (!d.raster && d.text.empty()))
         return abs;
     const float w = static_cast<float>(d.texture.width()) / raster_scale_;
     const float h = static_cast<float>(d.texture.height()) / raster_scale_;
