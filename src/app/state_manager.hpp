@@ -19,10 +19,6 @@ void init(const Resources& resources);
 // Call every frame after animations/events and right before drawing.
 void sync_surface();
 
-// DEBUG: logs geometry for a few frames after a shrink finishes.
-
-void trace_frame(const char* tag);
-
 void switch_state(StateType state);
 
 // Stop the active view and destroy the root.

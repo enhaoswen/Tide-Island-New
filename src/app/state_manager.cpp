@@ -1,12 +1,10 @@
 #include "state_manager.hpp"
 
 #include <cmath>
-#include <string_view>
 
 #include "island.hpp"
 #include "backend/wayland.hpp"
 #include "scene/animation.hpp"
-#include "utils/log.hpp"
 #include "views/clock_view.hpp"
 #include "views/music_player.hpp"
 
@@ -60,7 +58,6 @@ StateManager::Resources resources;
 Object::Context         ctx{};
 Object::Handle          root{};
 Object::Handle          bg{};
-int                     trace_left{0};
 // Root size to switch to once the Wayland surface has actually been resized.
 float                   root_width{};
 float                   root_height{};
@@ -106,8 +103,6 @@ void resize(const uint32_t width, const uint32_t height, bool expended, float ra
     if (!expended) {
         on_done = [width, height] {
             if (!ctx.is_animating(bg, Prop::W) && !ctx.is_animating(bg, Prop::H)) {
-                StateManager::trace_frame("on_done(before resize)");
-                trace_left = 6;
                 Island::set_priority(Island::k_priority_idle);
                 // Hover events were dropped during the transition; catch up with the pointer.
                 if (ctx.hovered() == bg)
@@ -115,7 +110,6 @@ void resize(const uint32_t width, const uint32_t height, bool expended, float ra
                 else
                     set_surface(width, height);
                 Island::request_redraw(true);
-                StateManager::trace_frame("on_done(after resize)");
             }
         };
     }
@@ -241,21 +235,6 @@ void StateManager::sync_surface() {
         const Frame f = ctx.absolute_frame(bg);
         Wayland::set_blur_shape(f.x, f.y, f.width, f.height, ctx.rect(bg).radius());
     }
-}
-
-void StateManager::trace_frame(const char* tag) {
-    if (!root || (trace_left <= 0 && !string_view{tag}.contains("on_done")))
-        return;
-    const auto b  = ctx.frame(bg);
-    const auto r  = ctx.frame(root);
-    const auto sz = Wayland::get_surface_size();
-    const auto bf = Wayland::get_buffer_size();
-    Log::logger(Log::Debug,
-        "[trace] {} bg=({:.2f},{:.2f},{:.2f}x{:.2f}) root={:.2f}x{:.2f} surface={}x{} buffer={}x{} scale={:.3f} animW={} animH={}",
-        tag, b.x, b.y, b.width, b.height, r.width, r.height, sz[0], sz[1], bf[0], bf[1],
-        Wayland::get_scale(), ctx.is_animating(bg, Prop::W), ctx.is_animating(bg, Prop::H));
-    if (trace_left > 0 && !string_view{tag}.contains("on_done"))
-        --trace_left;
 }
 
 void StateManager::switch_state(const StateType state) {

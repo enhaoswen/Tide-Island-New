@@ -136,11 +136,9 @@ void API::run() {
                 ctx.layout();
             StateManager::sync_surface();
 
-            StateManager::trace_frame("frame(draw)");
             Renderer::begin_frame();
             Object::draw(ctx, renderer);
             Renderer::end_frame();
-            StateManager::trace_frame("frame(swapped)");
         }
 
         const bool redraw  = Timer::wait(ctx.animating());
