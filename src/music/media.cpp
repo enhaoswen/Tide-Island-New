@@ -107,7 +107,7 @@ bool fetch_artwork(const string& url) {
     if (url.starts_with("file://")) {
         const string path = file_url_to_path(url);
         if (!path.empty())
-            artwork_pixels = Image::decode_square(read_file(path), Media::kArtworkSide);
+            artwork_pixels = Image::decode_square(read_file(path), Media::k_artwork_side);
         if (!artwork_pixels)
             Log::logger(Log::Warning, "Failed to load album art: {}", url);
         return true;
@@ -144,7 +144,7 @@ bool process_http(span<const pollfd> ready, steady_clock::time_point now) {
             continue;
         }
         artwork_pixels = Image::decode_square(
-            {reinterpret_cast<const uint8_t*>(r.body.data()), r.body.size()}, Media::kArtworkSide);
+            {reinterpret_cast<const uint8_t*>(r.body.data()), r.body.size()}, Media::k_artwork_side);
         changed = true;
     }
     // One cover per track: release curl + the TLS connection (~1 MiB) once idle.

@@ -38,7 +38,7 @@ void shutdown();
 
 [[nodiscard]] lyricsmpris::Milliseconds position();
 
-// Current cover, center-cropped and downscaled to at most kArtworkSide square.
+// Current cover, center-cropped and downscaled to at most k_artwork_side square.
 // nullptr when there is none (yet).
 inline constexpr int k_artwork_side = 120;
 [[nodiscard]] const Image::Pixels* artwork();
