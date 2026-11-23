@@ -633,7 +633,6 @@ bool Context::animate(TAnimDesc desc) {
 
 void Context::update(float dt) {
     const bool animated = anim_.update(*this, dt);
-    refresh_text(Renderer::text_scale());
     const bool laid_out = layout();
     if (animated || laid_out)
         update_hover();
@@ -646,49 +645,59 @@ float Context::text_zoom(uint16_t i) const {
     return z > 0.f ? z : 1.f;
 }
 
-std::uint32_t Context::raster_key(const TextData& d, float scale) {
-    if (d.raster)
-        return static_cast<std::uint32_t>(lround(d.natural_w * scale)) + 1;
-    return Text::raster_size(d.font, scale);
+std::uint64_t Context::raster_key(const TextData& d, float scale, int phase_x, int phase_y) {
+    const std::uint64_t size = d.raster ? static_cast<std::uint64_t>(lround(scale * 1024.f)) + 1
+                                        : Text::raster_size(d.font, scale);
+    return size ? size << 4 | static_cast<std::uint64_t>(phase_x) << 2 | static_cast<std::uint64_t>(phase_y) : 0;
 }
 
-Texture Context::raster_text(const TextData& d, float scale) {
+Texture Context::raster_text(const TextData& d, float scale, float sub_x, float sub_y) {
     if (d.raster)
-        return d.raster(scale, d.raster_arg);
+        return d.raster(scale, sub_x, sub_y, d.raster_arg);
     if (!d.text.empty())
-        return Renderer::prepare_text(d.text, d.font, scale);
+        return Renderer::prepare_text(d.text, d.font, scale, sub_x, sub_y);
     return {};
 }
 
 void Context::rasterize(uint16_t i, TextData& d) {
     const float want = Renderer::text_scale() * text_zoom(i);
-    d.set_content(raster_text(d, want));
-    d.raster_key = raster_key(d, want);
+    d.set_content(raster_text(d, want, 0.f, 0.f));
+    d.raster_key = raster_key(d, want, 0, 0);
 }
 
-void Context::refresh_text(float scale) {
-    if (!(scale > 0.0f))
-        return;
-    raster_scale_ = scale;
+Frame Context::prepare_text_draw(TextData& d, const Frame& abs) {
+    if (!d.texture.valid() || (!d.raster && d.text.empty()))
+        return abs;
 
-    for (uint16_t i{}; i < nodes_.size(); ++i) {
-        Node& n = nodes_[i];
-        if (n.kind != Kind::Text)
-            continue;
+    const float scale = Renderer::text_scale();
+    const float zoom  = d.natural_w > 0.f ? abs.width / d.natural_w : 1.f;
+    const float want  = scale * zoom;
 
-        TextData& d = texts_[n.data];
-        if (!d.texture.valid() || (!d.raster && d.text.empty()))
-            continue;
+    const auto split = [](float v, float& whole) {
+        const float quarters = std::round(v * 4.f);
+        whole                = std::floor(quarters / 4.f);
+        return quarters / 4.f - whole;
+    };
+    float       whole_x{}, whole_y{};
+    const float sub_x = split((abs.x - d.natural_origin_x * zoom) * scale, whole_x);
+    const float sub_y = split((abs.y - d.natural_origin_y * zoom) * scale, whole_y);
 
-        const float         want = scale * text_zoom(i);
-        const std::uint32_t key  = raster_key(d, want);
-        if (key == 0 || key == d.raster_key)
-            continue;
-        if (Texture t = raster_text(d, want); t.valid()) {
+    const std::uint64_t key = raster_key(d, want, static_cast<int>(sub_x * 4.f), static_cast<int>(sub_y * 4.f));
+    if (key != 0 && key != d.raster_key) {
+        if (Texture t = raster_text(d, want, sub_x, sub_y); t.valid()) {
             d.texture    = std::move(t);
             d.raster_key = key;
         }
     }
+
+    // The key may keep a raster from a zoom a hair away; still draw it 1:1 instead of blurring.
+    const float k = std::abs(d.texture.scale() - want) <= want * 0.01f ? d.texture.scale() / scale : zoom;
+    return {
+        .x      = whole_x / scale + d.texture.origin_x() * k,
+        .y      = whole_y / scale + d.texture.origin_y() * k,
+        .width  = d.texture.logical_width() * k,
+        .height = d.texture.logical_height() * k,
+    };
 }
 
 ImageView& ImageView::set_image(std::string_view path) {

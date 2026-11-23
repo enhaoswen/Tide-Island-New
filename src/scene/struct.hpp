@@ -284,7 +284,7 @@ struct ImageData {
 };
 
 // Draws a coverage (R8) texture for the given output scale; `arg` is caller data.
-using RasterFn = Texture (*)(float scale, std::uintptr_t arg);
+using RasterFn = Texture (*)(float scale, float sub_x, float sub_y, std::uintptr_t arg);
 
 struct TextData {
     Texture        texture{};
@@ -297,13 +297,17 @@ struct TextData {
     // another zoom (whose hinting changes the extent slightly) never re-lays out.
     float natural_w{};
     float natural_h{};
+    float natural_origin_x{};
+    float natural_origin_y{};
     // Identifies the pixels a raster at some scale would produce; equal keys never re-raster.
-    std::uint32_t raster_key{};
+    std::uint64_t raster_key{};
 
     void set_content(Texture t) {
         texture   = std::move(t);
         natural_w = texture.valid() ? texture.logical_width() : 0.f;
         natural_h = texture.valid() ? texture.logical_height() : 0.f;
+        natural_origin_x = texture.origin_x();
+        natural_origin_y = texture.origin_y();
     }
 
     void reset() {
@@ -315,6 +319,8 @@ struct TextData {
         raster_arg = 0;
         natural_w  = 0.f;
         natural_h  = 0.f;
+        natural_origin_x = 0.f;
+        natural_origin_y = 0.f;
         raster_key = 0;
     }
 };

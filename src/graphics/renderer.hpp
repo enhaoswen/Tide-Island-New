@@ -28,7 +28,7 @@ float text_scale();
 
 Texture prepare_text(std::string_view text, FontHandle font);
 
-Texture prepare_text(std::string_view text, FontHandle font, float scale);
+Texture prepare_text(std::string_view text, FontHandle font, float scale, float sub_x = 0.f, float sub_y = 0.f);
 
 // Satisfies Object::Renderer (see scene/render.hpp). Stateless: all GL state is
 // internal to the renderer translation unit, so a single instance is enough.

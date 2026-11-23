@@ -46,6 +46,12 @@ public:
 
     [[nodiscard]] float scale() const noexcept;
 
+    void set_origin(float x, float y) noexcept;
+
+    [[nodiscard]] float origin_x() const noexcept;
+
+    [[nodiscard]] float origin_y() const noexcept;
+
     [[nodiscard]] bool valid() const;
 
     [[nodiscard]] int width() const;

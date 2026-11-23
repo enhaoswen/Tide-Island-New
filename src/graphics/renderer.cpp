@@ -351,8 +351,8 @@ Texture Renderer::prepare_text(string_view text, FontHandle font) {
     return prepare_text(text, font, text_scale());
 }
 
-Texture Renderer::prepare_text(string_view text, FontHandle font, float scale) {
-    const Text::Bitmap bitmap{Text::draw(text, font, scale)};
+Texture Renderer::prepare_text(string_view text, FontHandle font, float scale, float sub_x, float sub_y) {
+    const Text::Bitmap bitmap{Text::draw(text, font, scale, sub_x, sub_y)};
     if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
         return {};
     }
@@ -365,6 +365,7 @@ Texture Renderer::prepare_text(string_view text, FontHandle font, float scale) {
     texture.upload(static_cast<int>(bitmap.width), static_cast<int>(bitmap.height),
         Texture::Format::R8, bitmap.pixels);
     texture.set_scale(scale);
+    texture.set_origin(static_cast<float>(bitmap.offset_x) / scale, static_cast<float>(bitmap.offset_y) / scale);
     return texture;
 }
 

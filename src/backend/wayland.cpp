@@ -27,6 +27,7 @@
 #include <limits>
 #include <cstring>
 #include <array>
+#include <chrono>
 #include <poll.h>
 #include <memory>
 #include <string_view>
@@ -87,6 +88,17 @@ bool  pointer_inside{};
 bool  pointer_motion_pending{};
 bool  pointer_has_frames{}; // wl_pointer >= v5 groups events with wl_pointer.frame
 bool  wayland_needs_redraw{false};
+
+wl_callback*                     frame_callback{};
+std::chrono::steady_clock::time_point frame_requested{};
+
+void frame_done(void*, wl_callback* callback, uint32_t) {
+    wl_callback_destroy(callback);
+    if (callback == frame_callback)
+        frame_callback = nullptr;
+}
+
+constexpr wl_callback_listener frame_listener{.done = frame_done};
 
 int wayland_fd{-1};
 
@@ -874,6 +886,12 @@ void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int3
 
 void Wayland::swap_buffer() {
     flush_blur();
+    // Must precede the swap to be part of its commit.
+    if (frame_callback)
+        wl_callback_destroy(frame_callback);
+    frame_callback = wl_surface_frame(surface.get());
+    wl_callback_add_listener(frame_callback, &frame_listener, nullptr);
+    frame_requested = chrono::steady_clock::now();
     if (!eglSwapBuffers(egl_display, egl_surface)) {
         Log::fatal("eglSwapBuffers failed");
     }
@@ -1038,6 +1056,11 @@ void Wayland::shutdown() {
         return;
     }
 
+    if (frame_callback) {
+        wl_callback_destroy(frame_callback);
+        frame_callback = nullptr;
+    }
+
     // 1. Terminate EGL Environment
     if (egl_display != EGL_NO_DISPLAY) {
         eglMakeCurrent(
@@ -1078,6 +1101,12 @@ bool Wayland::sync_surface() {
 
 bool Wayland::resize_pending() {
     return has_pending;
+}
+
+bool Wayland::frame_ready() {
+    // Hidden surfaces get no frame callbacks; don't freeze animations.
+    constexpr auto k_frame_timeout = chrono::milliseconds{250};
+    return !frame_callback || chrono::steady_clock::now() - frame_requested > k_frame_timeout;
 }
 
 bool Wayland::get_wayland_redraw() {

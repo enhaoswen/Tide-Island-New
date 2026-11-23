@@ -39,49 +39,49 @@ float ease(Ease e, float t) {
     return t;
 }
 
-void spring_step(float& value, float& velocity, float target,
-    float stiffness, float damping, float mass, float dt) noexcept {
+void spring_step(float& value, float&    velocity, float target,
+    float               stiffness, float damping, float  mass, float dt) noexcept {
     const double k = max(stiffness, 1e-3f);
     const double m = max(mass, 1e-4f);
     const double c = max(damping, 0.f);
 
-    const double w0 = sqrt(k / m);
+    const double w0   = sqrt(k / m);
     const double zeta = c / (2.0 * sqrt(k * m));
-    const double x = static_cast<double>(value) - target;
-    const double v = velocity;
-    const double t = dt;
+    const double x    = static_cast<double>(value) - target;
+    const double v    = velocity;
+    const double t    = dt;
 
     double nx, nv;
 
     if (zeta < 1.0 - 1e-4) {
         const double wd = w0 * sqrt(1.0 - zeta * zeta);
-        const double a = zeta * w0;
-        const double e = exp(-a * t);
+        const double a  = zeta * w0;
+        const double e  = exp(-a * t);
         const double cs = cos(wd * t);
         const double sn = sin(wd * t);
-        const double b = (v + a * x) / wd;
-        nx = e * (x * cs + b * sn);
-        nv = e * ((b * wd - a * x) * cs - (x * wd + a * b) * sn);
+        const double b  = (v + a * x) / wd;
+        nx              = e * (x * cs + b * sn);
+        nv              = e * ((b * wd - a * x) * cs - (x * wd + a * b) * sn);
     }
     else if (zeta > 1.0 + 1e-4) {
-        const double s = sqrt(zeta * zeta - 1.0);
+        const double s  = sqrt(zeta * zeta - 1.0);
         const double r1 = -w0 * (zeta - s);
         const double r2 = -w0 * (zeta + s);
         const double c2 = (v - r1 * x) / (r2 - r1);
         const double c1 = x - c2;
         const double e1 = exp(r1 * t);
         const double e2 = exp(r2 * t);
-        nx = c1 * e1 + c2 * e2;
-        nv = c1 * r1 * e1 + c2 * r2 * e2;
+        nx              = c1 * e1 + c2 * e2;
+        nv              = c1 * r1 * e1 + c2 * r2 * e2;
     }
     else {
         const double e = exp(-w0 * t);
         const double b = v + w0 * x;
-        nx = e * (x + b * t);
-        nv = e * (v - w0 * b * t);
+        nx             = e * (x + b * t);
+        nv             = e * (v - w0 * b * t);
     }
 
-    value = static_cast<float>(target + nx);
+    value    = static_cast<float>(target + nx);
     velocity = static_cast<float>(nv);
 }
 
@@ -97,42 +97,42 @@ Animator::Entry* Animator::acquire(Object::Context& ctx, Object::Handle h, Prop 
         return nullptr;
 
     Entry e{};
-    e.h = h;
-    e.prop = p;
+    e.h     = h;
+    e.prop  = p;
     e.value = *current;
     entries_.push_back(e);
     return &entries_.back();
 }
 
 bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Spring& s, float delay,
-    AnimCallback on_done) {
+    AnimCallback                      on_done) {
     Entry* e = acquire(ctx, h, p);
     if (!e)
         return false;
 
     if (e->mode == Mode::Timed)
         e->velocity = 0.f;
-    e->mode = Mode::Spring;
-    e->target = to;
-    e->delay = std::max(delay, 0.f);
+    e->mode    = Mode::Spring;
+    e->target  = to;
+    e->delay   = std::max(delay, 0.f);
     e->on_done = std::move(on_done);
-    e->spring = {s.stiffness, s.damping, s.mass};
+    e->spring  = {s.stiffness, s.damping, s.mass};
     return true;
 }
 
 bool Animator::start(Object::Context& ctx, Object::Handle h, Prop p, float to, const Timing& t, float delay,
-    AnimCallback on_done) {
+    AnimCallback                      on_done) {
     Entry* e = acquire(ctx, h, p);
     if (!e)
         return false;
 
-    e->mode = Mode::Timed;
-    e->ease = t.ease;
+    e->mode     = Mode::Timed;
+    e->ease     = t.ease;
     e->velocity = 0.f;
-    e->target = to;
-    e->delay = std::max(delay, 0.f);
-    e->on_done = std::move(on_done);
-    e->timed = {e->value, t.duration, 0.f};
+    e->target   = to;
+    e->delay    = std::max(delay, 0.f);
+    e->on_done  = std::move(on_done);
+    e->timed    = {e->value, t.duration, 0.f};
     return true;
 }
 
@@ -159,11 +159,12 @@ void Animator::cancel_all(Object::Handle h) {
 }
 
 bool Animator::active(Object::Handle h, Prop p) const {
-    for (const Entry& e : entries_)
-        if (e.h == h && e.prop == p)
-            return true;
-    return false;
+    return ranges::any_of(entries_, [h, p](const Entry& e) {
+        return e.h == h && e.prop == p;
+    });
 }
+
+
 
 // dt_ms in milliseconds. Springs are solved in seconds internally.
 bool Animator::step(Entry& e, float dt_ms) {
@@ -173,7 +174,7 @@ bool Animator::step(Entry& e, float dt_ms) {
 
         if (fabs(e.value - e.target) < rest_pos(e.prop) &&
             fabs(e.velocity) < rest_vel(e.prop)) {
-            e.value = e.target;
+            e.value    = e.target;
             e.velocity = 0.f;
             return true;
         }
@@ -181,7 +182,7 @@ bool Animator::step(Entry& e, float dt_ms) {
     }
 
     TimedParams& t = e.timed;
-    t.elapsed += dt_ms;
+    t.elapsed      += dt_ms;
     if (t.duration <= 0.f || t.elapsed >= t.duration) {
         e.value = e.target;
         return true;
@@ -191,16 +192,16 @@ bool Animator::step(Entry& e, float dt_ms) {
 }
 
 bool Animator::update(Object::Context& ctx, float dt_ms) {
-    dt_ms = max(dt_ms, 0.f);
+    dt_ms        = max(dt_ms, 0.f);
     bool stepped = false;
 
     // Callbacks run after the loop: they may start/cancel animations and mutate entries_.
     vector<AnimCallback> done;
 
     for (size_t i = 0; i < entries_.size();) {
-        Entry& e = entries_[i];
-        bool finished = !ctx.alive(e.h);
-        bool reached = false;
+        Entry& e        = entries_[i];
+        bool   finished = !ctx.alive(e.h);
+        bool   reached  = false;
 
         if (!finished) {
             float step_dt = dt_ms;
@@ -215,11 +216,11 @@ bool Animator::update(Object::Context& ctx, float dt_ms) {
             }
 
             finished = step(e, step_dt);
-            reached = finished;
-            stepped = true;
+            reached  = finished;
+            stepped  = true;
             if (!ctx.set_prop(e.h, e.prop, e.value)) {
                 finished = true;
-                reached = false;
+                reached  = false;
             }
         }
 

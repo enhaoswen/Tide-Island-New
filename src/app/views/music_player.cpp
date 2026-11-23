@@ -589,15 +589,15 @@ struct V2 {
 }
 
 // Coverage mask (R8) of `sdf` over a w x h logical box, at the output scale.
-[[nodiscard]] Texture rasterize(float scale, float w, float h, const function<float(V2)>& sdf) {
+[[nodiscard]] Texture rasterize(float scale, float sub_x, float sub_y, float w, float h, const function<float(V2)>& sdf) {
     scale = max(scale, 1.f);
-    const int   pw    = static_cast<int>(ceil(w * scale));
-    const int   ph    = static_cast<int>(ceil(h * scale));
+    const int   pw    = static_cast<int>(ceil(w * scale + sub_x));
+    const int   ph    = static_cast<int>(ceil(h * scale + sub_y));
 
     vector<uint8_t> px(static_cast<size_t>(pw) * static_cast<size_t>(ph));
     for (int y = 0; y < ph; ++y)
         for (int x = 0; x < pw; ++x) {
-            const V2    p{(static_cast<float>(x) + 0.5f) / scale, (static_cast<float>(y) + 0.5f) / scale};
+            const V2    p{(static_cast<float>(x) + 0.5f - sub_x) / scale, (static_cast<float>(y) + 0.5f - sub_y) / scale};
             const float d                                                                 = sdf(p) * scale; // in physical pixels
             const float coverage                                                          = clamp(0.5f - d, 0.f, 1.f);
             px[static_cast<size_t>(y) * static_cast<size_t>(pw) + static_cast<size_t>(x)] =
@@ -625,17 +625,17 @@ enum class Glyph : uint8_t { Play, Pause, Forward, Backward, Heart, HeartFilled 
     return sqrt(min(dot(a, a), dot(b, b))) * (p.x - p.y > 0.f ? 1.f : -1.f);
 }
 
-[[nodiscard]] Texture make_glyph(Glyph g, float scale) {
+[[nodiscard]] Texture make_glyph(Glyph g, float scale, float sub_x, float sub_y) {
     switch (g) {
     case Glyph::Play: {
         constexpr float h = 22.f * kIconScale, w = h * 0.88f, r = 2.6f * kIconScale, nudge = 2.f * kIconScale, x0 = kAA + nudge;
-        return rasterize(scale, w + nudge + 2 * kAA, h + 2 * kAA, [=](V2 p) {
+        return rasterize(scale, sub_x, sub_y, w + nudge + 2 * kAA, h + 2 * kAA, [=](V2 p) {
             return sd_round_triangle(p, {x0, kAA}, {x0, kAA + h}, {x0 + w, kAA + h * 0.5f}, r);
         });
     }
     case Glyph::Pause: {
         constexpr float h = 21.f * kIconScale, bar = 6.f * kIconScale, gap = 6.f * kIconScale, r = 1.8f * kIconScale;
-        return rasterize(scale, 2 * bar + gap + 2 * kAA, h + 2 * kAA, [=](V2 p) {
+        return rasterize(scale, sub_x, sub_y, 2 * bar + gap + 2 * kAA, h + 2 * kAA, [=](V2 p) {
             return min(sd_round_rect(p, {kAA, kAA}, {bar, h}, r),
                 sd_round_rect(p, {kAA + bar + gap, kAA}, {bar, h}, r));
         });
@@ -645,7 +645,7 @@ enum class Glyph : uint8_t { Play, Pause, Forward, Backward, Heart, HeartFilled 
         constexpr float h     = 16.f * kIconScale, w = 15.f * kIconScale, step = w - 2.5f * kIconScale, r = 2.f * kIconScale;
         constexpr float total = step + w;
         const bool      flip  = g == Glyph::Backward;
-        return rasterize(scale, total + 2 * kAA, h + 2 * kAA, [=](V2 p) {
+        return rasterize(scale, sub_x, sub_y, total + 2 * kAA, h + 2 * kAA, [=](V2 p) {
             if (flip)
                 p.x = total + 2 * kAA - p.x;
             float d = 1e9f;
@@ -663,7 +663,7 @@ enum class Glyph : uint8_t { Play, Pause, Forward, Backward, Heart, HeartFilled 
         constexpr float height = 1.1036f * k + 2 * r;
         constexpr float bottom = (kHeartSize + height) * 0.5f - r;
         const bool      filled = g == Glyph::HeartFilled;
-        return rasterize(scale, kHeartSize, kHeartSize, [=](V2 p) {
+        return rasterize(scale, sub_x, sub_y, kHeartSize, kHeartSize, [=](V2 p) {
             const float d = sd_heart({(p.x - kHeartSize * 0.5f) / k, (bottom - p.y) / k}) * k - r;
             return filled ? d : abs(d + stroke * 0.5f) - stroke * 0.5f;
         });
@@ -699,7 +699,7 @@ Handle make_icon(Handle parent, Glyph glyph) {
     const Handle t = c.create_text(parent, {});
     // Redrawn by the scene when the output scale changes, so edges stay crisp.
     c.text(t).set_color(Color::White).set_raster(
-        [](float scale, uintptr_t g) { return make_glyph(static_cast<Glyph>(g), scale); }, static_cast<uintptr_t>(glyph));
+        [](float scale, float sub_x, float sub_y, uintptr_t g) { return make_glyph(static_cast<Glyph>(g), scale, sub_x, sub_y); }, static_cast<uintptr_t>(glyph));
     // Fixed at the glyph's natural size so press / pop animations can scale it.
     const float w = c.text(t).texture_width(), h = c.text(t).texture_height();
     c.set_size_mode(t, Object::Axis::Horizontal, Object::SizeMode::Fixed);

@@ -58,9 +58,6 @@ StateManager::Resources resources;
 Object::Context         ctx{};
 Object::Handle          root{};
 Object::Handle          bg{};
-// Root size to switch to once the Wayland surface has actually been resized.
-float                   root_width{};
-float                   root_height{};
 
 constexpr float k_hover_scale = 1.03f;
 
@@ -89,8 +86,6 @@ void on_bg_click(const Object::Event& e) {
 
 void set_surface(const uint32_t width, const uint32_t height) {
     Wayland::request_resize(width, height);
-    root_width  = static_cast<float>(width);
-    root_height = static_cast<float>(height);
 }
 
 void hover(bool on);
@@ -189,8 +184,6 @@ void StateManager::init(const Resources& arg_resources) {
     resources    = arg_resources;
 
     root        = ctx.create_root(island_state.island_width, island_state.island_height);
-    root_width  = static_cast<float>(island_state.island_width);
-    root_height = static_cast<float>(island_state.island_height);
 
     bg = ctx.create_rect(root, Object::RectDesc{
         .frame = Frame{
@@ -225,8 +218,10 @@ void StateManager::sync_surface() {
     Wayland::sync_surface();
     if (!root)
         return;
+    // Actual size: the backend pads and rounds the requested one.
     if (!Wayland::resize_pending()) {
-        ctx.set_size(root, root_width, root_height);
+        const auto [w, h] = Wayland::get_surface_size();
+        ctx.set_size(root, static_cast<float>(w), static_cast<float>(h));
         ctx.layout();
     }
 

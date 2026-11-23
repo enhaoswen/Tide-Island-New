@@ -121,7 +121,7 @@ void API::run() {
 
     while (island->is_running) {
 
-        if (island->need_redraw) {
+        if (island->need_redraw && Wayland::frame_ready()) {
             Island::request_redraw(false);
 
             const auto  now   = steady_clock::now();
@@ -141,7 +141,7 @@ void API::run() {
             Renderer::end_frame();
         }
 
-        const bool redraw  = Timer::wait(ctx.animating());
+        const bool redraw  = Timer::wait(ctx.animating() || island->need_redraw);
         // Pointer input gathered during the wait; callbacks usually change something visible.
         const bool handled = ctx.dispatch_events();
         Island::request_redraw(redraw || handled || island->need_redraw);

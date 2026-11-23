@@ -12,6 +12,8 @@ struct Texture::Impl {
     int      width{};
     int      height{};
     float    scale{1.0f};
+    float    origin_x{};
+    float    origin_y{};
 
     void reset() {
         if (view.id)
@@ -23,6 +25,7 @@ struct Texture::Impl {
         image  = {};
         width  = height = 0;
         scale  = 1.0f;
+        origin_x = origin_y = 0.0f;
     }
 
     ~Impl() {
@@ -132,6 +135,21 @@ void Texture::set_scale(float scale) noexcept {
 
 float Texture::scale() const noexcept {
     return impl ? impl->scale : 1.0f;
+}
+
+void Texture::set_origin(float x, float y) noexcept {
+    if (impl) {
+        impl->origin_x = x;
+        impl->origin_y = y;
+    }
+}
+
+float Texture::origin_x() const noexcept {
+    return impl ? impl->origin_x : 0.0f;
+}
+
+float Texture::origin_y() const noexcept {
+    return impl ? impl->origin_y : 0.0f;
 }
 
 float Texture::logical_width() const noexcept {

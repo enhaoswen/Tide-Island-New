@@ -195,21 +195,20 @@ void Context::arrange_children(Node& n) {
     const float leftover = avail_main - used - gaps - grown;
     float lead = 0.f;
     float gap = l.spacing;
-    if (leftover > 1e-3f) {
-        switch (l.justify) {
-        case Justify::Start:
-            break;
-        case Justify::Center:
-            lead = leftover * .5f;
-            break;
-        case Justify::End:
-            lead = leftover;
-            break;
-        case Justify::SpaceBetween:
-            if (count > 1)
-                gap += leftover / static_cast<float>(count - 1);
-            break;
-        }
+    // Negative leftover too: an overshooting spring must stay centered.
+    switch (l.justify) {
+    case Justify::Start:
+        break;
+    case Justify::Center:
+        lead = leftover * .5f;
+        break;
+    case Justify::End:
+        lead = leftover;
+        break;
+    case Justify::SpaceBetween:
+        if (count > 1 && leftover > 0.f)
+            gap += leftover / static_cast<float>(count - 1);
+        break;
     }
 
     float cursor = pad_main_start + lead;

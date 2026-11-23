@@ -4,6 +4,7 @@
 #include <fontconfig/fontconfig.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include FT_OUTLINE_H
 #include <hb.h>
 #include <hb-ft.h>
 
@@ -53,6 +54,7 @@ struct LoadedFont {
     string family{};
     Text::Weight weight{};
     unsigned pixel_size{};
+    // 26.6 fixed point: whole-pixel sizes make the same text a different size at each zoom.
     unsigned raster_size{};
     vector<FaceState> faces{};
     unordered_map<uint64_t, GlyphBitmap> glyph_cache{};
@@ -253,7 +255,7 @@ FaceState* get_face(LoadedFont& font, unsigned index) {
     auto& state = font.faces[index];
     if (state.face && state.hb_font) {
         if (state.raster_size != font.raster_size) {
-            if (FT_Set_Pixel_Sizes(state.face, 0, font.raster_size)) {
+            if (FT_Set_Char_Size(state.face, 0, static_cast<FT_F26Dot6>(font.raster_size), 72, 72)) {
                 Log::logger(Log::Error, R"_(Failed to set font size, path="{}")_", state.path);
                 return nullptr;
             }
@@ -267,7 +269,7 @@ FaceState* get_face(LoadedFont& font, unsigned index) {
         Log::logger(Log::Error, R"_(Failed to load font file, path="{}")_", state.path);
         return nullptr;
     }
-    if (FT_Set_Pixel_Sizes(state.face, 0, font.raster_size)) {
+    if (FT_Set_Char_Size(state.face, 0, static_cast<FT_F26Dot6>(font.raster_size), 72, 72)) {
         Log::logger(Log::Error, R"_(Failed to set font size, path="{}")_", state.path);
         FT_Done_Face(state.face);
         state.face = nullptr;
@@ -290,8 +292,8 @@ bool prepare_raster_size(LoadedFont& font, float scale) {
         Log::logger(Log::Error, "Invalid text scale {}", scale);
         return false;
     }
-    const float size{max(1.0f, round(static_cast<float>(font.pixel_size) * scale))};
-    if (!isfinite(size) || size >= static_cast<float>(numeric_limits<unsigned>::max())) {
+    const float size{max(64.0f, round(static_cast<float>(font.pixel_size) * scale * 64.0f))};
+    if (!isfinite(size) || size >= static_cast<float>(numeric_limits<int32_t>::max())) {
         Log::logger(Log::Error, "Text raster size is too large");
         return false;
     }
@@ -340,7 +342,7 @@ void resolve_missing_faces(LoadedFont& font, const vector<Codepoint>& cps) {
 
     // One short-lived Fontconfig lookup handles every missing cluster in this
     // line. Only copied paths and face indices remain after this function.
-    const FontQuery query(font.family, font.raster_size, font.weight);
+    const FontQuery query(font.family, font.pixel_size, font.weight);
     if (!query.matches) return;
     for (const auto& cluster : missing) {
         if (choose_face(font, cps, cluster.begin, cluster.end) != font.faces.size())
@@ -413,15 +415,35 @@ vector<Run> make_runs(const LoadedFont& font, const vector<Codepoint>& cps) {
     return runs;
 }
 
-uint64_t glyph_key(unsigned face_index, unsigned glyph_id) {
-    return (static_cast<uint64_t>(face_index) << 32) | glyph_id;
+struct PixelPhase {
+    int64_t  whole{};
+    unsigned phase{};
+};
+
+PixelPhase split_26_6(int64_t v) {
+    const int64_t quarters = (v + 8) >> 4;
+    return {quarters >> 2, static_cast<unsigned>(quarters & 3)};
 }
 
-GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id) {
+uint64_t glyph_key(unsigned face_index, unsigned glyph_id, unsigned phase_x, unsigned phase_y) {
+    return (static_cast<uint64_t>(face_index) << 36) | (static_cast<uint64_t>(phase_x) << 34) |
+           (static_cast<uint64_t>(phase_y) << 32) | glyph_id;
+}
+
+GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id, unsigned phase_x, unsigned phase_y) {
     FT_Face face = font.faces[face_index].face;
-    if (FT_Load_Glyph(face, glyph_id, FT_LOAD_RENDER | FT_LOAD_COLOR)) {
-        Log::logger(Log::Error, "Failed to rasterize glyph {}", glyph_id);
+    // Not full hinting: it reshapes glyphs per phase and size, so moving text would shimmer.
+    if (FT_Load_Glyph(face, glyph_id, FT_LOAD_COLOR | FT_LOAD_TARGET_LIGHT)) {
+        Log::logger(Log::Error, "Failed to load glyph {}", glyph_id);
         return GlyphBitmap::failure();
+    }
+    if (face->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+        FT_Outline_Translate(&face->glyph->outline, static_cast<FT_Pos>(phase_x) * 16,
+                             -static_cast<FT_Pos>(phase_y) * 16);
+        if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_LIGHT)) {
+            Log::logger(Log::Error, "Failed to rasterize glyph {}", glyph_id);
+            return GlyphBitmap::failure();
+        }
     }
 
     const FT_Bitmap& bitmap = face->glyph->bitmap;
@@ -470,9 +492,9 @@ GlyphBitmap rasterize(LoadedFont& font, unsigned face_index, unsigned glyph_id) 
     return result;
 }
 
-const GlyphBitmap& get_glyph(LoadedFont& font, const PositionedGlyph& placement,
-                             unordered_map<uint64_t, GlyphBitmap>& scratch) {
-    const auto key = glyph_key(placement.face_index, placement.glyph_id);
+const GlyphBitmap& get_glyph(LoadedFont& font, const PositionedGlyph& placement, unsigned phase_x,
+                             unsigned phase_y, unordered_map<uint64_t, GlyphBitmap>& scratch) {
+    const auto key = glyph_key(placement.face_index, placement.glyph_id, phase_x, phase_y);
     if (placement.cacheable) {
         const auto cached = font.glyph_cache.find(key);
         if (cached != font.glyph_cache.end()) return cached->second;
@@ -480,7 +502,7 @@ const GlyphBitmap& get_glyph(LoadedFont& font, const PositionedGlyph& placement,
 
     auto it = scratch.find(key);
     if (it == scratch.end()) {
-        auto glyph = rasterize(font, placement.face_index, placement.glyph_id);
+        auto glyph = rasterize(font, placement.face_index, placement.glyph_id, phase_x, phase_y);
         if (placement.cacheable && !glyph.failed)
             return font.glyph_cache.emplace(key, std::move(glyph)).first->second;
         it = scratch.emplace(key, std::move(glyph)).first;
@@ -523,7 +545,7 @@ FontHandle Text::load_font(string_view family, unsigned pixel_size, Text::Weight
     font->family = family;
     font->weight = weight;
     font->pixel_size = pixel_size;
-    font->raster_size = pixel_size;
+    font->raster_size = pixel_size * 64;
     {
         const FontQuery query(font->family, pixel_size, weight);
         if (!query.has_matches()) return {};
@@ -558,11 +580,11 @@ unsigned Text::raster_size(FontHandle handle, float scale) {
     const auto it = loaded_fonts.find(handle.id);
     if (it == loaded_fonts.end() || !isfinite(scale) || scale <= 0.0f)
         return 0;
-    const float size{max(1.0f, round(static_cast<float>(it->second->pixel_size) * scale))};
-    return size < static_cast<float>(numeric_limits<unsigned>::max()) ? static_cast<unsigned>(size) : 0;
+    const float size{max(64.0f, round(static_cast<float>(it->second->pixel_size) * scale * 64.0f))};
+    return size < static_cast<float>(numeric_limits<int32_t>::max()) ? static_cast<unsigned>(size) : 0;
 }
 
-Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale) {
+Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale, float sub_x, float sub_y) {
     LoadedFont* const font = require_font(handle);
     Bitmap bitmap{};
     if (!font || text.empty()) return bitmap;
@@ -630,13 +652,18 @@ Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale) {
     int64_t max_y{};
     bool has_pixels{};
 
+    const int64_t sub_x_26_6{lround(clamp(sub_x, 0.0f, 1.0f) * 64.0f)};
+    const int64_t sub_y_26_6{lround(clamp(sub_y, 0.0f, 1.0f) * 64.0f)};
+    const auto pen = [&](const PositionedGlyph& placement) {
+        return pair{split_26_6(placement.x_26_6 + sub_x_26_6), split_26_6(sub_y_26_6 - placement.y_26_6)};
+    };
+
     for (const auto& placement : placements) {
-        const auto& glyph = get_glyph(*font, placement, scratch);
+        const auto [px, py] = pen(placement);
+        const auto& glyph = get_glyph(*font, placement, px.phase, py.phase, scratch);
         if (glyph.pixels.empty()) continue;
-        const auto x = static_cast<int64_t>(lround(
-            static_cast<double>(placement.x_26_6) / 64.0)) + glyph.left;
-        const auto y = -static_cast<int64_t>(lround(
-            static_cast<double>(placement.y_26_6) / 64.0)) - glyph.top;
+        const auto x = px.whole + glyph.left;
+        const auto y = py.whole - glyph.top;
         min_x = min(min_x, x);
         max_x = max(max_x, x + glyph.width);
         if (!has_pixels) {
@@ -669,12 +696,11 @@ Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale) {
     bitmap.pixels.resize(static_cast<size_t>(bitmap.width) * bitmap.height);
 
     for (const auto& placement : placements) {
-        const auto& glyph = get_glyph(*font, placement, scratch);
+        const auto [px, py] = pen(placement);
+        const auto& glyph = get_glyph(*font, placement, px.phase, py.phase, scratch);
         if (glyph.pixels.empty()) continue;
-        const auto x = static_cast<int64_t>(lround(
-            static_cast<double>(placement.x_26_6) / 64.0)) + glyph.left - min_x;
-        const auto y = -static_cast<int64_t>(lround(
-            static_cast<double>(placement.y_26_6) / 64.0)) - glyph.top - min_y;
+        const auto x = px.whole + glyph.left - min_x;
+        const auto y = py.whole - glyph.top - min_y;
         for (unsigned row{}; row < glyph.height; ++row) {
             for (unsigned col{}; col < glyph.width; ++col) {
                 const auto source = glyph.pixels[static_cast<size_t>(row) * glyph.width + col];

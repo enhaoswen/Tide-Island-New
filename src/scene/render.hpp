@@ -18,7 +18,7 @@ concept Renderer = requires(R& r, const Frame& f, const Color& c, const Texture&
 
 struct Drawer {
     template <class R>
-    static void node(const Context& c, R& r, uint16_t i, const Placed& parent, float alpha) {
+    static void node(Context& c, R& r, uint16_t i, const Placed& parent, float alpha) {
         const Node& n = c.nodes_[i];
         if (!(n.flags & flag::visible))
             return;
@@ -47,8 +47,9 @@ struct Drawer {
             break;
         }
         case Kind::Text: {
-            const TextData& d = c.texts_[n.data];
-            r.draw_text(c.text_frame(d, abs), d.texture, d.font, d.color, alpha);
+            TextData&   d = c.texts_[n.data];
+            const Frame f = c.prepare_text_draw(d, abs);
+            r.draw_text(f, d.texture, d.font, d.color, alpha);
             break;
         }
         case Kind::Ring: {
@@ -70,14 +71,14 @@ struct Drawer {
     }
 
     template <class R>
-    static void all(const Context& c, R& r) {
+    static void all(Context& c, R& r) {
         for (const Handle root : c.roots_)
             node(c, r, root.id, Placed{}, 1.f);
     }
 };
 
 template <Renderer R>
-void draw(const Context& ctx, R& renderer) {
+void draw(Context& ctx, R& renderer) {
     Drawer::all(ctx, renderer);
 }
 

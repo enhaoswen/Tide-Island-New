@@ -32,12 +32,12 @@ struct TextDesc {
 };
 
 struct RingDesc {
-    Frame frame{};
-    Color color{};
+    Frame                frame{};
+    Color                color{};
     // Unset: `color` at 25% alpha, like the dimmed track of iOS timers.
     std::optional<Color> track{};
-    float progress{};
-    float thickness = 4.f;
+    float                progress{};
+    float                thickness = 4.f;
 };
 
 struct SAnimDesc {
@@ -118,12 +118,17 @@ public:
 
     RingView& set_progress(float p); // clamped to [0, 1]
     RingView& set_thickness(float t);
+
     RingView& set_color(const Color& c);
+
     RingView& set_track(const Color& c);
 
     [[nodiscard]] float progress() const;
+
     [[nodiscard]] float thickness() const;
+
     [[nodiscard]] Color color() const;
+
     [[nodiscard]] Color track() const;
 
 private:
@@ -144,13 +149,15 @@ public:
 
     [[nodiscard]] explicit operator bool() const;
 
-    TextView& set_texture(Texture t);       // text is rendered to a texture by the caller
+    TextView& set_texture(Texture t); // text is rendered to a texture by the caller
     // Procedural glyph: `fn` draws it now and again whenever the output scale changes.
     TextView& set_raster(RasterFn fn, std::uintptr_t arg);
 
     // Logical size of the current texture (0 x 0 if none).
     [[nodiscard]] float texture_width() const;
+
     [[nodiscard]] float texture_height() const;
+
     TextView& set_text(std::string_view s); // rasterizes with the stored font; keeps the string for scale changes
     TextView& set_font(FontHandle f);
 
@@ -375,18 +382,15 @@ private:
 
     void mark_dirty(uint16_t i);
 
-    // Re-rasterize text whose bitmap no longer matches its output scale times zoom.
-    void refresh_text(float scale);
-
     [[nodiscard]] float text_zoom(uint16_t i) const;
 
-    [[nodiscard]] static std::uint32_t raster_key(const TextData& d, float scale);
+    [[nodiscard]] static std::uint64_t raster_key(const TextData& d, float scale, int phase_x, int phase_y);
 
-    [[nodiscard]] static Texture raster_text(const TextData& d, float scale);
+    [[nodiscard]] static Texture raster_text(const TextData& d, float scale, float sub_x, float sub_y);
 
     void rasterize(uint16_t i, TextData& d);
 
-    [[nodiscard]] Frame text_frame(const TextData& d, const Frame& abs) const;
+    [[nodiscard]] static Frame prepare_text_draw(TextData& d, const Frame& abs);
 
     void set_flag(Handle h, uint16_t bit, bool on);
 
@@ -437,7 +441,6 @@ private:
     std::unordered_map<uint16_t, GrowData> grow_;
 
     Animator anim_;
-    float    raster_scale_ = 1.f;
 
     std::vector<Event> events_;
     std::size_t        event_head_ = 0;
@@ -481,15 +484,15 @@ inline Placed Context::place(const Node& n, const Placed& parent) const {
     const float h  = n.frame.height * s;
     const float px = parent.frame.x + (n.frame.x + n.frame.width * t.pivot_x) * parent.scale;
     const float py = parent.frame.y + (n.frame.y + n.frame.height * t.pivot_y) * parent.scale;
-    return {{px - w * t.pivot_x, py - h * t.pivot_y, w, h}, s};
-}
 
-inline Frame Context::text_frame(const TextData& d, const Frame& abs) const {
-    if (!d.texture.valid() || (!d.raster && d.text.empty()))
-        return abs;
-    const float w = static_cast<float>(d.texture.width()) / raster_scale_;
-    const float h = static_cast<float>(d.texture.height()) / raster_scale_;
-    return {abs.x + (abs.width - w) * .5f, abs.y + (abs.height - h) * .5f, w, h};
+    return {
+        .frame = {
+            .x     = px - w * t.pivot_x,
+            .y     = py - h * t.pivot_y,
+            .width = w, .height = h,
+        },
+        .scale = s,
+    };
 }
 
 inline RectView::operator bool() const { return ctx_ && ctx_->alive(h_); }
