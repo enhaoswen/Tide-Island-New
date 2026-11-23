@@ -30,7 +30,7 @@ void Context::measure(uint16_t i) {
     if (!(n.flags & flag::dirty))
         return;
 
-    for (uint16_t c = n.first; c != kNone; c = nodes_[c].next)
+    for (uint16_t c = n.first; c != k_none; c = nodes_[c].next)
         measure(c);
 
     const SizeMode wm = size_mode(n.flags, Axis::Horizontal);
@@ -46,7 +46,7 @@ void Context::measure(uint16_t i) {
             n.frame.height = h;
     }
 
-    if (n.layout == kNone || (wm != SizeMode::Fit && hm != SizeMode::Fit))
+    if (n.layout == k_none || (wm != SizeMode::Fit && hm != SizeMode::Fit))
         return;
 
     const LayoutData& l = layouts_[n.layout];
@@ -63,7 +63,7 @@ void Context::measure(uint16_t i) {
     float cross = 0.f;
     unsigned count = 0;
 
-    for (uint16_t c = n.first; c != kNone; c = nodes_[c].next) {
+    for (uint16_t c = n.first; c != k_none; c = nodes_[c].next) {
         if (!(nodes_[c].flags & flag::visible))
             continue;
         ++count;
@@ -84,10 +84,10 @@ void Context::measure(uint16_t i) {
 void Context::arrange(uint16_t i) {
     Node& n = nodes_[i];
 
-    if (n.layout != kNone)
+    if (n.layout != k_none)
         arrange_children(n);
 
-    for (uint16_t c = n.first; c != kNone; c = nodes_[c].next)
+    for (uint16_t c = n.first; c != k_none; c = nodes_[c].next)
         if (nodes_[c].flags & flag::dirty)
             arrange(c);
 
@@ -100,14 +100,14 @@ float Context::resolve_grow(Node& n, Axis axis, float space) {
     };
 
     unsigned remaining = 0;
-    for (uint16_t c = n.first; c != kNone; c = nodes_[c].next)
+    for (uint16_t c = n.first; c != k_none; c = nodes_[c].next)
         if (is_grow(nodes_[c]))
             ++remaining;
 
     float frozen_sum = 0.f;
     while (remaining > 0) {
         float total_weight = 0.f;
-        for (uint16_t c = n.first; c != kNone; c = nodes_[c].next) {
+        for (uint16_t c = n.first; c != k_none; c = nodes_[c].next) {
             const Node& ch = nodes_[c];
             if (is_grow(ch) && !(ch.flags & flag::frozen))
                 total_weight += grow_params(c, axis).weight;
@@ -119,7 +119,7 @@ float Context::resolve_grow(Node& n, Axis axis, float space) {
         };
 
         float violation = 0.f;
-        for (uint16_t c = n.first; c != kNone; c = nodes_[c].next) {
+        for (uint16_t c = n.first; c != k_none; c = nodes_[c].next) {
             const Node& ch = nodes_[c];
             if (!is_grow(ch) || (ch.flags & flag::frozen))
                 continue;
@@ -128,7 +128,7 @@ float Context::resolve_grow(Node& n, Axis axis, float space) {
             violation += std::clamp(w, p.min, p.max) - w;
         }
 
-        for (uint16_t c = n.first; c != kNone; c = nodes_[c].next) {
+        for (uint16_t c = n.first; c != k_none; c = nodes_[c].next) {
             Node& ch = nodes_[c];
             if (!is_grow(ch) || (ch.flags & flag::frozen))
                 continue;
@@ -152,7 +152,7 @@ float Context::resolve_grow(Node& n, Axis axis, float space) {
         }
     }
 
-    for (uint16_t c = n.first; c != kNone; c = nodes_[c].next)
+    for (uint16_t c = n.first; c != k_none; c = nodes_[c].next)
         nodes_[c].flags &= static_cast<uint16_t>(~flag::frozen);
 
     return frozen_sum;
@@ -175,7 +175,7 @@ void Context::arrange_children(Node& n) {
     float used = 0.f;
     unsigned count = 0;
     unsigned grow = 0;
-    for (uint16_t c = n.first; c != kNone; c = nodes_[c].next) {
+    for (uint16_t c = n.first; c != k_none; c = nodes_[c].next) {
         const Node& ch = nodes_[c];
         if (!(ch.flags & flag::visible))
             continue;
@@ -213,7 +213,7 @@ void Context::arrange_children(Node& n) {
     }
 
     float cursor = pad_main_start + lead;
-    for (uint16_t c = n.first; c != kNone; c = nodes_[c].next) {
+    for (uint16_t c = n.first; c != k_none; c = nodes_[c].next) {
         Node& ch = nodes_[c];
         if (!(ch.flags & flag::visible))
             continue;

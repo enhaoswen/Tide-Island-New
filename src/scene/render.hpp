@@ -62,7 +62,7 @@ struct Drawer {
         if (clip)
             r.push_clip(abs, radius);
 
-        for (uint16_t ch = n.first; ch != kNone; ch = c.nodes_[ch].next)
+        for (uint16_t ch = n.first; ch != k_none; ch = c.nodes_[ch].next)
             node(c, r, ch, p, alpha);
 
         if (clip)

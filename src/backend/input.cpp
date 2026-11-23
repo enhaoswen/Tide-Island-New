@@ -44,7 +44,7 @@ namespace {
 // ============================================================================
 
 EventCallback Context::listener(const Node& n, const EventType type) const {
-    for (uint16_t i = n.listeners; i != kNone; i = listeners_[i].next)
+    for (uint16_t i = n.listeners; i != k_none; i = listeners_[i].next)
         if (listeners_[i].mask.has(type))
             return listeners_[i].callback;
     return {};
@@ -52,7 +52,7 @@ EventCallback Context::listener(const Node& n, const EventType type) const {
 
 void Context::unbind(Node& n, const EventMask mask) {
     uint16_t* link = &n.listeners;
-    while (*link != kNone) {
+    while (*link != k_none) {
         Listener& l = listeners_[*link];
         l.mask      = l.mask.without(mask);
         if (l.mask) {
@@ -75,7 +75,7 @@ bool Context::on(const Handle h, const EventMask mask, const EventCallback cb) {
         return true;
 
     const uint16_t l = listeners_.acquire(Listener{cb, n->listeners, mask});
-    if (l == kNone)
+    if (l == k_none)
         return false;
 
     n->listeners = l;
@@ -109,7 +109,7 @@ bool Context::dispatch_events() {
 uint16_t Context::hit_node(uint16_t i, float x, float y, const Placed& parent) const {
     const Node& n = nodes_[i];
     if (!(n.flags & flag::visible) || n.opacity == 0)
-        return kNone; // what you cannot see you cannot click
+        return k_none; // what you cannot see you cannot click
 
     const Placed p = place(n, parent);
     const Frame& f = p.frame;
@@ -122,21 +122,21 @@ uint16_t Context::hit_node(uint16_t i, float x, float y, const Placed& parent) c
     if (clip || self) {
         inside = contains(f.x, f.y, f.width, f.height, radius, x, y);
         if (clip && !inside)
-            return kNone;
+            return k_none;
     }
 
-    for (uint16_t c = n.last; c != kNone; c = nodes_[c].prev) {
+    for (uint16_t c = n.last; c != k_none; c = nodes_[c].prev) {
         const uint16_t hit = hit_node(c, x, y, p);
-        if (hit != kNone)
+        if (hit != k_none)
             return hit;
     }
-    return (self && inside) ? i : kNone;
+    return (self && inside) ? i : k_none;
 }
 
 Handle Context::hit_test(float x, float y) const {
     for (const auto [id, gen] : views::reverse(roots_)) {
         const uint16_t hit = hit_node(id, x, y, Placed{});
-        if (hit != kNone)
+        if (hit != k_none)
             return handle_of(hit);
     }
     return {};

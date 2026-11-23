@@ -231,7 +231,7 @@ public:
         };
 
         [[nodiscard]] iterator begin() const { return {ctx_, first_}; }
-        [[nodiscard]] iterator end() const { return {ctx_, kNone}; }
+        [[nodiscard]] iterator end() const { return {ctx_, k_none}; }
 
     private:
         friend class Context;
@@ -423,7 +423,7 @@ private:
     void unbind(Node& n, EventMask mask);
 
     std::vector<Node>   nodes_;
-    uint16_t            free_head_ = kNone;
+    uint16_t            free_head_ = k_none;
     std::size_t         live_      = 0;
     std::vector<Handle> roots_; // back-to-front
 
@@ -473,7 +473,7 @@ inline RingData* RingView::data() const {
 
 inline Placed Context::place(const Node& n, const Placed& parent) const {
     Transform t{};
-    if (n.transform != kNone)
+    if (n.transform != k_none)
         t = transforms_[n.transform];
 
     const float s  = parent.scale * t.scale;

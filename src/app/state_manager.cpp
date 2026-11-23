@@ -151,7 +151,7 @@ void scale_bg(const float to, AnimCallback on_done = {}) {
     ctx.animate(Object::SAnimDesc{
         .h       = bg,
         .to      = to,
-        .s       = Springs::Smooth,
+        .s       = Springs::Gentle,
         .delay   = 0,
         .p       = Prop::Scale,
         .on_done = std::move(on_done),

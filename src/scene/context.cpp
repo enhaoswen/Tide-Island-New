@@ -20,18 +20,18 @@ namespace {
 } // namespace
 
 Context::Context(size_t reserve_nodes) {
-    nodes_.reserve(min<size_t>(reserve_nodes, kNone));
+    nodes_.reserve(min<size_t>(reserve_nodes, k_none));
 }
 
 uint16_t Context::alloc_node() {
     uint16_t i;
-    if (free_head_ != kNone) {
+    if (free_head_ != k_none) {
         i = free_head_;
         free_head_ = nodes_[i].next;
     }
     else {
-        if (nodes_.size() >= kNone)
-            return kNone;
+        if (nodes_.size() >= k_none)
+            return k_none;
         i = static_cast<uint16_t>(nodes_.size());
         nodes_.emplace_back();
     }
@@ -45,7 +45,7 @@ uint16_t Context::alloc_node() {
 }
 
 void Context::release_data(Kind kind, uint16_t data) {
-    if (data == kNone)
+    if (data == k_none)
         return;
     switch (kind) {
     case Kind::Group:
@@ -68,12 +68,12 @@ void Context::release_data(Kind kind, uint16_t data) {
 void Context::release_node(uint16_t i) {
     Node& n = nodes_[i];
     release_data(n.kind, n.data);
-    if (n.layout != kNone)
+    if (n.layout != k_none)
         layouts_.release(n.layout);
 
     unbind(n, EventMask::all());
 
-    if (n.transform != kNone)
+    if (n.transform != k_none)
         transforms_.release(n.transform);
 
     if (!grow_.empty())
@@ -90,7 +90,7 @@ void Context::release_node(uint16_t i) {
 
 Handle Context::spawn(Kind kind, uint16_t data, const Frame& frame, Handle parent) {
     const uint16_t i = alloc_node();
-    if (i == kNone) {
+    if (i == k_none) {
         release_data(kind, data);
         return {};
     }
@@ -114,7 +114,7 @@ Handle Context::spawn(Kind kind, uint16_t data, const Frame& frame, Handle paren
 
 Handle Context::create_root(float width, float height) {
     const uint16_t i = alloc_node();
-    if (i == kNone)
+    if (i == k_none)
         return {};
 
     Node& n = nodes_[i];
@@ -128,19 +128,19 @@ Handle Context::create_root(float width, float height) {
 }
 
 Handle Context::create_group(Handle parent, const Frame& frame) {
-    return spawn(Kind::Group, kNone, frame, parent);
+    return spawn(Kind::Group, k_none, frame, parent);
 }
 
 Handle Context::create_rect(Handle parent, const RectDesc& d) {
     const uint16_t data = rects_.acquire(RectData{d.color, d.radius});
-    if (data == kNone)
+    if (data == k_none)
         return {};
     return spawn(Kind::Rect, data, d.frame, parent);
 }
 
 Handle Context::create_image(Handle parent, ImageDesc d) {
     const uint16_t data = images_.acquire(ImageData{std::move(d.texture), d.radius});
-    if (data == kNone)
+    if (data == k_none)
         return {};
     return spawn(Kind::Image, data, d.frame, parent);
 }
@@ -151,7 +151,7 @@ Handle Context::create_text(Handle parent, TextDesc d) {
     td.color = d.color;
     td.set_content(std::move(d.texture));
     const uint16_t data = texts_.acquire(std::move(td));
-    if (data == kNone)
+    if (data == k_none)
         return {};
     return spawn(Kind::Text, data, d.frame, parent);
 }
@@ -161,7 +161,7 @@ Handle Context::create_ring(Handle parent, const RingDesc& d) {
     if (!d.track)
         color_channel(track, 3) *= .25f;
     const uint16_t data = rings_.acquire(RingData{d.color, track, clamp(d.progress, 0.f, 1.f), max(d.thickness, 0.f)});
-    if (data == kNone)
+    if (data == k_none)
         return {};
     return spawn(Kind::Ring, data, d.frame, parent);
 }
@@ -176,7 +176,7 @@ void Context::destroy(Handle h) {
     if (n->flags & flag::root) {
         erase(roots_, h);
     }
-    else if (n->parent != kNone) {
+    else if (n->parent != k_none) {
         const uint16_t old_parent = unlink(root);
         mark_dirty(old_parent);
     }
@@ -184,18 +184,18 @@ void Context::destroy(Handle h) {
     uint16_t cur = root;
     for (;;) {
         Node& c = nodes_[cur];
-        if (c.first != kNone) {
+        if (c.first != k_none) {
             cur = c.first;
             continue;
         }
 
-        const uint16_t up = (cur == root) ? kNone : c.parent;
-        if (up != kNone)
+        const uint16_t up = (cur == root) ? k_none : c.parent;
+        if (up != k_none)
             nodes_[up].first = c.next;
 
         release_node(cur);
 
-        if (up == kNone)
+        if (up == k_none)
             break;
         cur = up;
     }
@@ -211,9 +211,9 @@ void Context::link_last(uint16_t parent, uint16_t child) {
     Node& c = nodes_[child];
 
     c.parent = parent;
-    c.next = kNone;
+    c.next = k_none;
     c.prev = p.last;
-    if (p.last != kNone)
+    if (p.last != k_none)
         nodes_[p.last].next = child;
     else
         p.first = child;
@@ -225,9 +225,9 @@ void Context::link_first(uint16_t parent, uint16_t child) {
     Node& c = nodes_[child];
 
     c.parent = parent;
-    c.prev = kNone;
+    c.prev = k_none;
     c.next = p.first;
-    if (p.first != kNone)
+    if (p.first != k_none)
         nodes_[p.first].prev = child;
     else
         p.last = child;
@@ -237,26 +237,26 @@ void Context::link_first(uint16_t parent, uint16_t child) {
 uint16_t Context::unlink(uint16_t child) {
     Node& c = nodes_[child];
     const uint16_t parent = c.parent;
-    if (parent == kNone)
-        return kNone;
+    if (parent == k_none)
+        return k_none;
 
     Node& p = nodes_[parent];
-    if (c.prev != kNone)
+    if (c.prev != k_none)
         nodes_[c.prev].next = c.next;
     else
         p.first = c.next;
 
-    if (c.next != kNone)
+    if (c.next != k_none)
         nodes_[c.next].prev = c.prev;
     else
         p.last = c.prev;
 
-    c.parent = c.prev = c.next = kNone;
+    c.parent = c.prev = c.next = k_none;
     return parent;
 }
 
 void Context::mark_dirty(uint16_t i) {
-    while (i != kNone) {
+    while (i != k_none) {
         Node& n = nodes_[i];
         if (n.flags & flag::dirty)
             return;
@@ -271,11 +271,11 @@ bool Context::attach(Handle child, Handle parent) {
     if (!c || !p || child == parent || (c->flags & flag::root))
         return false;
 
-    for (uint16_t a = parent.id; a != kNone; a = nodes_[a].parent)
+    for (uint16_t a = parent.id; a != k_none; a = nodes_[a].parent)
         if (a == child.id)
             return false;
 
-    if (c->parent != kNone)
+    if (c->parent != k_none)
         mark_dirty(unlink(child.id));
 
     link_last(parent.id, child.id);
@@ -285,7 +285,7 @@ bool Context::attach(Handle child, Handle parent) {
 
 bool Context::detach(Handle h) {
     Node* n = node(h);
-    if (!n || n->parent == kNone)
+    if (!n || n->parent == k_none)
         return false;
     mark_dirty(unlink(h.id));
     return true;
@@ -301,12 +301,12 @@ void Context::move_to_front(Handle h) {
             rotate(it, it + 1, roots_.end());
         return;
     }
-    if (n->parent == kNone || n->next == kNone)
+    if (n->parent == k_none || n->next == k_none)
         return;
 
     const uint16_t p = unlink(h.id);
     link_last(p, h.id);
-    if (nodes_[p].layout != kNone)
+    if (nodes_[p].layout != k_none)
         mark_dirty(p);
 }
 
@@ -320,23 +320,23 @@ void Context::move_to_back(Handle h) {
             rotate(roots_.begin(), it, it + 1);
         return;
     }
-    if (n->parent == kNone || n->prev == kNone)
+    if (n->parent == k_none || n->prev == k_none)
         return;
 
     const uint16_t p = unlink(h.id);
     link_first(p, h.id);
-    if (nodes_[p].layout != kNone)
+    if (nodes_[p].layout != k_none)
         mark_dirty(p);
 }
 
 Handle Context::parent(Handle h) const {
     const Node* n = node(h);
-    return n && n->parent != kNone ? handle_of(n->parent) : Handle{};
+    return n && n->parent != k_none ? handle_of(n->parent) : Handle{};
 }
 
 Context::ChildRange Context::children(Handle h) const {
     const Node* n = node(h);
-    return {this, n ? n->first : kNone};
+    return {this, n ? n->first : k_none};
 }
 
 void Context::set_pos(Handle h, float x, float y) {
@@ -408,9 +408,9 @@ void Context::set_layout(Handle h, const LayoutData& layout) {
     if (!n)
         return;
 
-    if (n->layout == kNone) {
+    if (n->layout == k_none) {
         const uint16_t idx = layouts_.acquire(layout);
-        if (idx == kNone)
+        if (idx == k_none)
             return;
         n->layout = idx;
     }
@@ -421,9 +421,9 @@ void Context::set_layout(Handle h, const LayoutData& layout) {
 }
 
 void Context::clear_layout(Handle h) {
-    if (Node* n = node(h); n && n->layout != kNone) {
+    if (Node* n = node(h); n && n->layout != k_none) {
         layouts_.release(n->layout);
-        n->layout = kNone;
+        n->layout = k_none;
         mark_dirty(h.id);
     }
 }
@@ -439,11 +439,11 @@ Frame Context::absolute_frame(Handle h) const {
 
 Placed Context::placed(uint16_t i) const {
     const Node& n = nodes_[i];
-    return place(n, n.parent == kNone ? Placed{} : placed(n.parent));
+    return place(n, n.parent == k_none ? Placed{} : placed(n.parent));
 }
 
 Transform& Context::transform_of(Node& n) {
-    if (n.transform == kNone)
+    if (n.transform == k_none)
         n.transform = transforms_.acquire({});
     return transforms_[n.transform];
 }
@@ -497,7 +497,7 @@ optional<float> Context::get_prop(Handle h, Prop p) const {
     case Prop::Opacity:
         return static_cast<float>(n->opacity) * (1.f / 255.f);
     case Prop::Scale:
-        return n->transform == kNone ? 1.f : transforms_[n->transform].scale;
+        return n->transform == k_none ? 1.f : transforms_[n->transform].scale;
     case Prop::Radius:
         if (n->kind == Kind::Rect || n->kind == Kind::Image)
             return radius_of(*n);

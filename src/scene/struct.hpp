@@ -17,15 +17,15 @@
 namespace Object {
 
 // Index value meaning no node
-inline constexpr uint16_t kNone = 0xFFFF;
+inline constexpr uint16_t k_none = 0xFFFF;
 
 struct Handle {
-    uint16_t id  = kNone;
+    uint16_t id  = k_none;
     uint16_t gen = 0;
 
     constexpr bool operator==(const Handle&) const = default;
 
-    constexpr explicit operator bool() const noexcept { return id != kNone; }
+    constexpr explicit operator bool() const noexcept { return id != k_none; }
 };
 
 enum struct Button : uint8_t { Left, Right, Middle, None };
@@ -44,7 +44,7 @@ enum class EventType : uint8_t {
     DragEnd,
 };
 
-inline constexpr unsigned kEventTypeCount = static_cast<unsigned>(EventType::DragEnd) + 1;
+inline constexpr unsigned k_event_type_count = std::to_underlying(EventType::DragEnd) + 1;
 
 // x / y are surface coordinates of the pointer when the event was generated.
 // dx / dy: pointer delta for Drag, total offset from the press for DragStart, zero otherwise.
@@ -64,10 +64,10 @@ public:
     constexpr EventMask() noexcept = default;
 
     constexpr EventMask(EventType t) noexcept // NOLINT(google-explicit-constructor)
-        : bits_(static_cast<uint8_t>(1u << static_cast<unsigned>(t))) {
+        : bits_(static_cast<uint8_t>(1u << std::to_underlying(t))) {
     }
 
-    [[nodiscard]] static constexpr EventMask all() noexcept { return from_bits((1u << kEventTypeCount) - 1u); }
+    [[nodiscard]] static constexpr EventMask all() noexcept { return from_bits((1u << k_event_type_count) - 1u); }
 
     [[nodiscard]] constexpr bool has(EventType t) const noexcept { return (bits_ & EventMask{t}.bits_) != 0; }
     [[nodiscard]] constexpr bool any(EventMask m) const noexcept { return (bits_ & m.bits_) != 0; }
@@ -92,9 +92,9 @@ private:
     uint8_t bits_ = 0;
 };
 
-static_assert(kEventTypeCount <= 8, "EventMask stores one bit per EventType in a uint8_t");
+static_assert(k_event_type_count <= 8, "EventMask stores one bit per EventType in a uint8_t");
 
-[[nodiscard]] constexpr EventMask operator|(EventType a, EventType b) noexcept { return EventMask{a} | b; }
+[[nodiscard]] constexpr EventMask operator|(const EventType a, const EventType b) noexcept { return EventMask{a} | b; }
 
 // Non-owning, trivially copyable callable: two pointers, never allocates.
 //
@@ -106,15 +106,15 @@ static_assert(kEventTypeCount <= 8, "EventMask stores one bit per EventType in a
 // A bound object must outlive the binding (unbind it with Context::off, or destroy the node).
 class EventCallback {
 public:
-    using Fn = void (*)(const Event&);
+    using fn = void (*)(const Event&);
 
     constexpr EventCallback() noexcept = default;
 
     template <class F>
-        requires std::is_convertible_v<F, Fn>
+        requires std::is_convertible_v<F, fn>
     EventCallback(F&& f) noexcept // NOLINT(google-explicit-constructor, bugprone-forwarding-reference-overload)
         : thunk_(&call_fn) {
-        data_.fn = static_cast<Fn>(f);
+        data_.fn = static_cast<fn>(f);
         if (!data_.fn)
             thunk_ = nullptr;
     }
@@ -135,7 +135,7 @@ public:
 private:
     union Data {
         void* obj;
-        Fn    fn;
+        fn    fn;
     };
 
     using Thunk = void (*)(Data, const Event&);
@@ -153,7 +153,7 @@ static_assert(std::is_trivially_copyable_v<EventCallback>);
 // most one listener, so dispatch is a short walk (nodes rarely carry more than two entries).
 struct Listener {
     EventCallback callback{};
-    uint16_t      next = kNone;
+    uint16_t      next = k_none;
     EventMask     mask{};
 };
 
@@ -192,19 +192,19 @@ struct Insets {
 
 namespace flag {
 
-inline constexpr uint16_t visible   = 1u << 0;
-inline constexpr uint16_t dirty     = 1u << 1;
-inline constexpr uint16_t clip      = 1u << 2;
-inline constexpr uint16_t clickable = 1u << 3;
-inline constexpr uint16_t hoverable = 1u << 4;
-inline constexpr uint16_t draggable = 1u << 5;
-inline constexpr uint16_t root      = 1u << 6;
+inline constexpr uint16_t visible   = 1u << 0u;
+inline constexpr uint16_t dirty     = 1u << 1u;
+inline constexpr uint16_t clip      = 1u << 2u;
+inline constexpr uint16_t clickable = 1u << 3u;
+inline constexpr uint16_t hoverable = 1u << 4u;
+inline constexpr uint16_t draggable = 1u << 5u;
+inline constexpr uint16_t root      = 1u << 6u;
 
 inline constexpr uint16_t interactive = clickable | hoverable | draggable;
 
 inline constexpr unsigned size_shift_h = 7;
 inline constexpr unsigned size_shift_v = 9;
-inline constexpr uint16_t frozen       = 1u << 11;
+inline constexpr uint16_t frozen       = 1u << 11u;
 
 [[nodiscard]] constexpr unsigned size_shift(Axis a) noexcept {
     return a == Axis::Horizontal ? size_shift_h : size_shift_v;
@@ -218,7 +218,7 @@ inline constexpr uint16_t frozen       = 1u << 11;
 
 [[nodiscard]] constexpr uint16_t with_size_mode(uint16_t flags, Axis a, SizeMode m) noexcept {
     const unsigned s = flag::size_shift(a);
-    return static_cast<uint16_t>((flags & ~(3u << s)) | (static_cast<unsigned>(m) << s));
+    return static_cast<uint16_t>((flags & ~(3u << s)) | std::to_underlying(m) << s);
 }
 
 [[nodiscard]] constexpr float& extent(Frame& f, Axis a) noexcept {
@@ -232,17 +232,17 @@ inline constexpr uint16_t frozen       = 1u << 11;
 struct Node {
     Frame    frame{};
     uint32_t tag{};
-    uint16_t parent  = kNone;
-    uint16_t first   = kNone;
-    uint16_t last    = kNone;
-    uint16_t prev    = kNone;
-    uint16_t next    = kNone;
+    uint16_t parent  = k_none;
+    uint16_t first   = k_none;
+    uint16_t last    = k_none;
+    uint16_t prev    = k_none;
+    uint16_t next    = k_none;
     uint16_t gen     = 0;
     uint16_t flags   = flag::visible | flag::dirty;
-    uint16_t data    = kNone;
-    uint16_t layout    = kNone;
-    uint16_t listeners = kNone; // head of the Listener list
-    uint16_t transform = kNone;
+    uint16_t data    = k_none;
+    uint16_t layout    = k_none;
+    uint16_t listeners = k_none; // head of the Listener list
+    uint16_t transform = k_none;
     uint8_t  opacity   = 255;
     Kind     kind      = Kind::Group;
 };
@@ -348,8 +348,8 @@ public:
             items_[i] = std::move(value);
             return i;
         }
-        if (items_.size() >= kNone)
-            return kNone;
+        if (items_.size() >= k_none)
+            return k_none;
         items_.push_back(std::move(value));
         return static_cast<uint16_t>(items_.size() - 1);
     }
