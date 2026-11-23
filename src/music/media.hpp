@@ -21,11 +21,11 @@ enum class Update : std::uint8_t {
 };
 
 [[nodiscard]] constexpr Update operator|(Update a, Update b) noexcept {
-    return static_cast<Update>(static_cast<unsigned>(a) | static_cast<unsigned>(b));
+    return static_cast<Update>(std::to_underlying(a) | std::to_underlying(b));
 }
 
 [[nodiscard]] constexpr bool contains(Update set, Update u) noexcept {
-    return (static_cast<unsigned>(set) & static_cast<unsigned>(u)) != 0;
+    return (std::to_underlying(set) & std::to_underlying(u)) != 0;
 }
 
 void init();
@@ -40,7 +40,7 @@ void shutdown();
 
 // Current cover, center-cropped and downscaled to at most kArtworkSide square.
 // nullptr when there is none (yet).
-inline constexpr int kArtworkSide = 120;
+inline constexpr int k_artwork_side = 120;
 [[nodiscard]] const Image::Pixels* artwork();
 
 // Re-reads the player's position once (asynchronously); call when progress

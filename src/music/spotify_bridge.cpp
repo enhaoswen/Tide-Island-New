@@ -1,4 +1,4 @@
-#include "backend/spotify_bridge.hpp"
+#include "music/spotify_bridge.hpp"
 
 #include "backend/timer.hpp"
 #include "utils/log.hpp"

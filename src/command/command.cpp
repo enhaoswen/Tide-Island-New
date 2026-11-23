@@ -2,10 +2,10 @@
 #include "app/island.hpp"
 #include "utils/log.hpp"
 
-#include <vector>
 #include <optional>
 #include <ranges>
 #include <span>
+#include <vector>
 
 using namespace std;
 

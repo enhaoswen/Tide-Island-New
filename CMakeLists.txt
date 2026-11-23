@@ -29,7 +29,7 @@ set(SRC
         src/backend/wayland.cpp
         src/backend/egl_vendor.cpp
         src/backend/timer.cpp
-        src/backend/spotify_bridge.cpp
+        src/music/spotify_bridge.cpp
         src/graphics/driver_memory.cpp
         src/graphics/renderer.cpp
         src/graphics/text.cpp
@@ -39,7 +39,7 @@ set(SRC
         third_party/wayland/fractional-scale-v1-protocol.c
         third_party/wayland/viewporter-protocol.c
         third_party/wayland/ext-background-effect-v1-protocol.c
-        src/backend/command.cpp
+        src/command/command.cpp
         src/app/state_manager.cpp
         src/backend/config.cpp
         src/backend/config.hpp
@@ -54,9 +54,9 @@ set(SRC
         src/scene/layout.cpp
         src/scene/render.hpp
         src/backend/input.cpp
-        src/backend/media.cpp
+        src/music/media.cpp
         src/graphics/image.cpp
-        src/backend/media.hpp
+        src/music/media.hpp
 )
 
 add_executable(Tide-island ${SRC})

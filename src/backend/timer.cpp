@@ -1,8 +1,8 @@
 #include "backend/timer.hpp"
-#include "command.hpp"
+#include "command/command.hpp"
 #include "backend/event_queue.hpp"
-#include "backend/media.hpp"
-#include "backend/spotify_bridge.hpp"
+#include "music/media.hpp"
+#include "music/spotify_bridge.hpp"
 #include "backend/wayland.hpp"
 #include "utils/log.hpp"
 

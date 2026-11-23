@@ -1,4 +1,4 @@
-#include "backend/media.hpp"
+#include "music/media.hpp"
 
 #include "lyricsmpris/detail/Http.hpp"
 #include "utils/log.hpp"
@@ -14,17 +14,17 @@ using namespace std::chrono;
 
 namespace {
 
-constexpr size_t kMaxArtworkBytes = 16u * 1024u * 1024u;
+constexpr size_t k_max_artwork_bytes = 16u * 1024u * 1024u;
 
-optional<lyricsmpris::Client>        client{};
+optional<lyricsmpris::Client>         client{};
 unique_ptr<lyricsmpris::detail::Http> http{};
 
 void (*listener)(Media::Update) = nullptr;
 
 string                  artwork_url{};
 optional<Image::Pixels> artwork_pixels{}; // downscaled; encoded bytes are dropped after decoding
-uint64_t        artwork_request{};
-uint64_t        next_request_id{1};
+uint64_t                artwork_request{};
+uint64_t                next_request_id{1};
 
 [[nodiscard]] int hex_value(char c) {
     if (c >= '0' && c <= '9')
@@ -68,7 +68,7 @@ uint64_t        next_request_id{1};
     if (!in)
         return {};
     const auto size = in.tellg();
-    if (size <= 0 || static_cast<size_t>(size) > kMaxArtworkBytes)
+    if (size <= 0 || static_cast<size_t>(size) > k_max_artwork_bytes)
         return {};
     vector<uint8_t> bytes(static_cast<size_t>(size));
     in.seekg(0);
@@ -81,7 +81,7 @@ uint64_t        next_request_id{1};
     if (http)
         return true;
     lyricsmpris::Options options{};
-    options.max_response_bytes = kMaxArtworkBytes;
+    options.max_response_bytes = k_max_artwork_bytes;
     options.max_connections    = 1;
     auto created               = lyricsmpris::detail::Http::create(options);
     if (!created) {
@@ -114,8 +114,7 @@ bool fetch_artwork(const string& url) {
     }
 
     if ((url.starts_with("https://") || url.starts_with("http://")) && ensure_http()) {
-        const uint64_t id = next_request_id++;
-        if (http->enqueue({.id = id, .url = url, .referer = {}}))
+        if (const uint64_t id = next_request_id++; http->enqueue({.id = id, .url = url, .referer = {}}))
             artwork_request = id;
         else
             http.reset();
@@ -282,8 +281,7 @@ void Media::process(span<const pollfd> ready) {
     if (lyricsmpris::contains(*changes, lyric_changes))
         update = update | Update::Lyrics;
 
-    const auto& s = client->state();
-    if (fetch_artwork(s.has_player ? s.artwork_url : string{}))
+    if (const auto& s = client->state(); fetch_artwork(s.has_player ? s.artwork_url : string{}))
         update = update | Update::Artwork;
     if (process_http(ready, now))
         update = update | Update::Artwork;

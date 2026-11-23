@@ -34,7 +34,6 @@ struct TextDesc {
 struct RingDesc {
     Frame                frame{};
     Color                color{};
-    // Unset: `color` at 25% alpha, like the dimmed track of iOS timers.
     std::optional<Color> track{};
     float                progress{};
     float                thickness = 4.f;

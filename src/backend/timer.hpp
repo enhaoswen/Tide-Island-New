@@ -1,11 +1,18 @@
 #pragma once
 
-#include "backend/event_handle.hpp"
-
 #include <chrono>
+#include <cstdint>
+#include <limits>
 #include <source_location>
 
 namespace Timer {
+
+struct EventHandle {
+    std::uint32_t index{std::numeric_limits<std::uint32_t>::max()};
+    std::uint32_t generation{};
+    bool          operator==(const EventHandle&) const = default;
+};
+static_assert(sizeof(EventHandle) == 8);
 
 void init();
 // Priority orders simultaneous deadlines; it never suppresses an event.
