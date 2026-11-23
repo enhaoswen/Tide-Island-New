@@ -113,9 +113,23 @@ void main() {
 @program text img_vs text_fs
 
 
+@vs ring_vs
+in vec2 position;
+
+out vec2 Position;
+
+layout(binding = 2) uniform img_proj {
+    mat4 proj;
+};
+
+void main() {
+    gl_Position = proj * vec4(position, 0.0, 1.0);
+    Position = position;
+}
+@end
+
 @fs ring_fs
 in vec2 Position;
-in vec2 uv;
 
 layout(binding = 0) uniform ring_params {
     vec4 color;
@@ -168,4 +182,4 @@ void main() {
 }
 @end
 
-@program ring img_vs ring_fs
+@program ring ring_vs ring_fs

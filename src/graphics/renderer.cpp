@@ -260,7 +260,7 @@ void Renderer::init() {
     sg_pipeline_desc ring_pipe_desc{};
     ring_pipe_desc.shader                                  = ring_shader;
     ring_pipe_desc.layout.attrs[ATTR_ring_position].format = SG_VERTEXFORMAT_FLOAT2;
-    ring_pipe_desc.layout.attrs[ATTR_ring_coord].format    = SG_VERTEXFORMAT_FLOAT2;
+    ring_pipe_desc.layout.buffers[0].stride                = 4 * sizeof(float);
     ring_pipe_desc.primitive_type                          = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
     enable_blending(ring_pipe_desc);
     ring_pipeline = sg_make_pipeline(ring_pipe_desc);

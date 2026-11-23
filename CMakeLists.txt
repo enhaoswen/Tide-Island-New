@@ -13,9 +13,9 @@ pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
 pkg_check_modules(WAYLAND_EGL REQUIRED wayland-egl)
 pkg_check_modules(HARFBUZZ REQUIRED harfbuzz)
 pkg_check_modules(FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
+pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
 
 find_package(OpenGL REQUIRED)
-
 find_package(Freetype REQUIRED)
 
 add_subdirectory(src/lyricsmpris)
@@ -83,6 +83,7 @@ target_link_libraries(Tide-island PRIVATE
         Freetype::Freetype
         lyricsmpris_glaze
         LyricsMpris::LyricsMpris
+        PkgConfig::PIPEWIRE
 )
 
 target_compile_options(Tide-island PRIVATE -Wall -Wextra)
