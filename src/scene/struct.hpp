@@ -135,7 +135,7 @@ public:
 private:
     union Data {
         void* obj;
-        fn    fn;
+        EventCallback::fn fn;
     };
 
     using Thunk = void (*)(Data, const Event&);
