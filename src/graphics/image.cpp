@@ -90,41 +90,48 @@ namespace Image {
             }
         }
 
+        // One frame at a time keeps the scratch buffers small (~100 KB): a strip-sized float
+        // buffer is megabytes, and glibc keeps such blocks in the heap once they are freed.
         // Premultiplied, so transparent texels don't bleed their color into edges.
-        vector<float> pre(static_cast<size_t>(w) * h * 4);
-        for (size_t k = 0; k < pre.size(); k += 4) {
-            const float a = src.get()[k + 3] / 255.f;
-            for (size_t c = 0; c < 3; ++c)
-                pre[k + c] = src.get()[k + c] / 255.f * a;
-            pre[k + 3] = a;
-        }
+        vector<float> pre(static_cast<size_t>(cell) * cell * 4);
+        vector<float> mid(static_cast<size_t>(out) * cell * 4);
+        Pixels        p{ow, out, vector<uint8_t>(static_cast<size_t>(ow) * out * 4)};
+        for (int f = 0; f < frames; ++f) {
+            for (int y = 0; y < cell; ++y)
+                for (int x = 0; x < cell; ++x) {
+                    const uint8_t* s = src.get() + (static_cast<size_t>(y) * w + f * cell + x) * 4;
+                    float*         d = &pre[(static_cast<size_t>(y) * cell + x) * 4];
+                    const float    a = s[3] / 255.f;
+                    for (int c = 0; c < 3; ++c)
+                        d[c] = s[c] / 255.f * a;
+                    d[3] = a;
+                }
 
-        vector<float> mid(static_cast<size_t>(ow) * cell * 4);
-        for (int y = 0; y < cell; ++y)
-            for (int f = 0; f < frames; ++f)
+            ranges::fill(mid, 0.f);
+            for (int y = 0; y < cell; ++y)
                 for (int o = 0; o < out; ++o) {
-                    float* d = &mid[(static_cast<size_t>(y) * ow + f * out + o) * 4];
+                    float* d = &mid[(static_cast<size_t>(y) * out + o) * 4];
                     for (const Tap& t : taps[static_cast<size_t>(o)]) {
-                        const float* s = &pre[(static_cast<size_t>(y) * w + f * cell + t.i) * 4];
+                        const float* s = &pre[(static_cast<size_t>(y) * cell + t.i) * 4];
                         for (int c = 0; c < 4; ++c)
                             d[c] += s[c] * t.w;
                     }
                 }
 
-        Pixels p{ow, out, vector<uint8_t>(static_cast<size_t>(ow) * out * 4)};
-        for (int o = 0; o < out; ++o)
-            for (int x = 0; x < ow; ++x) {
-                array<float, 4> acc{};
-                for (const Tap& t : taps[static_cast<size_t>(o)]) {
-                    const float* s = &mid[(static_cast<size_t>(t.i) * ow + x) * 4];
-                    for (int c = 0; c < 4; ++c)
-                        acc[static_cast<size_t>(c)] += s[c] * t.w;
+            for (int o = 0; o < out; ++o)
+                for (int x = 0; x < out; ++x) {
+                    array<float, 4> acc{};
+                    for (const Tap& t : taps[static_cast<size_t>(o)]) {
+                        const float* s = &mid[(static_cast<size_t>(t.i) * out + x) * 4];
+                        for (size_t c = 0; c < 4; ++c)
+                            acc[c] += s[c] * t.w;
+                    }
+                    uint8_t* d = &p.rgba[(static_cast<size_t>(o) * ow + f * out + x) * 4];
+                    for (size_t c = 0; c < 3; ++c)
+                        d[c] = acc[3] > 0.f ? static_cast<uint8_t>(lround(clamp(acc[c] / acc[3], 0.f, 1.f) * 255.f)) : 0;
+                    d[3] = static_cast<uint8_t>(lround(clamp(acc[3], 0.f, 1.f) * 255.f));
                 }
-                uint8_t* d = &p.rgba[(static_cast<size_t>(o) * ow + x) * 4];
-                for (size_t c = 0; c < 3; ++c)
-                    d[c] = acc[3] > 0.f ? static_cast<uint8_t>(lround(clamp(acc[c] / acc[3], 0.f, 1.f) * 255.f)) : 0;
-                d[3] = static_cast<uint8_t>(lround(clamp(acc[3], 0.f, 1.f) * 255.f));
-            }
+        }
         return p;
     }
 
