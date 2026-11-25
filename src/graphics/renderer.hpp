@@ -35,7 +35,7 @@ Texture prepare_text(std::string_view text, FontHandle font, float scale, float 
 struct GpuRenderer {
     void draw_rect(const Frame& frame, const Color& color, float radius, float opacity);
 
-    void draw_image(const Frame& frame, const Texture& texture, float radius, float opacity);
+    void draw_image(const Frame& frame, const Texture& texture, const UvRect& uv, float radius, float opacity);
 
     void draw_text(const Frame& frame, const Texture& texture, FontHandle font, const Color& color, float opacity);
 

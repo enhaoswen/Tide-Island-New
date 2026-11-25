@@ -7,6 +7,7 @@
 #include "scene/animation.hpp"
 #include "views/clock_view.hpp"
 #include "views/music_player.hpp"
+#include "views/sysinfo.hpp"
 
 using namespace std;
 
@@ -39,7 +40,7 @@ struct StateSize {
     float    r;
 };
 
-constexpr StateSize size_of(StateType t) {
+StateSize size_of(StateType t) {
     switch (t) {
     case StateType::Clock:
         return {140, 38, 19};
@@ -49,6 +50,8 @@ constexpr StateSize size_of(StateType t) {
         return {410, 165, 32};
     case StateType::ControlCenter:
         return {420, 352, 28};
+    case StateType::Osd:
+        return {SysInfoView::width(), 38, 19};
     }
     return {140, 38, 19};
 }
@@ -65,6 +68,7 @@ bool is_expended(StateType type) {
     switch (type) {
     case StateType::Clock:
     case StateType::Lyrics:
+    case StateType::Osd:
         return false;
 
     case StateType::MusicPLayer:
@@ -138,6 +142,8 @@ void resize(const uint32_t width, const uint32_t height, bool expended, float ra
 
     if (expended)
         set_surface(width, height);
+    else if (const auto [sw, sh] = Wayland::get_surface_size(); width > sw || height > sh)
+        set_surface(max(width, sw), max(height, sh)); // growing: room now, exact size once settled
 }
 
 void scale_bg(const float to, AnimCallback on_done = {}) {
@@ -178,97 +184,107 @@ void on_hovered(const Object::Event&) {
 }
 
 namespace StateManager {
-    void init(const Resources& arg_resources) {
-        island_state = Island::get_island();
-        resources    = arg_resources;
+void init(const Resources& arg_resources) {
+    island_state = Island::get_island();
+    resources    = arg_resources;
 
-        root        = ctx.create_root(island_state.island_width, island_state.island_height);
+    root = ctx.create_root(island_state.island_width, island_state.island_height);
 
-        bg = ctx.create_rect(root, Object::RectDesc{
-            .frame = Frame{
-                .x      = 0.f,
-                .y      = 0.f,
-                .width  = static_cast<float>(island_state.island_width),
-                .height = static_cast<float>(island_state.island_height),
-            },
+    bg = ctx.create_rect(root, Object::RectDesc{
+        .frame = Frame{
+            .x      = 0.f,
+            .y      = 0.f,
+            .width  = static_cast<float>(island_state.island_width),
+            .height = static_cast<float>(island_state.island_height),
+        },
 
-            .color  = island_state.color,
-            .radius = island_state.radius,
-        });
+        .color  = island_state.color,
+        .radius = island_state.radius,
+    });
 
-        ctx.set_layout(root, Object::LayoutData{
-            .dir     = Object::Direction::Row,
-            .justify = Object::Justify::Center,
-        });
+    ctx.set_layout(root, Object::LayoutData{
+        .dir     = Object::Direction::Row,
+        .justify = Object::Justify::Center,
+    });
 
-        ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Fixed);
-        ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Fixed);
-        ctx.on_click(bg, on_bg_click);
-        ctx.set_pivot(bg, .5f, 0.f);
-        ctx.on(bg, Object::EventType::HoverEnter | Object::EventType::HoverLeave, on_hovered);
+    ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Fixed);
+    ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Fixed);
+    ctx.on_click(bg, on_bg_click);
+    ctx.set_pivot(bg, .5f, 0.f);
+    ctx.on(bg, Object::EventType::HoverEnter | Object::EventType::HoverLeave, on_hovered);
+
+    SysInfoView::init({.value = resources.main_font, .label = resources.title});
+}
+
+Object::Context& context() {
+    return ctx;
+}
+
+void sync_surface() {
+    // Root follows the surface: it may only change in the frame the new buffer is used.
+    Wayland::sync_surface();
+    if (!root)
+        return;
+    // Actual size: the backend pads and rounds the requested one.
+    if (!Wayland::resize_pending()) {
+        const auto [w, h] = Wayland::get_surface_size();
+        ctx.set_size(root, static_cast<float>(w), static_cast<float>(h));
+        ctx.layout();
     }
 
-    Object::Context& context() {
-        return ctx;
+    Wayland::set_blur(island_state.blur);
+    if (island_state.blur) {
+        const Frame f = ctx.absolute_frame(bg);
+        Wayland::set_blur_shape(f.x, f.y, f.width, f.height, ctx.rect(bg).radius());
+    }
+}
+
+void switch_state(const StateType state) {
+    stop();
+
+    Island::set_state(state);
+    if (ctx.scale(bg) != 1.f || ctx.is_animating(bg, Prop::Scale))
+        scale_bg(1.f);
+
+    if (state == StateType::Clock) {
+        resize(140, 38, false, 19);
+        ClockView::start(bg, resources.main_font);
     }
 
-    void sync_surface() {
-        // Root follows the surface: it may only change in the frame the new buffer is used.
-        Wayland::sync_surface();
-        if (!root)
-            return;
-        // Actual size: the backend pads and rounds the requested one.
-        if (!Wayland::resize_pending()) {
-            const auto [w, h] = Wayland::get_surface_size();
-            ctx.set_size(root, static_cast<float>(w), static_cast<float>(h));
-            ctx.layout();
-        }
-
-        Wayland::set_blur(island_state.blur);
-        if (island_state.blur) {
-            const Frame f = ctx.absolute_frame(bg);
-            Wayland::set_blur_shape(f.x, f.y, f.width, f.height, ctx.rect(bg).radius());
-        }
+    else if (state == StateType::MusicPLayer) {
+        resize(410, 165, true, 32);
+        MusicPlayerView::start(
+            bg,
+            {
+                .title  = resources.title,
+                .artist = resources.artist,
+                .time   = resources.time,
+                .icon   = resources.icon,
+            });
     }
 
-    void switch_state(const StateType state) {
-        stop();
-
-        Island::set_state(state);
-        if (ctx.scale(bg) != 1.f || ctx.is_animating(bg, Prop::Scale))
-            scale_bg(1.f);
-
-        if (state == StateType::Clock) {
-            resize(140, 38, false, 19);
-            ClockView::start(bg, resources.main_font);
-        }
-
-        else if (state == StateType::MusicPLayer) {
-            resize(410, 165, true, 32);
-            MusicPlayerView::start(
-                bg,
-                {
-                    .title  = resources.title,
-                    .artist = resources.artist,
-                    .time   = resources.time,
-                    .icon   = resources.icon,
-                });
-        }
-
-        Island::request_redraw(true);
+    else if (state == StateType::Osd) {
+        resize(SysInfoView::width(), 38, false, 19);
+        SysInfoView::start(bg);
     }
 
-    void stop() {
-        switch (Island::get_state()) {
-        case StateType::Clock:
-            ClockView::stop();
-            break;
-        case StateType::MusicPLayer:
-            MusicPlayerView::stop();
-            break;
-        default:
-            break;
-        }
+    Island::request_redraw(true);
+}
+
+void stop() {
+    switch (Island::get_state()) {
+    case StateType::Clock:
+        ClockView::stop();
+        break;
+    case StateType::MusicPLayer:
+        MusicPlayerView::stop();
+        break;
+    case StateType::Osd:
+        SysInfoView::stop();
+        break;
+    default:
+        break;
     }
+}
 
 } // namespace StateManager

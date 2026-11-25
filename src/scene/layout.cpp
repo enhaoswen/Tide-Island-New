@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+using namespace std;
+
 namespace Object {
 
 GrowParams Context::grow_params(uint16_t id, Axis axis) const {
@@ -37,9 +39,15 @@ void Context::measure(uint16_t i) {
     const SizeMode hm = size_mode(n.flags, Axis::Vertical);
 
     if (n.kind == Kind::Image || n.kind == Kind::Text) {
-        const auto [w, h] = n.kind == Kind::Image
-                                ? texture_extent(images_[n.data].texture)
-                                : std::pair{texts_[n.data].natural_w, texts_[n.data].natural_h};
+        auto [w, h] = n.kind == Kind::Image
+            ? texture_extent(images_[n.data].texture)
+            : pair{texts_[n.data].natural_w, texts_[n.data].natural_h};
+
+        if (n.kind == Kind::Image) {
+            const UvRect& uv = images_[n.data].uv;
+            w                *= uv.u1 - uv.u0;
+            h                *= uv.v1 - uv.v0;
+        }
         if (wm == SizeMode::Fit)
             n.frame.width = w;
         if (hm == SizeMode::Fit)
@@ -49,26 +57,26 @@ void Context::measure(uint16_t i) {
     if (n.layout == k_none || (wm != SizeMode::Fit && hm != SizeMode::Fit))
         return;
 
-    const LayoutData& l = layouts_[n.layout];
-    const bool row = l.dir == Direction::Row;
-    const Axis main_axis = row ? Axis::Horizontal : Axis::Vertical;
-    const Axis cross_axis = row ? Axis::Vertical : Axis::Horizontal;
+    const LayoutData& l          = layouts_[n.layout];
+    const bool        row        = l.dir == Direction::Row;
+    const Axis        main_axis  = row ? Axis::Horizontal : Axis::Vertical;
+    const Axis        cross_axis = row ? Axis::Vertical : Axis::Horizontal;
 
     const auto contribution = [this](uint16_t c, Axis a) {
         const Node& ch = nodes_[c];
         return size_mode(ch.flags, a) == SizeMode::Grow ? grow_params(c, a).min : extent(ch.frame, a);
     };
 
-    float main = 0.f;
-    float cross = 0.f;
+    float    main  = 0.f;
+    float    cross = 0.f;
     unsigned count = 0;
 
     for (uint16_t c = n.first; c != k_none; c = nodes_[c].next) {
         if (!(nodes_[c].flags & flag::visible))
             continue;
         ++count;
-        main += contribution(c, main_axis);
-        cross = std::max(cross, contribution(c, cross_axis));
+        main  += contribution(c, main_axis);
+        cross = max(cross, contribution(c, cross_axis));
     }
     if (count > 1)
         main += l.spacing * static_cast<float>(count - 1);
@@ -113,8 +121,8 @@ float Context::resolve_grow(Node& n, Axis axis, float space) {
                 total_weight += grow_params(c, axis).weight;
         }
 
-        const float avail = std::max(space - frozen_sum, 0.f);
-        const auto wanted = [&](const GrowParams& p) {
+        const float avail  = max(space - frozen_sum, 0.f);
+        const auto  wanted = [&](const GrowParams& p) {
             return total_weight > 0.f ? avail * p.weight / total_weight : 0.f;
         };
 
@@ -124,8 +132,8 @@ float Context::resolve_grow(Node& n, Axis axis, float space) {
             if (!is_grow(ch) || (ch.flags & flag::frozen))
                 continue;
             const GrowParams p = grow_params(c, axis);
-            const float w = wanted(p);
-            violation += std::clamp(w, p.min, p.max) - w;
+            const float      w = wanted(p);
+            violation          += clamp(w, p.min, p.max) - w;
         }
 
         for (uint16_t c = n.first; c != k_none; c = nodes_[c].next) {
@@ -133,9 +141,9 @@ float Context::resolve_grow(Node& n, Axis axis, float space) {
             if (!is_grow(ch) || (ch.flags & flag::frozen))
                 continue;
 
-            const GrowParams p = grow_params(c, axis);
-            const float w = wanted(p);
-            const float clamped = std::clamp(w, p.min, p.max);
+            const GrowParams p       = grow_params(c, axis);
+            const float      w       = wanted(p);
+            const float      clamped = clamp(w, p.min, p.max);
 
             const bool freeze = violation == 0.f || (violation > 0.f ? clamped > w : clamped < w);
             if (!freeze)
@@ -143,10 +151,10 @@ float Context::resolve_grow(Node& n, Axis axis, float space) {
 
             float& e = extent(ch.frame, axis);
             if (e != clamped) {
-                e = clamped;
+                e        = clamped;
                 ch.flags |= flag::dirty;
             }
-            ch.flags |= flag::frozen;
+            ch.flags   |= flag::frozen;
             frozen_sum += clamped;
             --remaining;
         }
@@ -159,22 +167,22 @@ float Context::resolve_grow(Node& n, Axis axis, float space) {
 }
 
 void Context::arrange_children(Node& n) {
-    const LayoutData& l = layouts_[n.layout];
-    const bool row = l.dir == Direction::Row;
-    const Axis main_axis = row ? Axis::Horizontal : Axis::Vertical;
-    const Axis cross_axis = row ? Axis::Vertical : Axis::Horizontal;
+    const LayoutData& l          = layouts_[n.layout];
+    const bool        row        = l.dir == Direction::Row;
+    const Axis        main_axis  = row ? Axis::Horizontal : Axis::Vertical;
+    const Axis        cross_axis = row ? Axis::Vertical : Axis::Horizontal;
 
-    const float pad_main_start = row ? l.padding.left : l.padding.top;
+    const float pad_main_start  = row ? l.padding.left : l.padding.top;
     const float pad_cross_start = row ? l.padding.top : l.padding.left;
-    const float pad_main_total = row ? l.padding.left + l.padding.right : l.padding.top + l.padding.bottom;
+    const float pad_main_total  = row ? l.padding.left + l.padding.right : l.padding.top + l.padding.bottom;
     const float pad_cross_total = row ? l.padding.top + l.padding.bottom : l.padding.left + l.padding.right;
 
-    const float avail_main = std::max(0.f, extent(n.frame, main_axis) - pad_main_total);
-    const float avail_cross = std::max(0.f, extent(n.frame, cross_axis) - pad_cross_total);
+    const float avail_main  = max(0.f, extent(n.frame, main_axis) - pad_main_total);
+    const float avail_cross = max(0.f, extent(n.frame, cross_axis) - pad_cross_total);
 
-    float used = 0.f;
+    float    used  = 0.f;
     unsigned count = 0;
-    unsigned grow = 0;
+    unsigned grow  = 0;
     for (uint16_t c = n.first; c != k_none; c = nodes_[c].next) {
         const Node& ch = nodes_[c];
         if (!(ch.flags & flag::visible))
@@ -193,8 +201,8 @@ void Context::arrange_children(Node& n) {
     const float grown = grow > 0 ? resolve_grow(n, main_axis, avail_main - used - gaps) : 0.f;
 
     const float leftover = avail_main - used - gaps - grown;
-    float lead = 0.f;
-    float gap = l.spacing;
+    float       lead     = 0.f;
+    float       gap      = l.spacing;
     // Negative leftover too: an overshooting spring must stay centered.
     switch (l.justify) {
     case Justify::Start:
@@ -218,13 +226,13 @@ void Context::arrange_children(Node& n) {
             continue;
 
         const float m = extent(ch.frame, main_axis);
-        float& x = extent(ch.frame, cross_axis);
+        float&      x = extent(ch.frame, cross_axis);
 
         if (size_mode(ch.flags, cross_axis) == SizeMode::Grow) {
             const GrowParams p = grow_params(c, cross_axis);
-            const float s = std::clamp(avail_cross, p.min, p.max);
+            const float      s = clamp(avail_cross, p.min, p.max);
             if (x != s) {
-                x = s;
+                x        = s;
                 ch.flags |= flag::dirty;
             }
         }

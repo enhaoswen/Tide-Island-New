@@ -94,6 +94,7 @@ public:
     ImageView& set_texture(Texture t);           // may change the Fit size -> re-layout
     ImageView& set_image(std::string_view path); // loads then set_texture; no path stored
     ImageView& set_radius(float r);
+    ImageView& set_uv(const UvRect& uv); // e.g. one frame of a sprite strip
 
     [[nodiscard]] float radius() const;
 
@@ -576,6 +577,14 @@ inline ImageView& ImageView::set_texture(Texture t) {
 inline ImageView& ImageView::set_radius(float r) {
     if (auto* d = data())
         d->radius = r < 0.f ? 0.f : r;
+    return *this;
+}
+
+inline ImageView& ImageView::set_uv(const UvRect& uv) {
+    if (auto* d = data(); d && d->uv != uv) {
+        d->uv = uv;
+        ctx_->mark_dirty(h_.id);
+    }
     return *this;
 }
 

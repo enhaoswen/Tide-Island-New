@@ -15,4 +15,7 @@ struct Pixels {
 
 [[nodiscard]] std::optional<Pixels> decode_square(std::span<const std::uint8_t> encoded, int side);
 
+// A horizontal strip of `frames` square frames, each area-averaged down to `side` px.
+[[nodiscard]] std::optional<Pixels> load_strip(const char* path, int frames, int side);
+
 }

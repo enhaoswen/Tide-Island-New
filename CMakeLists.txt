@@ -45,6 +45,8 @@ set(SRC
         src/backend/config.hpp
         src/app/views/music_player.cpp
         src/app/views/music_player.hpp
+        src/app/views/sysinfo.cpp
+        src/app/views/sysinfo.hpp
         src/utils/get_type_name.hpp
         src/scene/context.cpp
         src/scene/context.hpp
@@ -67,7 +69,7 @@ set(SRC
 
 add_executable(Tide-island ${SRC})
 
-target_compile_definitions(Tide-island PRIVATE SOKOL_GLES3)
+target_compile_definitions(Tide-island PRIVATE SOKOL_GLES3 TIDE_RESOURCE_DIR="${CMAKE_SOURCE_DIR}/resource")
 
 target_include_directories(Tide-island PRIVATE
         src/

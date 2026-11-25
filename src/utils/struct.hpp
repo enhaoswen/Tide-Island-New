@@ -14,6 +14,13 @@ struct Position {
     float x, y;
 };
 
+// Normalized source rectangle of a texture.
+struct UvRect {
+    float u0{0}, v0{0}, u1{1}, v1{1};
+
+    bool operator==(const UvRect&) const = default;
+};
+
 struct FontHandle {
     std::uint64_t id{};
 };
@@ -28,4 +35,5 @@ enum struct StateType : std::uint8_t {
     Lyrics,
     MusicPLayer,
     ControlCenter,
+    Osd,
 };

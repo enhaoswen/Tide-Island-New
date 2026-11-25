@@ -7,6 +7,7 @@
 #include "music/spotify_bridge.hpp"
 #include "app/island.hpp"
 #include "app/views/clock_view.hpp"
+#include "app/views/sysinfo.hpp"
 #include "app/state_manager.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
@@ -153,6 +154,7 @@ namespace API {
     }
 
     void shutdown() {
+        SysInfoView::shutdown();
         ClockView::shutdown();
         StateManager::stop();
         SpotifyBridge::shutdown();

@@ -276,10 +276,12 @@ struct RingData {
 struct ImageData {
     Texture texture{};
     float   radius{};
+    UvRect  uv{};
 
     void reset() {
         texture.reset();
         radius = 0.f;
+        uv     = {};
     }
 };
 

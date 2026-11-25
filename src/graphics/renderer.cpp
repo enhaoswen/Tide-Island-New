@@ -97,7 +97,7 @@ RectVert rectangle_vertices(
     };
 }
 
-ImgVert image_vertices(const Frame frame) {
+ImgVert image_vertices(const Frame frame, const UvRect& uv = {}) {
     const float left{frame.x};
     const float top{frame.y};
     const float right{left + frame.width};
@@ -105,11 +105,21 @@ ImgVert image_vertices(const Frame frame) {
 
     return {
         // x, y, u, v
-        left, top, 0.0f, 0.0f,
-        right, top, 1.0f, 0.0f,
-        left, bottom, 0.0f, 1.0f,
-        right, bottom, 1.0f, 1.0f,
+        left, top, uv.u0, uv.v0,
+        right, top, uv.u1, uv.v0,
+        left, bottom, uv.u0, uv.v1,
+        right, bottom, uv.u1, uv.v1,
     };
+}
+
+Frame snap_to_pixels(Frame frame) {
+    const auto  surface = Wayland::get_surface_size();
+    const auto  buffer  = Wayland::get_buffer_size();
+    const float scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
+    const float scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
+    frame.x = round(frame.x * scale_x) / scale_x;
+    frame.y = round(frame.y * scale_y) / scale_y;
+    return frame;
 }
 
 rect_proj_uniform_t projection() {
@@ -392,11 +402,23 @@ namespace Renderer {
         sg_draw(0, 4, 1);
     }
 
-    void GpuRenderer::draw_image(const Frame& frame, const Texture& texture, float radius, float opacity) {
+    void GpuRenderer::draw_image(const Frame& frame, const Texture& texture, const UvRect& uv, float radius, float opacity) {
         if (!texture.valid())
             return;
 
-        const ImgVert vertices{image_vertices(frame)};
+        // Prepared at the output resolution (within rounding): draw texel-per-pixel, as text does.
+        const float px_scale = text_scale();
+        const float tex_w    = static_cast<float>(texture.width()) * (uv.u1 - uv.u0);
+        const float tex_h    = static_cast<float>(texture.height()) * (uv.v1 - uv.v0);
+        Frame       target{frame};
+        if (abs(frame.width * px_scale - tex_w) < 1.f && abs(frame.height * px_scale - tex_h) < 1.f) {
+            target.x += (frame.width - tex_w / px_scale) * .5f;
+            target.y += (frame.height - tex_h / px_scale) * .5f;
+            target.width  = tex_w / px_scale;
+            target.height = tex_h / px_scale;
+            target        = snap_to_pixels(target);
+        }
+        const ImgVert vertices{image_vertices(target, uv)};
         const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
         if (sg_query_buffer_overflow(image_vertex_buffer)) {
             Log::fatal("Image vertex buffer overflow");
@@ -434,15 +456,7 @@ namespace Renderer {
 
         // Snap the origin to the physical pixel grid. At fractional scales a
         // half-pixel offset resamples every glyph and makes text look blurry.
-        Frame snapped{frame};
-        if (!stretched) {
-            const auto  surface = Wayland::get_surface_size();
-            const auto  buffer  = Wayland::get_buffer_size();
-            const float scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
-            const float scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
-            snapped.x = round(frame.x * scale_x) / scale_x;
-            snapped.y = round(frame.y * scale_y) / scale_y;
-        }
+        const Frame snapped{stretched ? frame : snap_to_pixels(frame)};
 
         const ImgVert vertices{image_vertices(snapped)};
         const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};

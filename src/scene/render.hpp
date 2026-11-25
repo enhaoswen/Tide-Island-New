@@ -6,10 +6,10 @@ namespace Object {
 
 template <class R>
 concept Renderer = requires(R& r, const Frame& f, const Color& c, const Texture& t,
-    const FontHandle&          font, float     x)
+    const FontHandle&          font, float     x, const UvRect& uv)
     {
         r.draw_rect(f, c, x /*radius*/, x /*opacity*/);
-        r.draw_image(f, t, x /*radius*/, x /*opacity*/);
+        r.draw_image(f, t, uv, x /*radius*/, x /*opacity*/);
         r.draw_text(f, t, font, c, x /*opacity*/);
         r.draw_ring(f, c, c /*track*/, x /*progress*/, x /*thickness*/, x /*opacity*/);
         r.push_clip(f, x /*radius*/);
@@ -43,7 +43,7 @@ struct Drawer {
         case Kind::Image: {
             const ImageData& d = c.images_[n.data];
             radius             = d.radius * p.scale;
-            r.draw_image(abs, d.texture, radius, alpha);
+            r.draw_image(abs, d.texture, d.uv, radius, alpha);
             break;
         }
         case Kind::Text: {

@@ -4,6 +4,8 @@
 #include "utils/log.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <limits>
 #include <memory>
 
@@ -50,6 +52,79 @@ namespace Image {
                     dst[c] = static_cast<uint8_t>((sum[c] + n / 2) / n);
             }
         }
+        return p;
+    }
+
+    optional<Pixels> load_strip(const char* path, int frames, int side) {
+        int                                                         w{}, h{}, channels{};
+        const unique_ptr<unsigned char, decltype(&stbi_image_free)> src{
+            stbi_load(path, &w, &h, &channels, 4),
+            &stbi_image_free
+        };
+        if (!src) {
+            Log::logger(Log::Warning, R"_(Failed to load image path="{}": {})_", path, stbi_failure_reason());
+            return nullopt;
+        }
+        if (frames <= 0 || side <= 0 || w != h * frames) {
+            Log::logger(Log::Warning, R"_(Not a strip of {} square frames, path="{}")_", frames, path);
+            return nullopt;
+        }
+
+        const int cell = h;
+        const int out  = min(side, cell);
+        const int ow   = out * frames;
+
+        // Exact area weights (fractional coverage) per output pixel along one axis.
+        struct Tap {
+            int   i;
+            float w;
+        };
+        vector<vector<Tap>> taps(static_cast<size_t>(out));
+        const float         ratio = static_cast<float>(cell) / static_cast<float>(out);
+        for (int o = 0; o < out; ++o) {
+            const float a = static_cast<float>(o) * ratio, b = a + ratio;
+            for (int i = static_cast<int>(a); static_cast<float>(i) < b && i < cell; ++i) {
+                const float cover = min(b, static_cast<float>(i + 1)) - max(a, static_cast<float>(i));
+                if (cover > 0.f)
+                    taps[static_cast<size_t>(o)].push_back({i, cover / ratio});
+            }
+        }
+
+        // Premultiplied, so transparent texels don't bleed their color into edges.
+        vector<float> pre(static_cast<size_t>(w) * h * 4);
+        for (size_t k = 0; k < pre.size(); k += 4) {
+            const float a = src.get()[k + 3] / 255.f;
+            for (size_t c = 0; c < 3; ++c)
+                pre[k + c] = src.get()[k + c] / 255.f * a;
+            pre[k + 3] = a;
+        }
+
+        vector<float> mid(static_cast<size_t>(ow) * cell * 4);
+        for (int y = 0; y < cell; ++y)
+            for (int f = 0; f < frames; ++f)
+                for (int o = 0; o < out; ++o) {
+                    float* d = &mid[(static_cast<size_t>(y) * ow + f * out + o) * 4];
+                    for (const Tap& t : taps[static_cast<size_t>(o)]) {
+                        const float* s = &pre[(static_cast<size_t>(y) * w + f * cell + t.i) * 4];
+                        for (int c = 0; c < 4; ++c)
+                            d[c] += s[c] * t.w;
+                    }
+                }
+
+        Pixels p{ow, out, vector<uint8_t>(static_cast<size_t>(ow) * out * 4)};
+        for (int o = 0; o < out; ++o)
+            for (int x = 0; x < ow; ++x) {
+                array<float, 4> acc{};
+                for (const Tap& t : taps[static_cast<size_t>(o)]) {
+                    const float* s = &mid[(static_cast<size_t>(t.i) * ow + x) * 4];
+                    for (int c = 0; c < 4; ++c)
+                        acc[static_cast<size_t>(c)] += s[c] * t.w;
+                }
+                uint8_t* d = &p.rgba[(static_cast<size_t>(o) * ow + x) * 4];
+                for (size_t c = 0; c < 3; ++c)
+                    d[c] = acc[3] > 0.f ? static_cast<uint8_t>(lround(clamp(acc[c] / acc[3], 0.f, 1.f) * 255.f)) : 0;
+                d[3] = static_cast<uint8_t>(lround(clamp(acc[3], 0.f, 1.f) * 255.f));
+            }
         return p;
     }
 
