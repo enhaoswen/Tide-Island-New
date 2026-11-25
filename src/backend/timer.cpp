@@ -4,6 +4,7 @@
 #include "music/media.hpp"
 #include "music/spotify_bridge.hpp"
 #include "backend/wayland.hpp"
+#include "backend/sysinfo/sysinfo.hpp"
 #include "utils/log.hpp"
 
 #include <algorithm>
@@ -23,8 +24,8 @@ using namespace std::chrono;
 
 namespace {
 
-int timer_fd{-1};
-int wayland_fd{-1};
+int  timer_fd{-1};
+int  wayland_fd{-1};
 // Cleared once stdin hits EOF / hangs up (e.g. started with stdin = /dev/null),
 // otherwise poll would report it readable forever and the loop would spin.
 bool stdin_open{true};
@@ -53,32 +54,39 @@ void set_timer_at(steady_clock::time_point deadline) {
 }
 
 void arm_next() {
-    if (timer_fd == -1) return;
+    if (timer_fd == -1)
+        return;
     if (timer_queue.empty()) {
         const itimerspec disarmed{};
-        if (timerfd_settime(timer_fd, 0, &disarmed, nullptr) == -1) Log::fatal("timerfd_settime failed");
+        if (timerfd_settime(timer_fd, 0, &disarmed, nullptr) == -1)
+            Log::fatal("timerfd_settime failed");
     }
-    else set_timer_at(timer_queue.next_deadline());
+    else {
+        set_timer_at(timer_queue.next_deadline());
+    }
 }
 
-} // namespace
+}
 
 Timer::EventHandle Timer::push(microseconds duration, void (*callback)(), float priority, source_location location) {
-    if (timer_fd == -1) Log::fatal("Timer is not initialized");
+    if (timer_fd == -1)
+        Log::fatal("Timer is not initialized");
     if (!callback || !isfinite(priority)) {
         Log::logger(Log::Error, "{}:{}: Invalid timer callback or priority", location.file_name(), location.line());
         return {};
     }
     const auto previous = timer_queue.next_deadline();
-    const auto handle = timer_queue.push(steady_clock::now() + max(duration, microseconds::zero()), callback, priority);
-    if (timer_queue.next_deadline() != previous) arm_next();
+    const auto handle   = timer_queue.push(steady_clock::now() + max(duration, microseconds::zero()), callback, priority);
+    if (timer_queue.next_deadline() != previous)
+        arm_next();
     return handle;
 }
 
 bool Timer::cancel(EventHandle event) {
     const auto previous = timer_queue.next_deadline();
     const bool removed{timer_queue.cancel(event)};
-    if (removed && timer_queue.next_deadline() != previous) arm_next();
+    if (removed && timer_queue.next_deadline() != previous)
+        arm_next();
     return removed;
 }
 
@@ -91,12 +99,14 @@ void Timer::clear() {
 
 void Timer::shutdown() {
     timer_queue.clear();
-    if (timer_fd != -1) close(timer_fd);
+    if (timer_fd != -1)
+        close(timer_fd);
     timer_fd = wayland_fd = -1;
 }
 
 void Timer::init() {
-    if (timer_fd != -1) return;
+    if (timer_fd != -1)
+        return;
     timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
 
     if (timer_fd == -1) {
@@ -123,30 +133,33 @@ void Timer::handle_events(std::source_location) {
         result = read(timer_fd, &expiration_count, sizeof(expiration_count));
     } while (result == -1 && errno == EINTR);
     // A Wayland callback can cancel/rearm the timer after poll reported readiness.
-    if (result == -1 && errno == EAGAIN) return;
-    if (result != sizeof(expiration_count)) Log::fatal("timerfd read failed");
+    if (result == -1 && errno == EAGAIN)
+        return;
+    if (result != sizeof(expiration_count))
+        Log::fatal("timerfd read failed");
 
     const auto now = steady_clock::now();
 
-    while (auto callback = timer_queue.pop_ready(now)) callback();
+    while (auto callback = timer_queue.pop_ready(now))
+        callback();
     arm_next();
 }
 
 bool Timer::wait(bool animating) {
     const short wayland_events = Wayland::prepare_events();
 
-    constexpr size_t kFixed = 3;
     static vector<pollfd> fds;
     fds.clear();
     fds.push_back({.fd = wayland_fd, .events = wayland_events, .revents = 0});
     fds.push_back({.fd = timer_fd, .events = POLLIN, .revents = 0});
     // A negative fd is ignored by poll and keeps the slot layout fixed.
     fds.push_back({.fd = stdin_open ? STDIN_FILENO : -1, .events = POLLIN, .revents = 0});
+    fds.push_back({.fd = SysInfo::fd(), .events = POLLIN, .revents = 0});
     Media::append_poll_fds(fds);
     const size_t media_end = fds.size();
     SpotifyBridge::append_poll_fds(fds);
 
-    int timeout_ms{animating ? 16 : -1};
+    int        timeout_ms{animating ? 16 : -1};
     const auto media_deadline = Media::next_deadline();
     if (media_deadline) {
         const auto left = ceil<milliseconds>(*media_deadline - steady_clock::now()).count();
@@ -176,16 +189,22 @@ bool Timer::wait(bool animating) {
     // Media reports through its listener; the view requests a redraw only for
     // what it shows, so e.g. lyric line ticks while collapsed draw nothing.
     {
-        const span<const pollfd> media_fds{fds.begin() + kFixed, fds.begin() + static_cast<ptrdiff_t>(media_end)};
-        const bool ready = any_of(media_fds.begin(), media_fds.end(), [](const pollfd& p) { return p.revents != 0; });
-        if (ready || (media_deadline && steady_clock::now() >= *media_deadline))
+        constexpr size_t         k_fixed = 4;
+        const span<const pollfd> media_fds{fds.begin() + k_fixed, fds.begin() + static_cast<ptrdiff_t>(media_end)};
+        if (const bool ready = ranges::any_of(media_fds, [](const pollfd& p) { return p.revents != 0; }); ready || (media_deadline && steady_clock::now() >= *media_deadline))
             Media::process(media_fds);
     }
     {
-        const span<const pollfd> bridge_fds{fds.begin() + static_cast<ptrdiff_t>(media_end), fds.end()};
-        if (any_of(bridge_fds.begin(), bridge_fds.end(), [](const pollfd& p) { return p.revents != 0; }))
+        if (
+            const span<const pollfd> bridge_fds{fds.begin() + static_cast<ptrdiff_t>(media_end), fds.end()};
+            ranges::any_of(bridge_fds, [](const pollfd& p) {
+                return p.revents != 0;
+            }))
             SpotifyBridge::process(bridge_fds);
     }
+
+    if (fds[3].revents & POLLIN)
+        SysInfo::process();
 
     if (fds[1].revents & POLLIN) {
         handle_events();

@@ -2,6 +2,7 @@
 #include "backend/wayland.hpp"
 #include "graphics/renderer.hpp"
 #include "backend/timer.hpp"
+#include "backend/sysinfo/sysinfo.hpp"
 #include "music/media.hpp"
 #include "music/spotify_bridge.hpp"
 #include "app/island.hpp"
@@ -81,6 +82,8 @@ void API::init() {
     SpotifyBridge::init();
     Log::logger(Log::Debug, "Media initialized (available: {})", Media::available());
 
+    SysInfo::init();
+
     Wayland::set_pointer_callbacks({
         .motion = on_pointer_motion,
         .button = on_pointer_button,
@@ -153,6 +156,7 @@ void API::shutdown() {
     StateManager::stop();
     SpotifyBridge::shutdown();
     Media::shutdown();
+    SysInfo::shutdown();
     Timer::shutdown();
     Text::shutdown();
     Renderer::shutdown();

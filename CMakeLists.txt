@@ -57,6 +57,12 @@ set(SRC
         src/music/media.cpp
         src/graphics/image.cpp
         src/music/media.hpp
+        src/backend/sysinfo/sysinfo.cpp
+        src/backend/sysinfo/sysinfo.hpp
+        src/backend/sysinfo/source.hpp
+        src/backend/sysinfo/pipewire.cpp
+        src/backend/sysinfo/backlight.cpp
+        src/backend/sysinfo/power.cpp
 )
 
 add_executable(Tide-island ${SRC})

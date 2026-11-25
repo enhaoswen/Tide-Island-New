@@ -139,7 +139,7 @@ Handle Context::create_rect(Handle parent, const RectDesc& d) {
 }
 
 Handle Context::create_image(Handle parent, ImageDesc d) {
-    const uint16_t data = images_.acquire(ImageData{std::move(d.texture), d.radius});
+    const uint16_t data = images_.acquire(ImageData{.texture = std::move(d.texture), .radius = d.radius});
     if (data == k_none)
         return {};
     return spawn(Kind::Image, data, d.frame, parent);
@@ -645,10 +645,10 @@ float Context::text_zoom(uint16_t i) const {
     return z > 0.f ? z : 1.f;
 }
 
-std::uint64_t Context::raster_key(const TextData& d, float scale, int phase_x, int phase_y) {
-    const std::uint64_t size = d.raster ? static_cast<std::uint64_t>(lround(scale * 1024.f)) + 1
+uint64_t Context::raster_key(const TextData& d, float scale, int phase_x, int phase_y) {
+    const uint64_t size = d.raster ? static_cast<uint64_t>(lround(scale * 1024.f)) + 1
                                         : Text::raster_size(d.font, scale);
-    return size ? size << 4 | static_cast<std::uint64_t>(phase_x) << 2 | static_cast<std::uint64_t>(phase_y) : 0;
+    return size ? size << 4 | static_cast<uint64_t>(phase_x) << 2 | static_cast<uint64_t>(phase_y) : 0;
 }
 
 Texture Context::raster_text(const TextData& d, float scale, float sub_x, float sub_y) {
@@ -674,15 +674,15 @@ Frame Context::prepare_text_draw(TextData& d, const Frame& abs) {
     const float want  = scale * zoom;
 
     const auto split = [](float v, float& whole) {
-        const float quarters = std::round(v * 4.f);
-        whole                = std::floor(quarters / 4.f);
+        const float quarters = round(v * 4.f);
+        whole                = floor(quarters / 4.f);
         return quarters / 4.f - whole;
     };
     float       whole_x{}, whole_y{};
     const float sub_x = split((abs.x - d.natural_origin_x * zoom) * scale, whole_x);
     const float sub_y = split((abs.y - d.natural_origin_y * zoom) * scale, whole_y);
 
-    const std::uint64_t key = raster_key(d, want, static_cast<int>(sub_x * 4.f), static_cast<int>(sub_y * 4.f));
+    const uint64_t key = raster_key(d, want, static_cast<int>(sub_x * 4.f), static_cast<int>(sub_y * 4.f));
     if (key != 0 && key != d.raster_key) {
         if (Texture t = raster_text(d, want, sub_x, sub_y); t.valid()) {
             d.texture    = std::move(t);
@@ -700,7 +700,7 @@ Frame Context::prepare_text_draw(TextData& d, const Frame& abs) {
     };
 }
 
-ImageView& ImageView::set_image(std::string_view path) {
+ImageView& ImageView::set_image(string_view path) {
     if (auto* d = data()) {
         d->texture = Renderer::prepare_image(path);
         ctx_->mark_dirty(h_.id);
@@ -708,7 +708,7 @@ ImageView& ImageView::set_image(std::string_view path) {
     return *this;
 }
 
-TextView& TextView::set_raster(RasterFn fn, std::uintptr_t arg) {
+TextView& TextView::set_raster(RasterFn fn, uintptr_t arg) {
     if (auto* d = data()) {
         d->raster     = fn;
         d->raster_arg = arg;
@@ -719,7 +719,7 @@ TextView& TextView::set_raster(RasterFn fn, std::uintptr_t arg) {
     return *this;
 }
 
-TextView& TextView::set_text(std::string_view s) {
+TextView& TextView::set_text(string_view s) {
     if (auto* d = data()) {
         d->raster = nullptr;
         d->text   = s;
