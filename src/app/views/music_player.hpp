@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scene/context.hpp"
+#include "scene/struct.hpp"
 #include "utils/struct.hpp"
 
 namespace MusicPlayerView {
@@ -16,4 +16,4 @@ void start(Object::Handle bg, const Fonts& fonts);
 
 void stop();
 
-}
+} // namespace MusicPlayerView

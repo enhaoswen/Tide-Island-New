@@ -49,101 +49,104 @@ Config::IslandConfig to_config() {
 // [Public API Implementation]
 // ============================================================================
 
-const Island::IslandState& Island::get_island() {
-    return island;
-}
-
-void Island::init() {
-    if (!Config::exists()) {
-        Config::write(to_config());
-        return;
+namespace Island {
+    const Island::IslandState& get_island() {
+        return island;
     }
 
-    Config::IslandConfig config = to_config();
-    if (!Config::read(config))
-        return;
+    void init() {
+        if (!Config::exists()) {
+            Config::write(to_config());
+            return;
+        }
 
-    if (config.island_width == 0 || config.island_height == 0 ||
-        !isfinite(config.radius) || config.radius < 0) {
-        Log::logger(Log::Error, "Invalid island dimensions, animation scale, radius, or priority");
-        return;
+        Config::IslandConfig config = to_config();
+        if (!Config::read(config))
+            return;
+
+        if (config.island_width == 0 || config.island_height == 0 ||
+            !isfinite(config.radius) || config.radius < 0) {
+            Log::logger(Log::Error, "Invalid island dimensions, animation scale, radius, or priority");
+            return;
+        }
+
+        island.island_width = config.island_width;
+        island.island_height = config.island_height;
+        island.zone = config.zone;
+        island.anchor_top = config.anchor_top;
+        island.radius = config.radius;
+        island.color = config.color;
+        island.blur = config.blur;
     }
 
-    island.island_width = config.island_width;
-    island.island_height = config.island_height;
-    island.zone = config.zone;
-    island.anchor_top = config.anchor_top;
-    island.radius = config.radius;
-    island.color = config.color;
-    island.blur = config.blur;
-}
-
-void Island::set_anchor_top(std::int32_t distance) {
-    if (!in_range<int16_t>(distance)) {
-        Log::logger(Log::Error, "Anchor distance is outside the int16 range: {}", distance);
-        return;
-    }
-    island.anchor_top = static_cast<int16_t>(distance);
-}
-
-void Island::set_is_running(bool state) {
-    island.is_running = state;
-}
-
-void Island::set_radius(float radius, source_location location) {
-    if (!isfinite(radius) || radius < 0) {
-        Log::logger(Log::Error, "{}:{}: Radius must be finite and nonnegative, value={}",
-            location.file_name(), location.line(), radius);
-        return;
+    void set_anchor_top(std::int32_t distance) {
+        if (!in_range<int16_t>(distance)) {
+            Log::logger(Log::Error, "Anchor distance is outside the int16 range: {}", distance);
+            return;
+        }
+        island.anchor_top = static_cast<int16_t>(distance);
     }
 
-    island.radius = radius;
-}
-
-void Island::set_priority(float priority) {
-    if (!isfinite(priority)) {
-        Log::logger(Log::Error, "Priority must be finite, value={}", priority);
-        return;
+    void set_is_running(bool state) {
+        island.is_running = state;
     }
-    island.current_priority = priority;
-}
 
-void Island::set_zone(std::int32_t zone) {
-    if (!in_range<int16_t>(zone)) {
-        Log::logger(Log::Error, "Exclusive zone is outside the int16 range: {}", zone);
-        return;
+    void set_radius(float radius, source_location location) {
+        if (!isfinite(radius) || radius < 0) {
+            Log::logger(Log::Error, "{}:{}: Radius must be finite and nonnegative, value={}",
+                location.file_name(), location.line(), radius);
+            return;
+        }
+
+        island.radius = radius;
     }
-    island.zone = static_cast<int16_t>(zone);
-}
 
-void Island::set_size(std::uint16_t width, std::uint16_t height) {
-    if (width == 0 || height == 0) {
-        Log::logger(Log::Error, "Island width and height must be positive");
-        return;
+    void set_priority(float priority) {
+        if (!isfinite(priority)) {
+            Log::logger(Log::Error, "Priority must be finite, value={}", priority);
+            return;
+        }
+        island.current_priority = priority;
     }
-    island.island_width = width;
-    island.island_height = height;
-}
 
-void Island::request_redraw(bool redraw) {
-    island.need_redraw = redraw;
-}
-
-void Island::set_animation_scale(float scale) {
-    if (!isfinite(scale) || scale <= 0) {
-        Log::logger(
-            Log::Error,
-            "Animation scale must be finite and positive, value={}",
-            scale);
-        return;
+    void set_zone(std::int32_t zone) {
+        if (!in_range<int16_t>(zone)) {
+            Log::logger(Log::Error, "Exclusive zone is outside the int16 range: {}", zone);
+            return;
+        }
+        island.zone = static_cast<int16_t>(zone);
     }
-    island.animation_scale = scale;
-}
 
-StateType Island::get_state() {
-    return island.state;
-}
+    void set_size(std::uint16_t width, std::uint16_t height) {
+        if (width == 0 || height == 0) {
+            Log::logger(Log::Error, "Island width and height must be positive");
+            return;
+        }
+        island.island_width = width;
+        island.island_height = height;
+    }
 
-void Island::set_state(StateType state) {
-    island.state = state;
-}
+    void request_redraw(bool redraw) {
+        island.need_redraw = redraw;
+    }
+
+    void set_animation_scale(float scale) {
+        if (!isfinite(scale) || scale <= 0) {
+            Log::logger(
+                Log::Error,
+                "Animation scale must be finite and positive, value={}",
+                scale);
+            return;
+        }
+        island.animation_scale = scale;
+    }
+
+    StateType get_state() {
+        return island.state;
+    }
+
+    void set_state(StateType state) {
+        island.state = state;
+    }
+
+} // namespace Island

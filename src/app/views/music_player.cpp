@@ -3,12 +3,12 @@
 #include "app/API.hpp"
 #include "app/island.hpp"
 #include "app/state_manager.hpp"
-#include "music/media.hpp"
-#include "music/spotify_bridge.hpp"
 #include "backend/timer.hpp"
 #include "graphics/renderer.hpp"
 #include "graphics/text.hpp"
 #include "graphics/texture.hpp"
+#include "music/media.hpp"
+#include "music/spotify_bridge.hpp"
 #include "utils/log.hpp"
 
 #include <algorithm>
@@ -27,62 +27,62 @@ using Object::Handle;
 
 namespace {
 
-const Color kArtPlaceholder{"#2c2c2e"};
-const Color kSecondary{"#8e8e93"};
-const Color kTrack{"#333333"};
-const Color kBarPlaying{"#b56cff"};
-const Color kBarPaused{"#5f4b72"};
+const Color k_art_placeholder{"#2c2c2e"};
+const Color k_secondary{"#8e8e93"};
+const Color k_track{"#333333"};
+const Color k_bar_playing{"#b56cff"};
+const Color k_bar_paused{"#5f4b72"};
 
-constexpr float kPadX        = 20.f;
-constexpr float kPadY        = 18.f;
-constexpr float kExpandedW   = 410.f;
-constexpr float kExpandedH   = 165.f;
-constexpr float kContentW    = kExpandedW - 2 * kPadX;
-constexpr float kArtSize     = 60.f;
-constexpr float kBarW        = 3.f;
-constexpr float kBarMinH     = 6.f;
-constexpr float kBarMaxH     = 22.f;
-constexpr float kButtonW     = 56.f;
+constexpr float k_pad_x        = 20.f;
+constexpr float k_pad_y        = 18.f;
+constexpr float k_expanded_w   = 410.f;
+constexpr float k_expanded_h   = 165.f;
+constexpr float k_content_w    = k_expanded_w - 2 * k_pad_x;
+constexpr float k_art_size     = 60.f;
+constexpr float k_bar_w        = 3.f;
+constexpr float k_bar_min_h    = 6.f;
+constexpr float k_bar_max_h    = 22.f;
+constexpr float k_button_w     = 56.f;
 // Taller than the glyphs so the row's center sits halfway between the progress
 // bar and the island's bottom edge (equal space above and below the icons).
-constexpr float kControlsH   = 42.f;
-constexpr float kDimOpacity  = 0.45f;
-constexpr float kPressedTone = 0.7f;  // icon brightness while held
-constexpr float kPressedSize = 0.86f; // icon scale while held
+constexpr float k_controls_h   = 42.f;
+constexpr float k_dim_opacity  = 0.45f;
+constexpr float k_pressed_tone = 0.7f;  // icon brightness while held
+constexpr float k_pressed_size = 0.86f; // icon scale while held
 
-constexpr int kBarCount = 5;
+constexpr int k_bar_count = 5;
 
-constexpr float kIconScale = 1.25f; // all transport glyph dimensions below are x this
-constexpr float kHeartSize = 24.f * kIconScale;
+constexpr float k_icon_scale = 1.25f; // all transport glyph dimensions below are x this
+constexpr float k_heart_size = 24.f * k_icon_scale;
 
 // Transport is centered on the island; the heart's right edge lines up with
 // the end of the progress row (like AirPlay in iOS's player).
-constexpr float           kSlotStep = 0.225f;
-constexpr array<float, 3> kSlotCenter{0.5f - kSlotStep, 0.5f, 0.5f + kSlotStep};
-constexpr float           kFavoriteSlot = 1.f - 20.f * kIconScale * 0.5f / kContentW;
+constexpr float           k_slot_step = 0.225f;
+constexpr array<float, 3> k_slot_center{0.5f - k_slot_step, 0.5f, 0.5f + k_slot_step};
+constexpr float           k_favorite_slot = 1.f - 20.f * k_icon_scale * 0.5f / k_content_w;
 
-constexpr auto kTick = milliseconds{64};
+constexpr auto k_tick = milliseconds{64};
 
-constexpr Timing kRevealFade{260.f, Ease::OutCubic};
-constexpr float  kRevealDelay = 70.f;
+constexpr Timing k_reveal_fade{260.f, Ease::OutCubic};
+constexpr float  k_reveal_delay = 70.f;
 
 // Press feedback: quick, critically damped squeeze; release springs back with a
 // slight overshoot (damping ratio ~0.6), like iOS buttons.
-constexpr Spring kPressSpring{520.f, 46.f, 1.f};
-constexpr Spring kReleaseSpring{320.f, 22.f, 1.f};
+constexpr Spring k_press_spring{.stiffness = 520.f, .damping = 46.f, .mass = 1.f};
+constexpr Spring k_release_spring{.stiffness = 320.f, .damping = 22.f, .mass = 1.f};
 
 
 struct Nodes {
-    Handle                   art{};
-    Handle                   title{}, artist{};
-    array<Handle, kBarCount> bars{};
-    Handle                   time_l{},     time_r{};
-    Handle                   time_l_box{}, time_r_box{};
-    Handle                   track{},      fill{},      fill_rest{};
-    Handle                   prev{},       play{},      next{};
-    Handle                   prev_icon{},  play_icon{}, next_icon{};
-    Handle                   pause_icon{};
-    Handle                   fav{}, heart_box{}, heart_outline{}, heart_fill{};
+    Handle                     art{};
+    Handle                     title{}, artist{};
+    array<Handle, k_bar_count> bars{};
+    Handle                     time_l{},     time_r{};
+    Handle                     time_l_box{}, time_r_box{};
+    Handle                     track{},      fill{},      fill_rest{};
+    Handle                     prev{},       play{},      next{};
+    Handle                     prev_icon{},  play_icon{}, next_icon{};
+    Handle                     pause_icon{};
+    Handle                     fav{}, heart_box{}, heart_outline{}, heart_fill{};
 };
 
 Nodes              n{};
@@ -102,6 +102,7 @@ struct IconBase {
     Handle h{};
     float  w{}, hgt{};
 };
+
 array<IconBase, 6> icon_base{};
 size_t             icon_count{};
 bool               shown_pause{};
@@ -109,10 +110,10 @@ bool               shown_pause{};
 // Optimistic play/pause: the UI flips on click and holds that until the player
 // confirms (Spotify reports "Paused" ~265 ms after the command) or the timeout
 // gives up and shows the real state again.
-constexpr auto           kPredictTimeout = milliseconds{1500};
-optional<bool>           predicted_playing{};
-milliseconds             predicted_position{}; // frozen progress while predicting a pause
-Timer::EventHandle       predict_timer{};
+constexpr auto     k_predict_timeout = milliseconds{1500};
+optional<bool>     predicted_playing{};
+milliseconds       predicted_position{}; // frozen progress while predicting a pause
+Timer::EventHandle predict_timer{};
 
 // Favorite heart, as last displayed.
 string shown_fav_uri;
@@ -143,17 +144,17 @@ void set_text_cached(Handle h, string& cache, const string& s) {
 }
 
 [[nodiscard]] float paused_level(int i) {
-    constexpr array<float, kBarCount> levels{0.34f, 0.58f, 0.82f, 0.58f, 0.34f};
+    constexpr array<float, k_bar_count> levels{0.34f, 0.58f, 0.82f, 0.58f, 0.34f};
     return levels[static_cast<size_t>(i)];
 }
 
 void set_bars(bool use_playing) {
     auto& c = ctx();
-    for (int i = 0; i < kBarCount; ++i) {
+    for (int i = 0; i < k_bar_count; ++i) {
         const Handle bar   = n.bars[static_cast<size_t>(i)];
         const float  level = use_playing ? playing_level(i) : paused_level(i);
-        c.set_size(bar, kBarW, kBarMinH + (kBarMaxH - kBarMinH) * level);
-        c.rect(bar).set_color(use_playing ? kBarPlaying : kBarPaused);
+        c.set_size(bar, k_bar_w, k_bar_min_h + (k_bar_max_h - k_bar_min_h) * level);
+        c.rect(bar).set_color(use_playing ? k_bar_playing : k_bar_paused);
     }
 }
 
@@ -226,11 +227,11 @@ void on_tick() {
 void schedule_tick() {
     if (!running || !playing || Timer::is_pending(ticker))
         return;
-    ticker = API::push_event(duration_cast<microseconds>(kTick), on_tick, 0);
+    ticker = API::push_event(duration_cast<microseconds>(k_tick), on_tick, 0);
 }
 
 void set_enabled(Handle button, bool enabled) {
-    ctx().set_opacity(button, enabled ? 1.f : kDimOpacity);
+    ctx().set_opacity(button, enabled ? 1.f : k_dim_opacity);
 }
 
 // ---- Favorite (Spotify Liked Songs) ------------------------------------------
@@ -249,8 +250,8 @@ void set_enabled(Handle button, bool enabled) {
 
 void set_heart_scale(Handle h, float scale) {
     auto&       c   = ctx();
-    const float sz  = kHeartSize * scale;
-    const float off = (kHeartSize - sz) * 0.5f;
+    const float sz  = k_heart_size * scale;
+    const float off = (k_heart_size - sz) * 0.5f;
     for (const Prop p : {Prop::X, Prop::Y, Prop::W, Prop::H})
         c.cancel_animation(h, p);
     c.set_pos(h, off, off);
@@ -259,8 +260,8 @@ void set_heart_scale(Handle h, float scale) {
 
 void animate_heart_scale(Handle h, float scale, float ms, float delay, AnimCallback done = {}) {
     auto&        c   = ctx();
-    const float  sz  = kHeartSize * scale;
-    const float  off = (kHeartSize - sz) * 0.5f;
+    const float  sz  = k_heart_size * scale;
+    const float  off = (k_heart_size - sz) * 0.5f;
     const Timing t{ms, Ease::InOutQuad};
     c.animate(Object::TAnimDesc{.h = h, .to = off, .t = t, .delay = delay, .p = Prop::X});
     c.animate(Object::TAnimDesc{.h = h, .to = off, .t = t, .delay = delay, .p = Prop::Y});
@@ -307,8 +308,8 @@ void play_heart(bool liked) {
 }
 
 void refresh_favorite() {
-    auto&       c       = ctx();
-    const bool  visible = spotify_player();
+    auto&      c       = ctx();
+    const bool visible = spotify_player();
     c.set_visible(n.fav, visible);
     if (!visible) {
         shown_fav_uri.clear();
@@ -321,8 +322,10 @@ void refresh_favorite() {
     const bool   liked     = available && b.liked;
     set_enabled(n.fav, available && !b.busy);
 
-    if (uri != shown_fav_uri) // new track: show its state without animating
+    if (uri != shown_fav_uri) {
+        // new track: show its state without animating
         settle_heart(liked);
+    }
     else if (liked != shown_liked) {
         if (available)
             play_heart(liked);
@@ -348,6 +351,7 @@ void toggle_favorite() {
 }
 
 void pop_in(Handle icon);
+
 void refresh();
 
 void clear_prediction() {
@@ -377,15 +381,15 @@ void toggle_play() {
     predicted_playing  = !from;
     predicted_position = Media::position();
     API::cancel_event(predict_timer);
-    predict_timer = API::push_event(duration_cast<microseconds>(kPredictTimeout), on_predict_timeout, 0);
+    predict_timer = API::push_event(duration_cast<microseconds>(k_predict_timeout), on_predict_timeout, 0);
     refresh();
 }
 
 void refresh() {
-    auto&       c           = ctx();
-    const auto* s           = Media::state();
-    const bool  has         = s && s->has_player;
-    const bool  actual      = has && s->playback == lyricsmpris::Playback::Playing;
+    auto&       c      = ctx();
+    const auto* s      = Media::state();
+    const bool  has    = s && s->has_player;
+    const bool  actual = has && s->playback == lyricsmpris::Playback::Playing;
     if (predicted_playing && (*predicted_playing == actual || !has))
         clear_prediction(); // confirmed (or the player went away)
     const bool now_playing = predicted_playing.value_or(actual);
@@ -407,7 +411,7 @@ void refresh() {
     set_enabled(n.next, caps.control && caps.next);
 
     if (now_playing != shown_pause) {
-        shown_pause = now_playing;
+        shown_pause      = now_playing;
         const Handle in  = now_playing ? n.pause_icon : n.play_icon;
         const Handle out = now_playing ? n.play_icon : n.pause_icon;
         c.set_visible(out, false);
@@ -471,7 +475,7 @@ void animate_tone(Handle icon, float tone, const Timing& t) {
 void spring_icon_scale(Handle icon, float s, const Spring& sp) {
     auto& c = ctx();
     if (icon == n.heart_outline || icon == n.heart_fill) {
-        const float sz = kHeartSize * s, off = (kHeartSize - sz) * 0.5f;
+        const float sz = k_heart_size * s, off = (k_heart_size - sz) * 0.5f;
         c.animate(Object::SAnimDesc{.h = icon, .to = off, .s = sp, .delay = 0, .p = Prop::X});
         c.animate(Object::SAnimDesc{.h = icon, .to = off, .s = sp, .delay = 0, .p = Prop::Y});
         c.animate(Object::SAnimDesc{.h = icon, .to = sz, .s = sp, .delay = 0, .p = Prop::W});
@@ -494,7 +498,7 @@ void pop_in(Handle icon) {
     }
     c.set_opacity(icon, 0.f);
     c.animate(Object::TAnimDesc{.h = icon, .to = 1.f, .t = {160.f, Ease::OutCubic}, .delay = 0, .p = Prop::Opacity});
-    spring_icon_scale(icon, 1.f, kReleaseSpring);
+    spring_icon_scale(icon, 1.f, k_release_spring);
 }
 
 void set_pressed(Handle button, bool pressed) {
@@ -514,8 +518,8 @@ void set_pressed(Handle button, bool pressed) {
     for (const Handle icon : icons) {
         if (!icon)
             continue;
-        animate_tone(icon, pressed ? kPressedTone : 1.f, tone);
-        spring_icon_scale(icon, pressed ? kPressedSize : 1.f, pressed ? kPressSpring : kReleaseSpring);
+        animate_tone(icon, pressed ? k_pressed_tone : 1.f, tone);
+        spring_icon_scale(icon, pressed ? k_pressed_size : 1.f, pressed ? k_press_spring : k_release_spring);
     }
 }
 
@@ -590,9 +594,9 @@ struct V2 {
 
 // Coverage mask (R8) of `sdf` over a w x h logical box, at the output scale.
 [[nodiscard]] Texture rasterize(float scale, float sub_x, float sub_y, float w, float h, const function<float(V2)>& sdf) {
-    scale = max(scale, 1.f);
-    const int   pw    = static_cast<int>(ceil(w * scale + sub_x));
-    const int   ph    = static_cast<int>(ceil(h * scale + sub_y));
+    scale        = max(scale, 1.f);
+    const int pw = static_cast<int>(ceil(w * scale + sub_x));
+    const int ph = static_cast<int>(ceil(h * scale + sub_y));
 
     vector<uint8_t> px(static_cast<size_t>(pw) * static_cast<size_t>(ph));
     for (int y = 0; y < ph; ++y)
@@ -628,13 +632,13 @@ enum class Glyph : uint8_t { Play, Pause, Forward, Backward, Heart, HeartFilled 
 [[nodiscard]] Texture make_glyph(Glyph g, float scale, float sub_x, float sub_y) {
     switch (g) {
     case Glyph::Play: {
-        constexpr float h = 22.f * kIconScale, w = h * 0.88f, r = 2.6f * kIconScale, nudge = 2.f * kIconScale, x0 = kAA + nudge;
+        constexpr float h = 22.f * k_icon_scale, w = h * 0.88f, r = 2.6f * k_icon_scale, nudge = 2.f * k_icon_scale, x0 = kAA + nudge;
         return rasterize(scale, sub_x, sub_y, w + nudge + 2 * kAA, h + 2 * kAA, [=](V2 p) {
             return sd_round_triangle(p, {x0, kAA}, {x0, kAA + h}, {x0 + w, kAA + h * 0.5f}, r);
         });
     }
     case Glyph::Pause: {
-        constexpr float h = 21.f * kIconScale, bar = 6.f * kIconScale, gap = 6.f * kIconScale, r = 1.8f * kIconScale;
+        constexpr float h = 21.f * k_icon_scale, bar = 6.f * k_icon_scale, gap = 6.f * k_icon_scale, r = 1.8f * k_icon_scale;
         return rasterize(scale, sub_x, sub_y, 2 * bar + gap + 2 * kAA, h + 2 * kAA, [=](V2 p) {
             return min(sd_round_rect(p, {kAA, kAA}, {bar, h}, r),
                 sd_round_rect(p, {kAA + bar + gap, kAA}, {bar, h}, r));
@@ -642,7 +646,7 @@ enum class Glyph : uint8_t { Play, Pause, Forward, Backward, Heart, HeartFilled 
     }
     case Glyph::Forward:
     case Glyph::Backward: {
-        constexpr float h     = 16.f * kIconScale, w = 15.f * kIconScale, step = w - 2.5f * kIconScale, r = 2.f * kIconScale;
+        constexpr float h     = 16.f * k_icon_scale, w = 15.f * k_icon_scale, step = w - 2.5f * k_icon_scale, r = 2.f * k_icon_scale;
         constexpr float total = step + w;
         const bool      flip  = g == Glyph::Backward;
         return rasterize(scale, sub_x, sub_y, total + 2 * kAA, h + 2 * kAA, [=](V2 p) {
@@ -658,13 +662,13 @@ enum class Glyph : uint8_t { Play, Pause, Forward, Backward, Heart, HeartFilled 
     case Glyph::HeartFilled: {
         // 20 x ~18.3 heart centered in the 24 box, tip slightly rounded; the
         // outline is a 2px stroke inside the filled silhouette so both match.
-        constexpr float width = 20.f * kIconScale, r = 1.f * kIconScale, stroke = 2.f * kIconScale;
+        constexpr float width  = 20.f * k_icon_scale, r = 1.f * k_icon_scale, stroke = 2.f * k_icon_scale;
         constexpr float k      = (width - 2 * r) / 1.2071f;
         constexpr float height = 1.1036f * k + 2 * r;
-        constexpr float bottom = (kHeartSize + height) * 0.5f - r;
+        constexpr float bottom = (k_heart_size + height) * 0.5f - r;
         const bool      filled = g == Glyph::HeartFilled;
-        return rasterize(scale, sub_x, sub_y, kHeartSize, kHeartSize, [=](V2 p) {
-            const float d = sd_heart({(p.x - kHeartSize * 0.5f) / k, (bottom - p.y) / k}) * k - r;
+        return rasterize(scale, sub_x, sub_y, k_heart_size, k_heart_size, [=](V2 p) {
+            const float d = sd_heart({(p.x - k_heart_size * 0.5f) / k, (bottom - p.y) / k}) * k - r;
             return filled ? d : abs(d + stroke * 0.5f) - stroke * 0.5f;
         });
     }
@@ -687,7 +691,7 @@ Object::LayoutData row(float spacing, Object::Alignment align = Object::Alignmen
 Handle make_button(Handle parent, float slot_center) {
     auto&        c = ctx();
     const Handle b = c.create_group(parent, Frame{
-        .x = kContentW * slot_center - kButtonW * 0.5f, .y = 0.f, .width = kButtonW, .height = kControlsH,
+        .x = k_content_w * slot_center - k_button_w * 0.5f, .y = 0.f, .width = k_button_w, .height = k_controls_h,
     });
     c.set_layout(b, row(0.f, Object::Alignment::Center, Object::Justify::Center));
     c.on(b, Object::EventType::Press | Object::EventType::Release | Object::EventType::Click, on_button);
@@ -711,7 +715,7 @@ Handle make_icon(Handle parent, Glyph glyph) {
 }
 
 void build(const MusicPlayerView::Fonts& f) {
-    auto& c = ctx();
+    auto& c     = ctx();
     icon_count  = 0;
     shown_pause = false;
 
@@ -722,28 +726,28 @@ void build(const MusicPlayerView::Fonts& f) {
         c.set_layout(bg, l);
     }
     c.set_clip(bg, true);
-    content = c.create_group(bg, Frame{.x = 0, .y = 0, .width = kExpandedW, .height = kExpandedH});
+    content = c.create_group(bg, Frame{.x = 0, .y = 0, .width = k_expanded_w, .height = k_expanded_h});
 
     Object::LayoutData column{};
     column.dir     = Object::Direction::Column;
-    column.padding = Object::Insets::xy(kPadX, kPadY);
+    column.padding = Object::Insets::xy(k_pad_x, k_pad_y);
     column.spacing = 8.f;
     c.set_layout(content, column);
 
     // Header: art | title + artist | visualizer
-    const Handle header = c.create_group(content, Frame{.x = 0, .y = 0, .width = 0, .height = kArtSize});
+    const Handle header = c.create_group(content, Frame{.x = 0, .y = 0, .width = 0, .height = k_art_size});
     c.set_size_mode(header, Object::Axis::Horizontal, Object::SizeMode::Grow);
     c.set_layout(header, row(16.f));
 
     const Handle art_box = c.create_rect(header, Object::RectDesc{
-        .frame = {0, 0, kArtSize, kArtSize}, .color = kArtPlaceholder, .radius = 10.f,
+        .frame = {0, 0, k_art_size, k_art_size}, .color = k_art_placeholder, .radius = 10.f,
     });
-    n.art = c.create_image(art_box, Object::ImageDesc{.frame = {0, 0, kArtSize, kArtSize}, .texture = {}, .radius = 10.f});
+    n.art = c.create_image(art_box, Object::ImageDesc{.frame = {0, 0, k_art_size, k_art_size}, .texture = {}, .radius = 10.f});
     c.set_size_mode(n.art, Object::Axis::Horizontal, Object::SizeMode::Fixed);
     c.set_size_mode(n.art, Object::Axis::Vertical, Object::SizeMode::Fixed);
     c.set_visible(n.art, false);
 
-    const Handle info = c.create_group(header, Frame{.x = 0, .y = 0, .width = 0, .height = kArtSize});
+    const Handle info = c.create_group(header, Frame{.x = 0, .y = 0, .width = 0, .height = k_art_size});
     c.set_size_mode(info, Object::Axis::Horizontal, Object::SizeMode::Grow);
     c.set_clip(info, true); // long titles are cut at the visualizer instead of overflowing
     {
@@ -756,14 +760,14 @@ void build(const MusicPlayerView::Fonts& f) {
     n.title  = c.create_text(info, {});
     n.artist = c.create_text(info, {});
     c.text(n.title).set_font(f.title).set_color(Color::White);
-    c.text(n.artist).set_font(f.artist).set_color(kSecondary);
+    c.text(n.artist).set_font(f.artist).set_color(k_secondary);
 
-    const Handle viz = c.create_group(header, Frame{.x = 0, .y = 0, .width = 32.f, .height = kBarMaxH});
+    const Handle viz = c.create_group(header, Frame{.x = 0, .y = 0, .width = 32.f, .height = k_bar_max_h});
     c.set_layout(viz, row(3.f, Object::Alignment::Center, Object::Justify::Center));
-    for (int i = 0; i < kBarCount; ++i) {
-        const float h                  = kBarMinH + (kBarMaxH - kBarMinH) * paused_level(i);
+    for (int i = 0; i < k_bar_count; ++i) {
+        const float h                  = k_bar_min_h + (k_bar_max_h - k_bar_min_h) * paused_level(i);
         n.bars[static_cast<size_t>(i)] = c.create_rect(viz, Object::RectDesc{
-            .frame = {0, 0, kBarW, h}, .color = kBarPaused, .radius = 2.f,
+            .frame = {0, 0, k_bar_w, h}, .color = k_bar_paused, .radius = 2.f,
         });
     }
 
@@ -771,7 +775,7 @@ void build(const MusicPlayerView::Fonts& f) {
     c.set_size_mode(progress, Object::Axis::Horizontal, Object::SizeMode::Grow);
     c.set_layout(progress, row(12.f));
     n.time_l_box = c.create_group(progress, Frame{.x = 0, .y = 0, .width = 0, .height = 16.f});
-    n.track      = c.create_rect(progress, Object::RectDesc{.frame = {0, 0, 0, 6.f}, .color = kTrack, .radius = 3.f});
+    n.track      = c.create_rect(progress, Object::RectDesc{.frame = {0, 0, 0, 6.f}, .color = k_track, .radius = 3.f});
     n.time_r_box = c.create_group(progress, Frame{.x = 0, .y = 0, .width = 0, .height = 16.f});
     c.set_layout(n.time_l_box, row(0.f, Object::Alignment::Center, Object::Justify::Start));
     c.set_layout(n.time_r_box, row(0.f, Object::Alignment::Center, Object::Justify::End));
@@ -779,20 +783,19 @@ void build(const MusicPlayerView::Fonts& f) {
     n.time_r  = c.create_text(n.time_r_box, {});
     time_font = f.time;
     c.set_size_mode(n.track, Object::Axis::Horizontal, Object::SizeMode::Grow);
-    c.text(n.time_l).set_font(f.time).set_color(kSecondary);
-    c.text(n.time_r).set_font(f.time).set_color(kSecondary);
+    c.text(n.time_l).set_font(f.time).set_color(k_secondary);
+    c.text(n.time_r).set_font(f.time).set_color(k_secondary);
     c.set_layout(n.track, row(0.f));
     n.fill      = c.create_rect(n.track, Object::RectDesc{.frame = {0, 0, 0, 6.f}, .color = Color::White, .radius = 3.f});
     n.fill_rest = c.create_group(n.track, Frame{.x = 0, .y = 0, .width = 0, .height = 6.f});
 
     // Controls (absolute slots, no layout)
-    const Handle controls = c.create_group(content, Frame{.x = 0, .y = 0, .width = 0, .height = kControlsH});
+    const Handle controls = c.create_group(content, Frame{.x = 0, .y = 0, .width = 0, .height = k_controls_h});
     c.set_size_mode(controls, Object::Axis::Horizontal, Object::SizeMode::Grow);
 
-
-    n.prev       = make_button(controls, kSlotCenter[0]);
-    n.play       = make_button(controls, kSlotCenter[1]);
-    n.next       = make_button(controls, kSlotCenter[2]);
+    n.prev       = make_button(controls, k_slot_center[0]);
+    n.play       = make_button(controls, k_slot_center[1]);
+    n.next       = make_button(controls, k_slot_center[2]);
     n.prev_icon  = make_icon(n.prev, Glyph::Backward);
     n.play_icon  = make_icon(n.play, Glyph::Play);
     n.pause_icon = make_icon(n.play, Glyph::Pause);
@@ -806,13 +809,13 @@ void build(const MusicPlayerView::Fonts& f) {
     }
 
     // Favorite: two stacked hearts in a fixed box so they can scale about the center.
-    n.fav       = make_button(controls, kFavoriteSlot);
-    n.heart_box = c.create_group(n.fav, Frame{.x = 0, .y = 0, .width = kHeartSize, .height = kHeartSize});
+    n.fav       = make_button(controls, k_favorite_slot);
+    n.heart_box = c.create_group(n.fav, Frame{.x = 0, .y = 0, .width = k_heart_size, .height = k_heart_size});
     for (Handle* h : {&n.heart_outline, &n.heart_fill}) {
         *h = make_icon(n.heart_box, h == &n.heart_outline ? Glyph::Heart : Glyph::HeartFilled);
         c.set_size_mode(*h, Object::Axis::Horizontal, Object::SizeMode::Fixed);
         c.set_size_mode(*h, Object::Axis::Vertical, Object::SizeMode::Fixed);
-        c.set_size(*h, kHeartSize, kHeartSize);
+        c.set_size(*h, k_heart_size, k_heart_size);
     }
     shown_fav_uri.clear();
     shown_liked = false;
@@ -821,59 +824,62 @@ void build(const MusicPlayerView::Fonts& f) {
 
 }
 
-void MusicPlayerView::start(Handle arg_bg, const Fonts& fonts) {
-    if (!arg_bg) {
-        Log::logger(Log::Error, "MusicPlayerView: invalid background");
-        return;
+namespace MusicPlayerView {
+    void start(Handle arg_bg, const Fonts& fonts) {
+        if (!arg_bg) {
+            Log::logger(Log::Error, "MusicPlayerView: invalid background");
+            return;
+        }
+
+        stop();
+        bg = arg_bg;
+        SpotifyBridge::reload(); // one stat; picks up a setup run after launch
+        build(fonts);
+
+        running = true;
+        playing = false;
+        phase   = 0.f;
+        shown_title.clear();
+        shown_artist.clear();
+        shown_time_l.clear();
+        shown_time_r.clear();
+        shown_time_shape.clear();
+
+        ctx().layout();
+        refresh();
+        refresh_artwork();
+
+        auto& c = ctx();
+        c.set_opacity(content, 0.f);
+        c.animate(Object::TAnimDesc{.h = content, .to = 1.f, .t = k_reveal_fade, .delay = k_reveal_delay, .p = Prop::Opacity});
+        Media::set_listener(on_media);
+        SpotifyBridge::set_listener(on_bridge);
+        Media::resync_position(); // the local estimate may have drifted while hidden
     }
 
-    stop();
-    bg = arg_bg;
-    SpotifyBridge::reload(); // one stat; picks up a setup run after launch
-    build(fonts);
+    void stop() {
+        if (!running)
+            return;
+        running = false;
+        playing = false;
+        Media::set_listener(nullptr);
+        SpotifyBridge::set_listener(nullptr);
+        clear_prediction();
+        API::cancel_event(ticker);
+        ticker = {};
 
-    running = true;
-    playing = false;
-    phase   = 0.f;
-    shown_title.clear();
-    shown_artist.clear();
-    shown_time_l.clear();
-    shown_time_r.clear();
-    shown_time_shape.clear();
+        auto&          c = ctx();
+        vector<Handle> kids;
+        for (const Handle h : c.children(bg))
+            kids.push_back(h);
+        for (const Handle h : kids)
+            c.destroy(h);
+        c.clear_layout(bg);
+        c.set_clip(bg, false);
 
-    ctx().layout();
-    refresh();
-    refresh_artwork();
+        n       = {};
+        content = {};
+        bg      = {};
+    }
 
-    auto& c = ctx();
-    c.set_opacity(content, 0.f);
-    c.animate(Object::TAnimDesc{.h = content, .to = 1.f, .t = kRevealFade, .delay = kRevealDelay, .p = Prop::Opacity});
-    Media::set_listener(on_media);
-    SpotifyBridge::set_listener(on_bridge);
-    Media::resync_position(); // the local estimate may have drifted while hidden
-}
-
-void MusicPlayerView::stop() {
-    if (!running)
-        return;
-    running = false;
-    playing = false;
-    Media::set_listener(nullptr);
-    SpotifyBridge::set_listener(nullptr);
-    clear_prediction();
-    API::cancel_event(ticker);
-    ticker = {};
-
-    auto&          c = ctx();
-    vector<Handle> kids;
-    for (const Handle h : c.children(bg))
-        kids.push_back(h);
-    for (const Handle h : kids)
-        c.destroy(h);
-    c.clear_layout(bg);
-    c.set_clip(bg, false);
-
-    n       = {};
-    content = {};
-    bg      = {};
-}
+} // namespace MusicPlayerView

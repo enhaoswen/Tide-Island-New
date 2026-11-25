@@ -51,45 +51,48 @@ void schedule_next_tick() {
 
 }
 
-void ClockView::start(Object::Handle bg, FontHandle font, std::source_location l) {
-    if (!font.id) {
-        Log::logger(Log::Error, "{}:{}: Invalid font id", l.file_name(), l.line());
-        return;
+namespace ClockView {
+    void start(Object::Handle bg, FontHandle font, std::source_location l) {
+        if (!font.id) {
+            Log::logger(Log::Error, "{}:{}: Invalid font id", l.file_name(), l.line());
+            return;
+        }
+
+        if (!bg) {
+            Log::logger(Log::Error, "{}:{}: Invalid root", l.file_name(), l.line());
+            return;
+        }
+
+        stop();
+
+        auto& ctx = StateManager::context();
+
+        time_text = ctx.create_text(bg, {});
+        ctx.text(time_text).set_font(font).set_color(Color::White);
+
+        Object::LayoutData layout{};
+        layout.align   = Object::Alignment::Center;
+        layout.justify = Object::Justify::Center;
+        ctx.set_layout(bg, layout);
+
+        last    = {};
+        running = true;
+        update();
+        schedule_next_tick();
     }
 
-    if (!bg) {
-        Log::logger(Log::Error, "{}:{}: Invalid root", l.file_name(), l.line());
-        return;
+    void stop() {
+        running = false;
+        API::cancel_event(next_tick);
+        next_tick = {};
+        if (time_text) {
+            StateManager::context().destroy(time_text);
+            time_text = {};
+        }
     }
 
-    stop();
-
-    auto& ctx = StateManager::context();
-
-    time_text = ctx.create_text(bg, {});
-    ctx.text(time_text).set_font(font).set_color(Color::White);
-
-    Object::LayoutData layout{};
-    layout.align   = Object::Alignment::Center;
-    layout.justify = Object::Justify::Center;
-    ctx.set_layout(bg, layout);
-
-    last    = {};
-    running = true;
-    update();
-    schedule_next_tick();
-}
-
-void ClockView::stop() {
-    running = false;
-    API::cancel_event(next_tick);
-    next_tick = {};
-    if (time_text) {
-        StateManager::context().destroy(time_text);
-        time_text = {};
+    void shutdown() {
+        stop();
     }
-}
 
-void ClockView::shutdown() {
-    ClockView::stop();
-}
+} // namespace ClockView

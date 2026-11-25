@@ -192,333 +192,336 @@ void apply_scissor(const array<int, 4>& clip) {
 
 } // namespace
 
-void Renderer::init() {
-    // sokol environment init
+namespace Renderer {
+    void init() {
+        // sokol environment init
 
-    sg_desc descriptor{};
-    descriptor.logger.func                       = slog_func;
-    descriptor.environment.defaults.color_format = SG_PIXELFORMAT_RGBA8;
-    descriptor.environment.defaults.depth_format = SG_PIXELFORMAT_NONE;
-    descriptor.environment.defaults.sample_count = 1;
-    sg_setup(&descriptor);
-    if (!sg_isvalid()) {
-        Log::fatal("Failed to initialize Sokol");
-    }
+        sg_desc descriptor{};
+        descriptor.logger.func                       = slog_func;
+        descriptor.environment.defaults.color_format = SG_PIXELFORMAT_RGBA8;
+        descriptor.environment.defaults.depth_format = SG_PIXELFORMAT_NONE;
+        descriptor.environment.defaults.sample_count = 1;
+        sg_setup(&descriptor);
+        if (!sg_isvalid()) {
+            Log::fatal("Failed to initialize Sokol");
+        }
 
-    // rectangle environment init
+        // rectangle environment init
 
-    rectangle_shader = sg_make_shader(rectangle_shader_desc(sg_query_backend()));
+        rectangle_shader = sg_make_shader(rectangle_shader_desc(sg_query_backend()));
 
-    sg_pipeline_desc rectangle_pipe_desc{};
+        sg_pipeline_desc rectangle_pipe_desc{};
 
-    rectangle_pipe_desc.shader                                       = rectangle_shader;
-    rectangle_pipe_desc.layout.attrs[ATTR_rectangle_position].format = SG_VERTEXFORMAT_FLOAT2;
-    rectangle_pipe_desc.layout.attrs[ATTR_rectangle_color].format    = SG_VERTEXFORMAT_FLOAT4;
-    rectangle_pipe_desc.primitive_type                               = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
-    enable_blending(rectangle_pipe_desc);
-    rectangle_pipeline = sg_make_pipeline(&rectangle_pipe_desc);
+        rectangle_pipe_desc.shader                                       = rectangle_shader;
+        rectangle_pipe_desc.layout.attrs[ATTR_rectangle_position].format = SG_VERTEXFORMAT_FLOAT2;
+        rectangle_pipe_desc.layout.attrs[ATTR_rectangle_color].format    = SG_VERTEXFORMAT_FLOAT4;
+        rectangle_pipe_desc.primitive_type                               = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+        enable_blending(rectangle_pipe_desc);
+        rectangle_pipeline = sg_make_pipeline(&rectangle_pipe_desc);
 
-    sg_buffer_desc rectangle_buffer_desc{};
-    rectangle_buffer_desc.size                 = 16 * 1024;
-    rectangle_buffer_desc.usage.dynamic_update = true;
-    rectangle_buffer_desc.label                = "rect_vertex_buffer";
-    rect_vertex_buffer                         = sg_make_buffer(&rectangle_buffer_desc);
+        sg_buffer_desc rectangle_buffer_desc{};
+        rectangle_buffer_desc.size                 = 16 * 1024;
+        rectangle_buffer_desc.usage.dynamic_update = true;
+        rectangle_buffer_desc.label                = "rect_vertex_buffer";
+        rect_vertex_buffer                         = sg_make_buffer(&rectangle_buffer_desc);
 
-    // image environment init
+        // image environment init
 
-    image_shader = sg_make_shader(image_shader_desc(sg_query_backend()));
+        image_shader = sg_make_shader(image_shader_desc(sg_query_backend()));
 
-    sg_pipeline_desc image_pipe_desc{};
+        sg_pipeline_desc image_pipe_desc{};
 
-    image_pipe_desc.shader                                   = image_shader;
-    image_pipe_desc.layout.attrs[ATTR_image_position].format = SG_VERTEXFORMAT_FLOAT2;
-    image_pipe_desc.layout.attrs[ATTR_image_coord].format    = SG_VERTEXFORMAT_FLOAT2;
-    image_pipe_desc.primitive_type                           = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
-    enable_blending(image_pipe_desc);
-    image_pipeline = sg_make_pipeline(image_pipe_desc);
+        image_pipe_desc.shader                                   = image_shader;
+        image_pipe_desc.layout.attrs[ATTR_image_position].format = SG_VERTEXFORMAT_FLOAT2;
+        image_pipe_desc.layout.attrs[ATTR_image_coord].format    = SG_VERTEXFORMAT_FLOAT2;
+        image_pipe_desc.primitive_type                           = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+        enable_blending(image_pipe_desc);
+        image_pipeline = sg_make_pipeline(image_pipe_desc);
 
-    sg_buffer_desc image_buffer_desc{};
-    image_buffer_desc.size                 = 1024 * 1024;
-    image_buffer_desc.usage.dynamic_update = true;
-    image_buffer_desc.label                = "image_vertex_buffer";
-    image_vertex_buffer                    = sg_make_buffer(&image_buffer_desc);
+        sg_buffer_desc image_buffer_desc{};
+        image_buffer_desc.size                 = 1024 * 1024;
+        image_buffer_desc.usage.dynamic_update = true;
+        image_buffer_desc.label                = "image_vertex_buffer";
+        image_vertex_buffer                    = sg_make_buffer(&image_buffer_desc);
 
-    // text environment init
+        // text environment init
 
-    text_shader = sg_make_shader(text_shader_desc(sg_query_backend()));
+        text_shader = sg_make_shader(text_shader_desc(sg_query_backend()));
 
-    sg_pipeline_desc text_pipe_desc{};
-    text_pipe_desc.shader                                  = text_shader;
-    text_pipe_desc.layout.attrs[ATTR_text_position].format = SG_VERTEXFORMAT_FLOAT2;
-    text_pipe_desc.layout.attrs[ATTR_text_coord].format    = SG_VERTEXFORMAT_FLOAT2;
-    text_pipe_desc.primitive_type                          = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
-    enable_blending(text_pipe_desc);
-    text_pipeline = sg_make_pipeline(text_pipe_desc);
+        sg_pipeline_desc text_pipe_desc{};
+        text_pipe_desc.shader                                  = text_shader;
+        text_pipe_desc.layout.attrs[ATTR_text_position].format = SG_VERTEXFORMAT_FLOAT2;
+        text_pipe_desc.layout.attrs[ATTR_text_coord].format    = SG_VERTEXFORMAT_FLOAT2;
+        text_pipe_desc.primitive_type                          = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+        enable_blending(text_pipe_desc);
+        text_pipeline = sg_make_pipeline(text_pipe_desc);
 
-    ring_shader = sg_make_shader(ring_shader_desc(sg_query_backend()));
+        ring_shader = sg_make_shader(ring_shader_desc(sg_query_backend()));
 
-    sg_pipeline_desc ring_pipe_desc{};
-    ring_pipe_desc.shader                                  = ring_shader;
-    ring_pipe_desc.layout.attrs[ATTR_ring_position].format = SG_VERTEXFORMAT_FLOAT2;
-    ring_pipe_desc.layout.buffers[0].stride                = 4 * sizeof(float);
-    ring_pipe_desc.primitive_type                          = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
-    enable_blending(ring_pipe_desc);
-    ring_pipeline = sg_make_pipeline(ring_pipe_desc);
+        sg_pipeline_desc ring_pipe_desc{};
+        ring_pipe_desc.shader                                  = ring_shader;
+        ring_pipe_desc.layout.attrs[ATTR_ring_position].format = SG_VERTEXFORMAT_FLOAT2;
+        ring_pipe_desc.layout.buffers[0].stride                = 4 * sizeof(float);
+        ring_pipe_desc.primitive_type                          = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+        enable_blending(ring_pipe_desc);
+        ring_pipeline = sg_make_pipeline(ring_pipe_desc);
 
-    if (sg_query_pipeline_state(rectangle_pipeline) != SG_RESOURCESTATE_VALID ||
-        sg_query_pipeline_state(image_pipeline) != SG_RESOURCESTATE_VALID ||
-        sg_query_pipeline_state(text_pipeline) != SG_RESOURCESTATE_VALID ||
-        sg_query_pipeline_state(ring_pipeline) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Renderer pipeline is invalid (shader compile error?)");
-    }
+        if (sg_query_pipeline_state(rectangle_pipeline) != SG_RESOURCESTATE_VALID ||
+            sg_query_pipeline_state(image_pipeline) != SG_RESOURCESTATE_VALID ||
+            sg_query_pipeline_state(text_pipeline) != SG_RESOURCESTATE_VALID ||
+            sg_query_pipeline_state(ring_pipeline) != SG_RESOURCESTATE_VALID) {
+            Log::fatal("Renderer pipeline is invalid (shader compile error?)");
+        }
 
-    sg_sampler_desc sampler_desc{};
-    sampler_desc.min_filter = SG_FILTER_LINEAR;
-    sampler_desc.mag_filter = SG_FILTER_LINEAR;
-    sampler_desc.wrap_u     = SG_WRAP_CLAMP_TO_EDGE;
-    sampler_desc.wrap_v     = SG_WRAP_CLAMP_TO_EDGE;
-    image_sampler           = sg_make_sampler(&sampler_desc);
+        sg_sampler_desc sampler_desc{};
+        sampler_desc.min_filter = SG_FILTER_LINEAR;
+        sampler_desc.mag_filter = SG_FILTER_LINEAR;
+        sampler_desc.wrap_u     = SG_WRAP_CLAMP_TO_EDGE;
+        sampler_desc.wrap_v     = SG_WRAP_CLAMP_TO_EDGE;
+        image_sampler           = sg_make_sampler(&sampler_desc);
 
-    sampler_desc.min_filter = SG_FILTER_NEAREST;
-    sampler_desc.mag_filter = SG_FILTER_NEAREST;
-    text_sampler            = sg_make_sampler(&sampler_desc);
-    if (sg_query_sampler_state(image_sampler) != SG_RESOURCESTATE_VALID ||
-        sg_query_sampler_state(text_sampler) != SG_RESOURCESTATE_VALID) {
-        Log::fatal("Failed to create shared samplers");
-    }
+        sampler_desc.min_filter = SG_FILTER_NEAREST;
+        sampler_desc.mag_filter = SG_FILTER_NEAREST;
+        text_sampler            = sg_make_sampler(&sampler_desc);
+        if (sg_query_sampler_state(image_sampler) != SG_RESOURCESTATE_VALID ||
+            sg_query_sampler_state(text_sampler) != SG_RESOURCESTATE_VALID) {
+            Log::fatal("Failed to create shared samplers");
+        }
 
-    // release mem
+        // release mem
 
-    glReleaseShaderCompiler();
+        glReleaseShaderCompiler();
 #if defined(__GLIBC__)
-    static_cast<void>(malloc_trim(0));
+        static_cast<void>(malloc_trim(0));
 #endif
-}
-
-void Renderer::shutdown() {
-    if (sg_isvalid())
-        sg_shutdown();
-}
-
-void Renderer::begin_frame() {
-    sg_pass pass{};
-    pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-    pass.action.colors[0].clear_value = {0.0F, 0.0F, 0.0F, 0.0F};
-    pass.swapchain                    = swapchain();
-
-    sg_begin_pass(&pass);
-
-    // Reset the scissor to the whole buffer; sokol may retain state from the
-    // previous pass, so be explicit rather than relying on defaults.
-    const auto buffer = Wayland::get_buffer_size();
-    current_clip      = {0, 0, static_cast<int>(buffer[0]), static_cast<int>(buffer[1])};
-    sg_apply_scissor_rect(0, 0, static_cast<int>(buffer[0]), static_cast<int>(buffer[1]), true);
-    clip_stack.clear();
-}
-
-void Renderer::end_frame() {
-    sg_end_pass();
-    sg_commit();
-
-    Wayland::swap_buffer();
-}
-
-Texture Renderer::prepare_image(string_view path) {
-    // stbi_load needs a null-terminated filename; string_view does not guarantee
-    // one, so copy. Image loading is rare (startup), so the copy is negligible.
-    int                                                         width{}, height{}, channels{};
-    const unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels{
-        stbi_load(string{path}.c_str(), &width, &height, &channels, 4),
-        &stbi_image_free
-    };
-    if (!pixels) {
-        Log::fatal(R"_(Failed to load picture, path="{}")_", path);
-    }
-    // stbi_load guarantees positive dimensions and an allocation that fits size_t.
-    // Texture::upload validates the dimensions and byte count at the upload boundary.
-    const size_t size{static_cast<size_t>(width) * static_cast<size_t>(height) * 4};
-
-    Texture texture{};
-    texture.upload(width, height, Texture::Format::RGBA8, {pixels.get(), size});
-    return texture;
-}
-
-float Renderer::text_scale() {
-    return Wayland::get_scale();
-}
-
-Texture Renderer::prepare_text(string_view text, FontHandle font) {
-    return prepare_text(text, font, text_scale());
-}
-
-Texture Renderer::prepare_text(string_view text, FontHandle font, float scale, float sub_x, float sub_y) {
-    const Text::Bitmap bitmap{Text::draw(text, font, scale, sub_x, sub_y)};
-    if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
-        return {};
-    }
-    if (bitmap.width > static_cast<unsigned>(numeric_limits<int>::max()) ||
-        bitmap.height > static_cast<unsigned>(numeric_limits<int>::max())) {
-        Log::fatal("Text bitmap dimensions are too large");
     }
 
-    Texture texture{};
-    texture.upload(static_cast<int>(bitmap.width), static_cast<int>(bitmap.height),
-        Texture::Format::R8, bitmap.pixels);
-    texture.set_scale(scale);
-    texture.set_origin(static_cast<float>(bitmap.offset_x) / scale, static_cast<float>(bitmap.offset_y) / scale);
-    return texture;
-}
-
-void Renderer::GpuRenderer::draw_rect(const Frame& frame, const Color& color, float radius, float opacity) {
-    auto rgba = color.to_rgba();
-    rgba[3]   *= opacity;
-
-    const RectVert vertices{rectangle_vertices(frame, rgba)};
-    const int      offset{sg_append_buffer(rect_vertex_buffer, SG_RANGE(vertices))};
-    if (sg_query_buffer_overflow(rect_vertex_buffer)) {
-        Log::fatal("Vertex buffer overflow");
+    void shutdown() {
+        if (sg_isvalid())
+            sg_shutdown();
     }
 
-    sg_bindings bindings{};
-    bindings.vertex_buffers[0]        = rect_vertex_buffer;
-    bindings.vertex_buffer_offsets[0] = offset;
-    sg_apply_pipeline(rectangle_pipeline);
-    sg_apply_bindings(&bindings);
-    const auto project     = projection();
-    const auto radius_data = radius_uniform<rect_radius_uniform_t>(frame, clamp_radius(radius, frame));
-    sg_apply_uniforms(UB_rect_proj_uniform, SG_RANGE(project));
-    sg_apply_uniforms(UB_rect_radius_uniform, SG_RANGE(radius_data));
-    sg_draw(0, 4, 1);
-}
+    void begin_frame() {
+        sg_pass pass{};
+        pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+        pass.action.colors[0].clear_value = {0.0F, 0.0F, 0.0F, 0.0F};
+        pass.swapchain                    = swapchain();
 
-void Renderer::GpuRenderer::draw_image(const Frame& frame, const Texture& texture, float radius, float opacity) {
-    if (!texture.valid())
-        return;
+        sg_begin_pass(&pass);
 
-    const ImgVert vertices{image_vertices(frame)};
-    const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
-    if (sg_query_buffer_overflow(image_vertex_buffer)) {
-        Log::fatal("Image vertex buffer overflow");
+        // Reset the scissor to the whole buffer; sokol may retain state from the
+        // previous pass, so be explicit rather than relying on defaults.
+        const auto buffer = Wayland::get_buffer_size();
+        current_clip      = {0, 0, static_cast<int>(buffer[0]), static_cast<int>(buffer[1])};
+        sg_apply_scissor_rect(0, 0, static_cast<int>(buffer[0]), static_cast<int>(buffer[1]), true);
+        clip_stack.clear();
     }
 
-    sg_bindings bindings{};
-    bindings.vertex_buffers[0]        = image_vertex_buffer;
-    bindings.vertex_buffer_offsets[0] = offset;
-    bindings.samplers[SMP_smp]        = image_sampler;
-    bindings.views[VIEW_tex]          = sg_view(texture.view_id());
-    sg_apply_pipeline(image_pipeline);
-    sg_apply_bindings(&bindings);
+    void end_frame() {
+        sg_end_pass();
+        sg_commit();
 
-    const auto project = projection();
-    sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
-    const auto radius_data = radius_uniform<img_radius_uniform_t>(frame, clamp_radius(radius, frame));
-    sg_apply_uniforms(UB_img_radius_uniform, SG_RANGE(radius_data));
-
-    img_params_t params{};
-    params.tint[0] = params.tint[1] = params.tint[2] = 1.0f;
-    params.tint[3] = opacity;
-    sg_apply_uniforms(UB_img_params, SG_RANGE(params));
-    sg_draw(0, 4, 1);
-}
-
-void Renderer::GpuRenderer::draw_text(const Frame& frame, const Texture& texture, FontHandle /*font*/, const Color& color, float opacity) {
-    if (!texture.valid())
-        return;
-
-    // Texels only map 1:1 to pixels at the natural size; when stretched, nearest sampling
-    // duplicates whole columns and snapping makes it step, so filter and place it exactly.
-    const float px_scale  = text_scale();
-    const bool  stretched = abs(frame.width * px_scale - static_cast<float>(texture.width())) > 1e-2f ||
-                            abs(frame.height * px_scale - static_cast<float>(texture.height())) > 1e-2f;
-
-    // Snap the origin to the physical pixel grid. At fractional scales a
-    // half-pixel offset resamples every glyph and makes text look blurry.
-    Frame snapped{frame};
-    if (!stretched) {
-        const auto  surface = Wayland::get_surface_size();
-        const auto  buffer  = Wayland::get_buffer_size();
-        const float scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
-        const float scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
-        snapped.x = round(frame.x * scale_x) / scale_x;
-        snapped.y = round(frame.y * scale_y) / scale_y;
+        Wayland::swap_buffer();
     }
 
-    const ImgVert vertices{image_vertices(snapped)};
-    const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
-    if (sg_query_buffer_overflow(image_vertex_buffer)) {
-        Log::fatal("Text vertex buffer overflow");
+    Texture prepare_image(string_view path) {
+        // stbi_load needs a null-terminated filename; string_view does not guarantee
+        // one, so copy. Image loading is rare (startup), so the copy is negligible.
+        int                                                         width{}, height{}, channels{};
+        const unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels{
+            stbi_load(string{path}.c_str(), &width, &height, &channels, 4),
+            &stbi_image_free
+        };
+        if (!pixels) {
+            Log::fatal(R"_(Failed to load picture, path="{}")_", path);
+        }
+        // stbi_load guarantees positive dimensions and an allocation that fits size_t.
+        // Texture::upload validates the dimensions and byte count at the upload boundary.
+        const size_t size{static_cast<size_t>(width) * static_cast<size_t>(height) * 4};
+
+        Texture texture{};
+        texture.upload(width, height, Texture::Format::RGBA8, {pixels.get(), size});
+        return texture;
     }
 
-    sg_bindings bindings{};
-    bindings.vertex_buffers[0]        = image_vertex_buffer;
-    bindings.vertex_buffer_offsets[0] = offset;
-    bindings.samplers[SMP_smp]        = stretched ? image_sampler : text_sampler;
-    bindings.views[VIEW_tex]          = sg_view(texture.view_id());
-    sg_apply_pipeline(text_pipeline);
-    sg_apply_bindings(&bindings);
-
-    const auto project = projection();
-    sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
-
-    const auto    rgba = color.to_rgba();
-    text_params_t params{};
-    copy(rgba.begin(), rgba.end(), params.color);
-    params.color[3] *= opacity;
-    sg_apply_uniforms(UB_text_params, SG_RANGE(params));
-    sg_draw(0, 4, 1);
-}
-
-void Renderer::GpuRenderer::draw_ring(const Frame& frame, const Color& color, const Color& track, float progress, float thickness, float opacity) {
-    const float diameter = min(frame.width, frame.height);
-    thickness            = min(thickness, diameter * 0.5f);
-    if (!(thickness > 0.0f))
-        return;
-
-    // Grown by a pixel so the outer edge's antialiasing is not cut off by the quad.
-    const Frame   quad{frame.x - 1.0f, frame.y - 1.0f, frame.width + 2.0f, frame.height + 2.0f};
-    const ImgVert vertices{image_vertices(quad)};
-    const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
-    if (sg_query_buffer_overflow(image_vertex_buffer)) {
-        Log::fatal("Ring vertex buffer overflow");
+    float text_scale() {
+        return Wayland::get_scale();
     }
 
-    sg_bindings bindings{};
-    bindings.vertex_buffers[0]        = image_vertex_buffer;
-    bindings.vertex_buffer_offsets[0] = offset;
-    sg_apply_pipeline(ring_pipeline);
-    sg_apply_bindings(&bindings);
+    Texture prepare_text(string_view text, FontHandle font) {
+        return prepare_text(text, font, text_scale());
+    }
 
-    const auto project = projection();
-    sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
+    Texture prepare_text(string_view text, FontHandle font, float scale, float sub_x, float sub_y) {
+        const Text::Bitmap bitmap{Text::draw(text, font, scale, sub_x, sub_y)};
+        if (bitmap.width == 0 || bitmap.height == 0 || bitmap.pixels.empty()) {
+            return {};
+        }
+        if (bitmap.width > static_cast<unsigned>(numeric_limits<int>::max()) ||
+            bitmap.height > static_cast<unsigned>(numeric_limits<int>::max())) {
+            Log::fatal("Text bitmap dimensions are too large");
+        }
 
-    ring_params_t params{};
-    const auto    fg = color.to_rgba();
-    const auto    bg = track.to_rgba();
-    copy(fg.begin(), fg.end(), params.color);
-    copy(bg.begin(), bg.end(), params.track);
-    params.color[3] *= opacity;
-    params.track[3] *= opacity;
-    params.geometry[0] = frame.x + frame.width * 0.5f;
-    params.geometry[1] = frame.y + frame.height * 0.5f;
-    params.geometry[2] = (diameter - thickness) * 0.5f;
-    params.geometry[3] = thickness * 0.5f;
-    params.arc[0]      = clamp(progress, 0.0f, 1.0f);
-    sg_apply_uniforms(UB_ring_params, SG_RANGE(params));
-    sg_draw(0, 4, 1);
-}
+        Texture texture{};
+        texture.upload(static_cast<int>(bitmap.width), static_cast<int>(bitmap.height),
+            Texture::Format::R8, bitmap.pixels);
+        texture.set_scale(scale);
+        texture.set_origin(static_cast<float>(bitmap.offset_x) / scale, static_cast<float>(bitmap.offset_y) / scale);
+        return texture;
+    }
 
-void Renderer::GpuRenderer::push_clip(const Frame& frame, float /*radius*/) {
-    // Rounded corners are clipped in the fragment shaders; the scissor only
-    // bounds the rectangular extent, so radius is not needed here.
-    const array<int, 4> next{intersect_scissor(current_clip, frame_to_scissor(frame))};
-    clip_stack.push_back(current_clip);
-    apply_scissor(next);
-}
+    void GpuRenderer::draw_rect(const Frame& frame, const Color& color, float radius, float opacity) {
+        auto rgba = color.to_rgba();
+        rgba[3]   *= opacity;
 
-void Renderer::GpuRenderer::pop_clip() {
-    if (clip_stack.empty())
-        return;
-    const array<int, 4> prev{clip_stack.back()};
-    clip_stack.pop_back();
-    apply_scissor(prev);
-}
+        const RectVert vertices{rectangle_vertices(frame, rgba)};
+        const int      offset{sg_append_buffer(rect_vertex_buffer, SG_RANGE(vertices))};
+        if (sg_query_buffer_overflow(rect_vertex_buffer)) {
+            Log::fatal("Vertex buffer overflow");
+        }
+
+        sg_bindings bindings{};
+        bindings.vertex_buffers[0]        = rect_vertex_buffer;
+        bindings.vertex_buffer_offsets[0] = offset;
+        sg_apply_pipeline(rectangle_pipeline);
+        sg_apply_bindings(&bindings);
+        const auto project     = projection();
+        const auto radius_data = radius_uniform<rect_radius_uniform_t>(frame, clamp_radius(radius, frame));
+        sg_apply_uniforms(UB_rect_proj_uniform, SG_RANGE(project));
+        sg_apply_uniforms(UB_rect_radius_uniform, SG_RANGE(radius_data));
+        sg_draw(0, 4, 1);
+    }
+
+    void GpuRenderer::draw_image(const Frame& frame, const Texture& texture, float radius, float opacity) {
+        if (!texture.valid())
+            return;
+
+        const ImgVert vertices{image_vertices(frame)};
+        const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
+        if (sg_query_buffer_overflow(image_vertex_buffer)) {
+            Log::fatal("Image vertex buffer overflow");
+        }
+
+        sg_bindings bindings{};
+        bindings.vertex_buffers[0]        = image_vertex_buffer;
+        bindings.vertex_buffer_offsets[0] = offset;
+        bindings.samplers[SMP_smp]        = image_sampler;
+        bindings.views[VIEW_tex]          = sg_view(texture.view_id());
+        sg_apply_pipeline(image_pipeline);
+        sg_apply_bindings(&bindings);
+
+        const auto project = projection();
+        sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
+        const auto radius_data = radius_uniform<img_radius_uniform_t>(frame, clamp_radius(radius, frame));
+        sg_apply_uniforms(UB_img_radius_uniform, SG_RANGE(radius_data));
+
+        img_params_t params{};
+        params.tint[0] = params.tint[1] = params.tint[2] = 1.0f;
+        params.tint[3] = opacity;
+        sg_apply_uniforms(UB_img_params, SG_RANGE(params));
+        sg_draw(0, 4, 1);
+    }
+
+    void GpuRenderer::draw_text(const Frame& frame, const Texture& texture, FontHandle /*font*/, const Color& color, float opacity) {
+        if (!texture.valid())
+            return;
+
+        // Texels only map 1:1 to pixels at the natural size; when stretched, nearest sampling
+        // duplicates whole columns and snapping makes it step, so filter and place it exactly.
+        const float px_scale  = text_scale();
+        const bool  stretched = abs(frame.width * px_scale - static_cast<float>(texture.width())) > 1e-2f ||
+                                abs(frame.height * px_scale - static_cast<float>(texture.height())) > 1e-2f;
+
+        // Snap the origin to the physical pixel grid. At fractional scales a
+        // half-pixel offset resamples every glyph and makes text look blurry.
+        Frame snapped{frame};
+        if (!stretched) {
+            const auto  surface = Wayland::get_surface_size();
+            const auto  buffer  = Wayland::get_buffer_size();
+            const float scale_x{static_cast<float>(buffer[0]) / static_cast<float>(surface[0])};
+            const float scale_y{static_cast<float>(buffer[1]) / static_cast<float>(surface[1])};
+            snapped.x = round(frame.x * scale_x) / scale_x;
+            snapped.y = round(frame.y * scale_y) / scale_y;
+        }
+
+        const ImgVert vertices{image_vertices(snapped)};
+        const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
+        if (sg_query_buffer_overflow(image_vertex_buffer)) {
+            Log::fatal("Text vertex buffer overflow");
+        }
+
+        sg_bindings bindings{};
+        bindings.vertex_buffers[0]        = image_vertex_buffer;
+        bindings.vertex_buffer_offsets[0] = offset;
+        bindings.samplers[SMP_smp]        = stretched ? image_sampler : text_sampler;
+        bindings.views[VIEW_tex]          = sg_view(texture.view_id());
+        sg_apply_pipeline(text_pipeline);
+        sg_apply_bindings(&bindings);
+
+        const auto project = projection();
+        sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
+
+        const auto    rgba = color.to_rgba();
+        text_params_t params{};
+        copy(rgba.begin(), rgba.end(), params.color);
+        params.color[3] *= opacity;
+        sg_apply_uniforms(UB_text_params, SG_RANGE(params));
+        sg_draw(0, 4, 1);
+    }
+
+    void GpuRenderer::draw_ring(const Frame& frame, const Color& color, const Color& track, float progress, float thickness, float opacity) {
+        const float diameter = min(frame.width, frame.height);
+        thickness            = min(thickness, diameter * 0.5f);
+        if (!(thickness > 0.0f))
+            return;
+
+        // Grown by a pixel so the outer edge's antialiasing is not cut off by the quad.
+        const Frame   quad{frame.x - 1.0f, frame.y - 1.0f, frame.width + 2.0f, frame.height + 2.0f};
+        const ImgVert vertices{image_vertices(quad)};
+        const int     offset{sg_append_buffer(image_vertex_buffer, SG_RANGE(vertices))};
+        if (sg_query_buffer_overflow(image_vertex_buffer)) {
+            Log::fatal("Ring vertex buffer overflow");
+        }
+
+        sg_bindings bindings{};
+        bindings.vertex_buffers[0]        = image_vertex_buffer;
+        bindings.vertex_buffer_offsets[0] = offset;
+        sg_apply_pipeline(ring_pipeline);
+        sg_apply_bindings(&bindings);
+
+        const auto project = projection();
+        sg_apply_uniforms(UB_img_proj, SG_RANGE(project));
+
+        ring_params_t params{};
+        const auto    fg = color.to_rgba();
+        const auto    bg = track.to_rgba();
+        copy(fg.begin(), fg.end(), params.color);
+        copy(bg.begin(), bg.end(), params.track);
+        params.color[3] *= opacity;
+        params.track[3] *= opacity;
+        params.geometry[0] = frame.x + frame.width * 0.5f;
+        params.geometry[1] = frame.y + frame.height * 0.5f;
+        params.geometry[2] = (diameter - thickness) * 0.5f;
+        params.geometry[3] = thickness * 0.5f;
+        params.arc[0]      = clamp(progress, 0.0f, 1.0f);
+        sg_apply_uniforms(UB_ring_params, SG_RANGE(params));
+        sg_draw(0, 4, 1);
+    }
+
+    void GpuRenderer::push_clip(const Frame& frame, float /*radius*/) {
+        // Rounded corners are clipped in the fragment shaders; the scissor only
+        // bounds the rectangular extent, so radius is not needed here.
+        const array<int, 4> next{intersect_scissor(current_clip, frame_to_scissor(frame))};
+        clip_stack.push_back(current_clip);
+        apply_scissor(next);
+    }
+
+    void GpuRenderer::pop_clip() {
+        if (clip_stack.empty())
+            return;
+        const array<int, 4> prev{clip_stack.back()};
+        clip_stack.pop_back();
+        apply_scissor(prev);
+    }
+
+} // namespace Renderer

@@ -486,124 +486,127 @@ void apply_config() {
 
 }
 
-void SpotifyBridge::init() {
-    config_path = find_config_path();
-    reload();
-}
-
-void SpotifyBridge::reload() {
-    if (config_path.empty())
-        return;
-    struct stat               info{};
-    optional<struct timespec> mtime{};
-    if (stat(config_path.c_str(), &info) == 0)
-        mtime = info.st_mtim;
-    const bool same = config_checked && mtime.has_value() == config_mtime.has_value()
-        && (!mtime || (mtime->tv_sec == config_mtime->tv_sec && mtime->tv_nsec == config_mtime->tv_nsec));
-    if (same)
-        return;
-    config_checked = true;
-    config_mtime   = mtime;
-    apply_config();
-}
-
-void SpotifyBridge::shutdown() {
-    listener = nullptr;
-    close_all();
-    reset_state();
-}
-
-const SpotifyBridge::State& SpotifyBridge::state() { return st; }
-
-bool SpotifyBridge::set_favorite(string_view uri, bool liked) {
-    if (client_fd < 0 || st.busy || !st.known || uri != st.track_uri || !is_track_uri(uri))
-        return false;
-    request_id       = to_string(++request_counter);
-    request_uri      = uri;
-    request_liked    = liked;
-    // uri is [A-Za-z0-9:] and id is digits: nothing to escape.
-    const string msg = format(R"({{"type":"setFavorite","id":"{}","uri":"{}","liked":{}}})", request_id, uri, liked);
-    if (!send_frame(client_fd, 0x1, msg)) {
-        request_id.clear();
-        request_uri.clear();
-        return false;
+namespace SpotifyBridge {
+    void init() {
+        config_path = find_config_path();
+        reload();
     }
-    st.busy       = true;
-    request_timer = Timer::push(duration_cast<microseconds>(kRequestTimeout), on_request_timeout, 0);
-    notify();
-    return true;
-}
 
-void SpotifyBridge::set_listener(void (*l)()) { listener = l; }
+    void reload() {
+        if (config_path.empty())
+            return;
+        struct stat               info{};
+        optional<struct timespec> mtime{};
+        if (stat(config_path.c_str(), &info) == 0)
+            mtime = info.st_mtim;
+        const bool same = config_checked && mtime.has_value() == config_mtime.has_value()
+            && (!mtime || (mtime->tv_sec == config_mtime->tv_sec && mtime->tv_nsec == config_mtime->tv_nsec));
+        if (same)
+            return;
+        config_checked = true;
+        config_mtime   = mtime;
+        apply_config();
+    }
 
-void SpotifyBridge::append_poll_fds(vector<pollfd>& out) {
-    if (listen_fd < 0)
-        return;
-    out.push_back({.fd = listen_fd, .events = POLLIN, .revents = 0});
-    for (const Conn& c : conns)
-        out.push_back({.fd = c.fd, .events = POLLIN, .revents = 0});
-}
+    void shutdown() {
+        listener = nullptr;
+        close_all();
+        reset_state();
+    }
 
-void SpotifyBridge::process(span<const pollfd> ready) {
-    bool accept_ready = false;
-    for (const pollfd& p : ready) {
-        if (!p.revents)
-            continue;
-        if (p.fd == listen_fd) {
-            accept_ready = true;
-            continue;
+    const SpotifyBridge::State& state() { return st; }
+
+    bool set_favorite(string_view uri, bool liked) {
+        if (client_fd < 0 || st.busy || !st.known || uri != st.track_uri || !is_track_uri(uri))
+            return false;
+        request_id       = to_string(++request_counter);
+        request_uri      = uri;
+        request_liked    = liked;
+        // uri is [A-Za-z0-9:] and id is digits: nothing to escape.
+        const string msg = format(R"({{"type":"setFavorite","id":"{}","uri":"{}","liked":{}}})", request_id, uri, liked);
+        if (!send_frame(client_fd, 0x1, msg)) {
+            request_id.clear();
+            request_uri.clear();
+            return false;
         }
-        const auto it = find_if(conns.begin(), conns.end(), [&](const Conn& c) { return c.fd == p.fd; });
-        if (it == conns.end())
-            continue;
-        if ((p.revents & (POLLERR | POLLNVAL)) || !handle_readable(*it))
-            close_conn(*it);
+        st.busy       = true;
+        request_timer = Timer::push(duration_cast<microseconds>(kRequestTimeout), on_request_timeout, 0);
+        notify();
+        return true;
     }
-    erase_if(conns, [](const Conn& c) { return c.fd < 0; });
-    if (accept_ready)
-        accept_pending();
-    arm_auth_timer();
-}
 
-bool SpotifyBridge::is_spotify_service(string_view service) {
-    // (^|.)spotify([.-]|$), case-insensitive, like the original SpotifyTrack.js
-    for (size_t i = 0; i + 7 <= service.size(); ++i) {
-        const bool word = equal(service.begin() + static_cast<ptrdiff_t>(i), service.begin() + static_cast<ptrdiff_t>(i + 7),
-            "spotify", [](char a, char b) { return tolower(a) == b; });
-        if (!word)
-            continue;
-        const bool before = i == 0 || service[i - 1] == '.';
-        const bool after  = i + 7 == service.size() || service[i + 7] == '.' || service[i + 7] == '-';
-        if (before && after)
-            return true;
+    void set_listener(void (*l)()) { listener = l; }
+
+    void append_poll_fds(vector<pollfd>& out) {
+        if (listen_fd < 0)
+            return;
+        out.push_back({.fd = listen_fd, .events = POLLIN, .revents = 0});
+        for (const Conn& c : conns)
+            out.push_back({.fd = c.fd, .events = POLLIN, .revents = 0});
     }
-    return false;
-}
 
-string SpotifyBridge::track_uri_from_mpris(string_view service, string_view track_id, string_view media_url) {
-    if (!is_spotify_service(service))
-        return {};
-    const auto from = [](string_view s) -> string {
-        if (is_track_uri(s))
-            return string{s};
-        constexpr string_view web = "https://open.spotify.com/";
-        if (s.starts_with(web)) {
-            s.remove_prefix(web.size());
-            if (s.starts_with("intl-"))
-                s.remove_prefix(min(s.size(), s.find('/') + 1));
-            if (!s.starts_with("track/"))
-                return {};
-            s.remove_prefix(6);
-            s = s.substr(0, s.find_first_of("?#"));
+    void process(span<const pollfd> ready) {
+        bool accept_ready = false;
+        for (const pollfd& p : ready) {
+            if (!p.revents)
+                continue;
+            if (p.fd == listen_fd) {
+                accept_ready = true;
+                continue;
+            }
+            const auto it = find_if(conns.begin(), conns.end(), [&](const Conn& c) { return c.fd == p.fd; });
+            if (it == conns.end())
+                continue;
+            if ((p.revents & (POLLERR | POLLNVAL)) || !handle_readable(*it))
+                close_conn(*it);
         }
-        else if (s.starts_with("/com/spotify/track/"))
-            s.remove_prefix(19);
-        else
+        erase_if(conns, [](const Conn& c) { return c.fd < 0; });
+        if (accept_ready)
+            accept_pending();
+        arm_auth_timer();
+    }
+
+    bool is_spotify_service(string_view service) {
+        // (^|.)spotify([.-]|$), case-insensitive, like the original SpotifyTrack.js
+        for (size_t i = 0; i + 7 <= service.size(); ++i) {
+            const bool word = equal(service.begin() + static_cast<ptrdiff_t>(i), service.begin() + static_cast<ptrdiff_t>(i + 7),
+                "spotify", [](char a, char b) { return tolower(a) == b; });
+            if (!word)
+                continue;
+            const bool before = i == 0 || service[i - 1] == '.';
+            const bool after  = i + 7 == service.size() || service[i + 7] == '.' || service[i + 7] == '-';
+            if (before && after)
+                return true;
+        }
+        return false;
+    }
+
+    string track_uri_from_mpris(string_view service, string_view track_id, string_view media_url) {
+        if (!is_spotify_service(service))
             return {};
-        string uri = "spotify:track:" + string{s};
-        return is_track_uri(uri) ? uri : string{};
-    };
-    if (string uri = from(media_url); !uri.empty())
-        return uri;
-    return from(track_id);
-}
+        const auto from = [](string_view s) -> string {
+            if (is_track_uri(s))
+                return string{s};
+            constexpr string_view web = "https://open.spotify.com/";
+            if (s.starts_with(web)) {
+                s.remove_prefix(web.size());
+                if (s.starts_with("intl-"))
+                    s.remove_prefix(min(s.size(), s.find('/') + 1));
+                if (!s.starts_with("track/"))
+                    return {};
+                s.remove_prefix(6);
+                s = s.substr(0, s.find_first_of("?#"));
+            }
+            else if (s.starts_with("/com/spotify/track/"))
+                s.remove_prefix(19);
+            else
+                return {};
+            string uri = "spotify:track:" + string{s};
+            return is_track_uri(uri) ? uri : string{};
+        };
+        if (string uri = from(media_url); !uri.empty())
+            return uri;
+        return from(track_id);
+    }
+
+} // namespace SpotifyBridge

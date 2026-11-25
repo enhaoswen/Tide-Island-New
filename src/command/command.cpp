@@ -84,29 +84,30 @@ void handle_animation(span<const string_view> args) {
 
 }
 
-void Command::handle_command(string_view cmd) {
-    vector<string_view> result = split(cmd);
+namespace Command {
+    void handle_command(string_view cmd) {
+        vector<string_view> result = split(cmd);
 
-    if (result.empty()) {
-        return;
-    }
-
-    if (result[0] == "quit") {
-        exit(EXIT_SUCCESS);
-    }
-
-    if (result[0] == "animation") {
-        if (result.size() <= 2) {
-            Log::logger(Log::Error, R"_(Command "animation" requires more args. {})_", cmd);
+        if (result.empty()) {
             return;
         }
-        handle_animation(result);
-        return;
-    }
 
-    if (result[0] == "help") {
+        if (result[0] == "quit") {
+            exit(EXIT_SUCCESS);
+        }
 
-        string const help = R"(TIDE ISLAND HELP
+        if (result[0] == "animation") {
+            if (result.size() <= 2) {
+                Log::logger(Log::Error, R"_(Command "animation" requires more args. {})_", cmd);
+                return;
+            }
+            handle_animation(result);
+            return;
+        }
+
+        if (result[0] == "help") {
+
+            string const help = R"(TIDE ISLAND HELP
 
 Commands:
   quit            Exit Tide Island.
@@ -119,10 +120,12 @@ Commands:
       animation speed 1.5
 )";
 
-        Log::frame_logger(Log::Warning, help);
+            Log::frame_logger(Log::Warning, help);
+        }
+
+        else {
+            Log::logger(Log::Error, "Invalid command {}", cmd);
+        }
     }
 
-    else {
-        Log::logger(Log::Error, "Invalid command {}", cmd);
-    }
-}
+} // namespace Command

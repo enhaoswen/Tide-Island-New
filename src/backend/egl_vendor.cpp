@@ -238,45 +238,48 @@ vector<std::string> vendor_files() {
 
 } // namespace
 
-void EglVendor::select_for_wayland() {
-    // An empty override makes libglvnd load no vendor at all (eglGetDisplay then
-    // fails with EGL_BAD_PARAMETER); treat it as unset.
-    for (const char* name : {vendor_files_env, "__EGL_VENDOR_LIBRARY_DIRS"}) {
-        if (const char* value = getenv(name); value && *value == '\0') {
-            unsetenv(name);
-        }
-    }
-    const auto* auto_select = getenv("TIDE_EGL_AUTO_VENDOR");
-    if ((auto_select && string_view(auto_select) == "0") ||
-        getenv(vendor_files_env) || std::getenv("__EGL_VENDOR_LIBRARY_DIRS") ||
-        !getenv("WAYLAND_DISPLAY") || getuid() != geteuid() || getgid() != getegid()) {
-        return;
-    }
-    const auto files = vendor_files();
-    if (files.size() < 2) {
-        return;
-    }
-
-    // Probing EGL in the parent would retain every enumerated vendor and its
-    // compiler dependencies. Fork before threads/EGL exist, keeping those
-    // allocations in short-lived children instead.
-    const auto deadline = Clock::now() + selection_timeout;
-    const auto original = probe({}, min(deadline, Clock::now() + probe_timeout));
-    if (!original) {
-        return;
-    }
-    for (const auto& file : files) {
-        const auto candidate = probe(file, min(deadline, Clock::now() + probe_timeout));
-        if (candidate && *candidate == *original) {
-            if (setenv(vendor_files_env, file.c_str(), 0) == 0) {
-                Log::logger(Log::Debug, R"_(Selected EGL vendor file="{}", renderer="{}")_",
-                    file, original->renderer.data());
+namespace EglVendor {
+    void select_for_wayland() {
+        // An empty override makes libglvnd load no vendor at all (eglGetDisplay then
+        // fails with EGL_BAD_PARAMETER); treat it as unset.
+        for (const char* name : {vendor_files_env, "__EGL_VENDOR_LIBRARY_DIRS"}) {
+            if (const char* value = getenv(name); value && *value == '\0') {
+                unsetenv(name);
             }
+        }
+        const auto* auto_select = getenv("TIDE_EGL_AUTO_VENDOR");
+        if ((auto_select && string_view(auto_select) == "0") ||
+            getenv(vendor_files_env) || std::getenv("__EGL_VENDOR_LIBRARY_DIRS") ||
+            !getenv("WAYLAND_DISPLAY") || getuid() != geteuid() || getgid() != getegid()) {
             return;
         }
-        if (Clock::now() >= deadline) {
-            break;
+        const auto files = vendor_files();
+        if (files.size() < 2) {
+            return;
         }
+
+        // Probing EGL in the parent would retain every enumerated vendor and its
+        // compiler dependencies. Fork before threads/EGL exist, keeping those
+        // allocations in short-lived children instead.
+        const auto deadline = Clock::now() + selection_timeout;
+        const auto original = probe({}, min(deadline, Clock::now() + probe_timeout));
+        if (!original) {
+            return;
+        }
+        for (const auto& file : files) {
+            const auto candidate = probe(file, min(deadline, Clock::now() + probe_timeout));
+            if (candidate && *candidate == *original) {
+                if (setenv(vendor_files_env, file.c_str(), 0) == 0) {
+                    Log::logger(Log::Debug, R"_(Selected EGL vendor file="{}", renderer="{}")_",
+                        file, original->renderer.data());
+                }
+                return;
+            }
+            if (Clock::now() >= deadline) {
+                break;
+            }
+        }
+        // An unavailable or unrecognized setup retains EGL's normal selection.
     }
-    // An unavailable or unrecognized setup retains EGL's normal selection.
-}
+
+} // namespace EglVendor

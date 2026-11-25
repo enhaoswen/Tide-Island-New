@@ -55,114 +55,117 @@ void on_pointer_leave() {
 
 }
 
-void API::init() {
+namespace API {
+    void init() {
 
-    Island::init();
-    island = &Island::get_island();
-    Log::logger(Log::Debug, "Island initialized successfully");
+        Island::init();
+        island = &Island::get_island();
+        Log::logger(Log::Debug, "Island initialized successfully");
 
-    Wayland::init(
-        island->island_width,
-        island->island_height,
-        island->zone,
-        island->anchor_top
-        );
-    Log::logger(Log::Debug, "Wayland initialized successfully");
+        Wayland::init(
+            island->island_width,
+            island->island_height,
+            island->zone,
+            island->anchor_top
+            );
+        Log::logger(Log::Debug, "Wayland initialized successfully");
 
-    Text::init();
-    Log::logger(Log::Debug, "Text initialized successfully");
+        Text::init();
+        Log::logger(Log::Debug, "Text initialized successfully");
 
-    Renderer::init();
-    Log::logger(Log::Debug, "Renderer initialized successfully");
+        Renderer::init();
+        Log::logger(Log::Debug, "Renderer initialized successfully");
 
-    Timer::init();
-    Log::logger(Log::Debug, "Timer initialized successfully");
+        Timer::init();
+        Log::logger(Log::Debug, "Timer initialized successfully");
 
-    Media::init();
-    SpotifyBridge::init();
-    Log::logger(Log::Debug, "Media initialized (available: {})", Media::available());
+        Media::init();
+        SpotifyBridge::init();
+        Log::logger(Log::Debug, "Media initialized (available: {})", Media::available());
 
-    SysInfo::init();
+        SysInfo::init();
 
-    Wayland::set_pointer_callbacks({
-        .motion = on_pointer_motion,
-        .button = on_pointer_button,
-        .leave  = on_pointer_leave,
-    });
+        Wayland::set_pointer_callbacks({
+            .motion = on_pointer_motion,
+            .button = on_pointer_button,
+            .leave  = on_pointer_leave,
+        });
 
-    Log::logger(Log::Debug, "Initialization completed successfully");
-}
-
-FontHandle API::load_font(string_view family, unsigned pixel_size, Text::Weight weight) {
-    return Text::load_font(family, pixel_size, weight);
-}
-
-void API::unload_font(FontHandle font) {
-    Text::unload_font(font);
-}
-
-const Island::IslandState& API::get_island() {
-    return *island;
-}
-
-Timer::EventHandle API::push_event(microseconds duration, void (*callback)(), float priority) {
-    return Timer::push(duration, callback, priority);
-}
-
-bool API::cancel_event(Timer::EventHandle event) {
-    return Timer::cancel(event);
-}
-
-void API::clear_status() {
-    ClockView::stop();
-    StateManager::context().clear();
-}
-
-void API::run() {
-    auto  last = steady_clock::now();
-    auto& ctx  = StateManager::context();
-
-    while (island->is_running) {
-
-        if (island->need_redraw && Wayland::frame_ready()) {
-            Island::request_redraw(false);
-
-            const auto  now   = steady_clock::now();
-            const float dt_ms = std::min(
-                static_cast<float>(duration_cast<microseconds>(now - last).count()) / 1000.0f, 33.f);
-            last = now;
-
-            ctx.update(dt_ms * island->animation_scale);
-            // Animation / layout can move nodes under a still pointer (hover changes). Lay out
-            // again if callbacks ran so their changes make it into this frame.
-            if (ctx.dispatch_events())
-                ctx.layout();
-            StateManager::sync_surface();
-
-            Renderer::begin_frame();
-            Object::draw(ctx, renderer);
-            Renderer::end_frame();
-        }
-
-        const bool redraw  = Timer::wait(ctx.animating() || island->need_redraw);
-        // Pointer input gathered during the wait; callbacks usually change something visible.
-        const bool handled = ctx.dispatch_events();
-        Island::request_redraw(redraw || handled || island->need_redraw);
+        Log::logger(Log::Debug, "Initialization completed successfully");
     }
-}
 
-void API::shutdown() {
-    ClockView::shutdown();
-    StateManager::stop();
-    SpotifyBridge::shutdown();
-    Media::shutdown();
-    SysInfo::shutdown();
-    Timer::shutdown();
-    Text::shutdown();
-    Renderer::shutdown();
-    Wayland::shutdown();
-}
+    FontHandle load_font(string_view family, unsigned pixel_size, Text::Weight weight) {
+        return Text::load_font(family, pixel_size, weight);
+    }
 
-void API::select_for_wayland() {
-    EglVendor::select_for_wayland();
-}
+    void unload_font(FontHandle font) {
+        Text::unload_font(font);
+    }
+
+    const Island::IslandState& get_island() {
+        return *island;
+    }
+
+    Timer::EventHandle push_event(microseconds duration, void (*callback)(), float priority) {
+        return Timer::push(duration, callback, priority);
+    }
+
+    bool cancel_event(Timer::EventHandle event) {
+        return Timer::cancel(event);
+    }
+
+    void clear_status() {
+        ClockView::stop();
+        StateManager::context().clear();
+    }
+
+    void run() {
+        auto  last = steady_clock::now();
+        auto& ctx  = StateManager::context();
+
+        while (island->is_running) {
+
+            if (island->need_redraw && Wayland::frame_ready()) {
+                Island::request_redraw(false);
+
+                const auto  now   = steady_clock::now();
+                const float dt_ms = std::min(
+                    static_cast<float>(duration_cast<microseconds>(now - last).count()) / 1000.0f, 33.f);
+                last = now;
+
+                ctx.update(dt_ms * island->animation_scale);
+                // Animation / layout can move nodes under a still pointer (hover changes). Lay out
+                // again if callbacks ran so their changes make it into this frame.
+                if (ctx.dispatch_events())
+                    ctx.layout();
+                StateManager::sync_surface();
+
+                Renderer::begin_frame();
+                Object::draw(ctx, renderer);
+                Renderer::end_frame();
+            }
+
+            const bool redraw  = Timer::wait(ctx.animating() || island->need_redraw);
+            // Pointer input gathered during the wait; callbacks usually change something visible.
+            const bool handled = ctx.dispatch_events();
+            Island::request_redraw(redraw || handled || island->need_redraw);
+        }
+    }
+
+    void shutdown() {
+        ClockView::shutdown();
+        StateManager::stop();
+        SpotifyBridge::shutdown();
+        Media::shutdown();
+        SysInfo::shutdown();
+        Timer::shutdown();
+        Text::shutdown();
+        Renderer::shutdown();
+        Wayland::shutdown();
+    }
+
+    void select_for_wayland() {
+        EglVendor::select_for_wayland();
+    }
+
+} // namespace API

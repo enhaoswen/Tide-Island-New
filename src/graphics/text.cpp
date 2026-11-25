@@ -521,202 +521,205 @@ LoadedFont* require_font(FontHandle handle) {
 
 } // namespace
 
-void Text::init() {
-    if (ft_library) {
-        Log::logger(Log::Warning, "Text is already initialized");
-        return;
-    }
-    FT_Library library{};
-    if (FT_Init_FreeType(&library)) Log::fatal("Failed to initialize FreeType");
-    ft_library = library;
-}
-
-FontHandle Text::load_font(string_view family, unsigned pixel_size, Text::Weight weight) {
-    if (!ft_library) {
-        Log::logger(Log::Error, "Text is not initialized");
-        return {};
-    }
-    if (family.empty() || !pixel_size) {
-        Log::logger(Log::Error, "Font family and pixel size are required");
-        return {};
-    }
-
-    auto font = make_unique<LoadedFont>();
-    font->family = family;
-    font->weight = weight;
-    font->pixel_size = pixel_size;
-    font->raster_size = pixel_size * 64;
-    {
-        const FontQuery query(font->family, pixel_size, weight);
-        if (!query.has_matches()) return {};
-        for (int i{}; i < query.matches->nfont; ++i) {
-            auto source = font_source(query.matches->fonts[i]);
-            if (!source) continue;
-            font->faces.push_back(std::move(*source));
-            if (get_face(*font, 0)) break;
-            font->faces.clear();
+namespace Text {
+    void init() {
+        if (ft_library) {
+            Log::logger(Log::Warning, "Text is already initialized");
+            return;
         }
+        FT_Library library{};
+        if (FT_Init_FreeType(&library)) Log::fatal("Failed to initialize FreeType");
+        ft_library = library;
     }
-    if (font->faces.empty()) {
-        Log::logger(Log::Error, "Failed to open a font for {}", family);
-        return {};
-    }
 
-    if (!next_font_id) {
-        Log::logger(Log::Error, "Text font handle limit reached");
-        return {};
-    }
-    FontHandle handle{next_font_id++};
-    loaded_fonts.emplace(handle.id, std::move(font));
-    return handle;
-}
-
-void Text::unload_font(FontHandle font) {
-    if (loaded_fonts.erase(font.id) != 1)
-        Log::logger(Log::Warning, "Invalid text font handle {}", font.id);
-}
-
-unsigned Text::raster_size(FontHandle handle, float scale) {
-    const auto it = loaded_fonts.find(handle.id);
-    if (it == loaded_fonts.end() || !isfinite(scale) || scale <= 0.0f)
-        return 0;
-    const float size{max(64.0f, round(static_cast<float>(it->second->pixel_size) * scale * 64.0f))};
-    return size < static_cast<float>(numeric_limits<int32_t>::max()) ? static_cast<unsigned>(size) : 0;
-}
-
-Text::Bitmap Text::draw(string_view text, FontHandle handle, float scale, float sub_x, float sub_y) {
-    LoadedFont* const font = require_font(handle);
-    Bitmap bitmap{};
-    if (!font || text.empty()) return bitmap;
-    if (!prepare_raster_size(*font, scale)) return bitmap;
-
-    const auto cps = decode_utf8(text);
-    if (cps.size() > static_cast<size_t>(numeric_limits<int>::max())) {
-        Log::logger(Log::Error, "Text is too long to shape");
-        return {};
-    }
-    resolve_missing_faces(*font, cps);
-    const auto runs = make_runs(*font, cps);
-    vector<uint32_t> values{};
-    values.reserve(cps.size());
-    for (const auto& cp : cps) values.push_back(cp.value);
-
-    vector<PositionedGlyph> placements{};
-    int64_t pen_x{};
-    int64_t pen_y{};
-    for (const auto& run : runs) {
-        hb_buffer_t* const buffer = hb_buffer_create();
-        if (!buffer) {
-            Log::logger(Log::Error, "Failed to create HarfBuzz buffer");
+    FontHandle load_font(string_view family, unsigned pixel_size, Text::Weight weight) {
+        if (!ft_library) {
+            Log::logger(Log::Error, "Text is not initialized");
             return {};
         }
-        hb_buffer_add_codepoints(buffer, values.data(), static_cast<int>(values.size()),
-                                 run.begin, static_cast<int>(run.end - run.begin));
-        hb_buffer_set_direction(buffer, HB_DIRECTION_LTR);
-        if (run.script != HB_SCRIPT_UNKNOWN && run.script != HB_SCRIPT_COMMON)
-            hb_buffer_set_script(buffer, run.script);
-        hb_buffer_guess_segment_properties(buffer);
-        hb_shape(font->faces[run.face_index].hb_font, buffer, nullptr, 0);
-
-        unsigned count{};
-        const auto* infos = hb_buffer_get_glyph_infos(buffer, &count);
-        const auto* positions = hb_buffer_get_glyph_positions(buffer, &count);
-        vector<unsigned> clusters{};
-        clusters.reserve(count);
-        for (unsigned i{}; i < count; ++i) clusters.push_back(infos[i].cluster);
-        sort(clusters.begin(), clusters.end());
-        clusters.erase(unique(clusters.begin(), clusters.end()), clusters.end());
-
-        for (unsigned i{}; i < count; ++i) {
-            const unsigned cluster_begin{infos[i].cluster};
-            const auto next = upper_bound(clusters.begin(), clusters.end(), cluster_begin);
-            const unsigned cluster_end{next == clusters.end() ? run.end : *next};
-            bool cacheable{cluster_begin < cluster_end && cluster_end <= values.size()};
-            for (unsigned j = cluster_begin; cacheable && j < cluster_end; ++j)
-                cacheable = cacheable_codepoint(values[j]);
-
-            placements.push_back({run.face_index, infos[i].codepoint, cacheable,
-                                  pen_x + positions[i].x_offset,
-                                  pen_y + positions[i].y_offset});
-            pen_x += positions[i].x_advance;
-            pen_y += positions[i].y_advance;
+        if (family.empty() || !pixel_size) {
+            Log::logger(Log::Error, "Font family and pixel size are required");
+            return {};
         }
-        hb_buffer_destroy(buffer);
-    }
 
-    bitmap.advance_x = static_cast<float>(pen_x) / 64.0f;
-    unordered_map<uint64_t, GlyphBitmap> scratch{};
-    int64_t min_x{min<int64_t>(0, static_cast<int64_t>(floor(bitmap.advance_x)))};
-    int64_t max_x{max<int64_t>(0, static_cast<int64_t>(ceil(bitmap.advance_x)))};
-    int64_t min_y{};
-    int64_t max_y{};
-    bool has_pixels{};
-
-    const int64_t sub_x_26_6{lround(clamp(sub_x, 0.0f, 1.0f) * 64.0f)};
-    const int64_t sub_y_26_6{lround(clamp(sub_y, 0.0f, 1.0f) * 64.0f)};
-    const auto pen = [&](const PositionedGlyph& placement) {
-        return pair{split_26_6(placement.x_26_6 + sub_x_26_6), split_26_6(sub_y_26_6 - placement.y_26_6)};
-    };
-
-    for (const auto& placement : placements) {
-        const auto [px, py] = pen(placement);
-        const auto& glyph = get_glyph(*font, placement, px.phase, py.phase, scratch);
-        if (glyph.pixels.empty()) continue;
-        const auto x = px.whole + glyph.left;
-        const auto y = py.whole - glyph.top;
-        min_x = min(min_x, x);
-        max_x = max(max_x, x + glyph.width);
-        if (!has_pixels) {
-            min_y = y;
-            max_y = y + glyph.height;
-            has_pixels = true;
-        } else {
-            min_y = min(min_y, y);
-            max_y = max(max_y, y + glyph.height);
-        }
-    }
-
-    if (max_x - min_x > numeric_limits<uint32_t>::max() ||
-        max_y - min_y > numeric_limits<uint32_t>::max() ||
-        min_x < numeric_limits<int32_t>::min() ||
-        min_y < numeric_limits<int32_t>::min()) {
-        Log::logger(Log::Error, "Text bitmap dimensions are too large");
-        return {};
-    }
-
-    bitmap.width = static_cast<uint32_t>(max_x - min_x);
-    bitmap.height = static_cast<uint32_t>(max_y - min_y);
-    bitmap.stride = bitmap.width;
-    bitmap.offset_x = static_cast<int32_t>(min_x);
-    bitmap.offset_y = static_cast<int32_t>(min_y);
-    if (bitmap.height && bitmap.width > numeric_limits<size_t>::max() / bitmap.height) {
-        Log::logger(Log::Error, "Text bitmap dimensions are too large");
-        return {};
-    }
-    bitmap.pixels.resize(static_cast<size_t>(bitmap.width) * bitmap.height);
-
-    for (const auto& placement : placements) {
-        const auto [px, py] = pen(placement);
-        const auto& glyph = get_glyph(*font, placement, px.phase, py.phase, scratch);
-        if (glyph.pixels.empty()) continue;
-        const auto x = px.whole + glyph.left - min_x;
-        const auto y = py.whole - glyph.top - min_y;
-        for (unsigned row{}; row < glyph.height; ++row) {
-            for (unsigned col{}; col < glyph.width; ++col) {
-                const auto source = glyph.pixels[static_cast<size_t>(row) * glyph.width + col];
-                auto& target = bitmap.pixels[static_cast<size_t>(y + row) * bitmap.stride + static_cast<size_t>(x) + col];
-                target = static_cast<uint8_t>(source +
-                    (static_cast<unsigned>(target) * (255u - source) + 127u) / 255u);
+        auto font = make_unique<LoadedFont>();
+        font->family = family;
+        font->weight = weight;
+        font->pixel_size = pixel_size;
+        font->raster_size = pixel_size * 64;
+        {
+            const FontQuery query(font->family, pixel_size, weight);
+            if (!query.has_matches()) return {};
+            for (int i{}; i < query.matches->nfont; ++i) {
+                auto source = font_source(query.matches->fonts[i]);
+                if (!source) continue;
+                font->faces.push_back(std::move(*source));
+                if (get_face(*font, 0)) break;
+                font->faces.clear();
             }
         }
-    }
-    return bitmap;
-}
+        if (font->faces.empty()) {
+            Log::logger(Log::Error, "Failed to open a font for {}", family);
+            return {};
+        }
 
-void Text::shutdown() {
-    loaded_fonts.clear();
-    if (ft_library) {
-        FT_Done_FreeType(ft_library);
-        ft_library = nullptr;
+        if (!next_font_id) {
+            Log::logger(Log::Error, "Text font handle limit reached");
+            return {};
+        }
+        FontHandle handle{next_font_id++};
+        loaded_fonts.emplace(handle.id, std::move(font));
+        return handle;
     }
-}
+
+    void unload_font(FontHandle font) {
+        if (loaded_fonts.erase(font.id) != 1)
+            Log::logger(Log::Warning, "Invalid text font handle {}", font.id);
+    }
+
+    unsigned raster_size(FontHandle handle, float scale) {
+        const auto it = loaded_fonts.find(handle.id);
+        if (it == loaded_fonts.end() || !isfinite(scale) || scale <= 0.0f)
+            return 0;
+        const float size{max(64.0f, round(static_cast<float>(it->second->pixel_size) * scale * 64.0f))};
+        return size < static_cast<float>(numeric_limits<int32_t>::max()) ? static_cast<unsigned>(size) : 0;
+    }
+
+    Text::Bitmap draw(string_view text, FontHandle handle, float scale, float sub_x, float sub_y) {
+        LoadedFont* const font = require_font(handle);
+        Bitmap bitmap{};
+        if (!font || text.empty()) return bitmap;
+        if (!prepare_raster_size(*font, scale)) return bitmap;
+
+        const auto cps = decode_utf8(text);
+        if (cps.size() > static_cast<size_t>(numeric_limits<int>::max())) {
+            Log::logger(Log::Error, "Text is too long to shape");
+            return {};
+        }
+        resolve_missing_faces(*font, cps);
+        const auto runs = make_runs(*font, cps);
+        vector<uint32_t> values{};
+        values.reserve(cps.size());
+        for (const auto& cp : cps) values.push_back(cp.value);
+
+        vector<PositionedGlyph> placements{};
+        int64_t pen_x{};
+        int64_t pen_y{};
+        for (const auto& run : runs) {
+            hb_buffer_t* const buffer = hb_buffer_create();
+            if (!buffer) {
+                Log::logger(Log::Error, "Failed to create HarfBuzz buffer");
+                return {};
+            }
+            hb_buffer_add_codepoints(buffer, values.data(), static_cast<int>(values.size()),
+                                     run.begin, static_cast<int>(run.end - run.begin));
+            hb_buffer_set_direction(buffer, HB_DIRECTION_LTR);
+            if (run.script != HB_SCRIPT_UNKNOWN && run.script != HB_SCRIPT_COMMON)
+                hb_buffer_set_script(buffer, run.script);
+            hb_buffer_guess_segment_properties(buffer);
+            hb_shape(font->faces[run.face_index].hb_font, buffer, nullptr, 0);
+
+            unsigned count{};
+            const auto* infos = hb_buffer_get_glyph_infos(buffer, &count);
+            const auto* positions = hb_buffer_get_glyph_positions(buffer, &count);
+            vector<unsigned> clusters{};
+            clusters.reserve(count);
+            for (unsigned i{}; i < count; ++i) clusters.push_back(infos[i].cluster);
+            sort(clusters.begin(), clusters.end());
+            clusters.erase(unique(clusters.begin(), clusters.end()), clusters.end());
+
+            for (unsigned i{}; i < count; ++i) {
+                const unsigned cluster_begin{infos[i].cluster};
+                const auto next = upper_bound(clusters.begin(), clusters.end(), cluster_begin);
+                const unsigned cluster_end{next == clusters.end() ? run.end : *next};
+                bool cacheable{cluster_begin < cluster_end && cluster_end <= values.size()};
+                for (unsigned j = cluster_begin; cacheable && j < cluster_end; ++j)
+                    cacheable = cacheable_codepoint(values[j]);
+
+                placements.push_back({run.face_index, infos[i].codepoint, cacheable,
+                                      pen_x + positions[i].x_offset,
+                                      pen_y + positions[i].y_offset});
+                pen_x += positions[i].x_advance;
+                pen_y += positions[i].y_advance;
+            }
+            hb_buffer_destroy(buffer);
+        }
+
+        bitmap.advance_x = static_cast<float>(pen_x) / 64.0f;
+        unordered_map<uint64_t, GlyphBitmap> scratch{};
+        int64_t min_x{min<int64_t>(0, static_cast<int64_t>(floor(bitmap.advance_x)))};
+        int64_t max_x{max<int64_t>(0, static_cast<int64_t>(ceil(bitmap.advance_x)))};
+        int64_t min_y{};
+        int64_t max_y{};
+        bool has_pixels{};
+
+        const int64_t sub_x_26_6{lround(clamp(sub_x, 0.0f, 1.0f) * 64.0f)};
+        const int64_t sub_y_26_6{lround(clamp(sub_y, 0.0f, 1.0f) * 64.0f)};
+        const auto pen = [&](const PositionedGlyph& placement) {
+            return pair{split_26_6(placement.x_26_6 + sub_x_26_6), split_26_6(sub_y_26_6 - placement.y_26_6)};
+        };
+
+        for (const auto& placement : placements) {
+            const auto [px, py] = pen(placement);
+            const auto& glyph = get_glyph(*font, placement, px.phase, py.phase, scratch);
+            if (glyph.pixels.empty()) continue;
+            const auto x = px.whole + glyph.left;
+            const auto y = py.whole - glyph.top;
+            min_x = min(min_x, x);
+            max_x = max(max_x, x + glyph.width);
+            if (!has_pixels) {
+                min_y = y;
+                max_y = y + glyph.height;
+                has_pixels = true;
+            } else {
+                min_y = min(min_y, y);
+                max_y = max(max_y, y + glyph.height);
+            }
+        }
+
+        if (max_x - min_x > numeric_limits<uint32_t>::max() ||
+            max_y - min_y > numeric_limits<uint32_t>::max() ||
+            min_x < numeric_limits<int32_t>::min() ||
+            min_y < numeric_limits<int32_t>::min()) {
+            Log::logger(Log::Error, "Text bitmap dimensions are too large");
+            return {};
+        }
+
+        bitmap.width = static_cast<uint32_t>(max_x - min_x);
+        bitmap.height = static_cast<uint32_t>(max_y - min_y);
+        bitmap.stride = bitmap.width;
+        bitmap.offset_x = static_cast<int32_t>(min_x);
+        bitmap.offset_y = static_cast<int32_t>(min_y);
+        if (bitmap.height && bitmap.width > numeric_limits<size_t>::max() / bitmap.height) {
+            Log::logger(Log::Error, "Text bitmap dimensions are too large");
+            return {};
+        }
+        bitmap.pixels.resize(static_cast<size_t>(bitmap.width) * bitmap.height);
+
+        for (const auto& placement : placements) {
+            const auto [px, py] = pen(placement);
+            const auto& glyph = get_glyph(*font, placement, px.phase, py.phase, scratch);
+            if (glyph.pixels.empty()) continue;
+            const auto x = px.whole + glyph.left - min_x;
+            const auto y = py.whole - glyph.top - min_y;
+            for (unsigned row{}; row < glyph.height; ++row) {
+                for (unsigned col{}; col < glyph.width; ++col) {
+                    const auto source = glyph.pixels[static_cast<size_t>(row) * glyph.width + col];
+                    auto& target = bitmap.pixels[static_cast<size_t>(y + row) * bitmap.stride + static_cast<size_t>(x) + col];
+                    target = static_cast<uint8_t>(source +
+                        (static_cast<unsigned>(target) * (255u - source) + 127u) / 255u);
+                }
+            }
+        }
+        return bitmap;
+    }
+
+    void shutdown() {
+        loaded_fonts.clear();
+        if (ft_library) {
+            FT_Done_FreeType(ft_library);
+            ft_library = nullptr;
+        }
+    }
+
+} // namespace Text

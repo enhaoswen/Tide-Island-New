@@ -61,8 +61,6 @@ Object::Handle          bg{};
 
 constexpr float k_hover_scale = 1.03f;
 
-
-
 bool is_expended(StateType type) {
     switch (type) {
     case StateType::Clock:
@@ -179,95 +177,98 @@ void on_hovered(const Object::Event&) {
 
 }
 
-void StateManager::init(const Resources& arg_resources) {
-    island_state = Island::get_island();
-    resources    = arg_resources;
+namespace StateManager {
+    void init(const Resources& arg_resources) {
+        island_state = Island::get_island();
+        resources    = arg_resources;
 
-    root        = ctx.create_root(island_state.island_width, island_state.island_height);
+        root        = ctx.create_root(island_state.island_width, island_state.island_height);
 
-    bg = ctx.create_rect(root, Object::RectDesc{
-        .frame = Frame{
-            .x      = 0.f,
-            .y      = 0.f,
-            .width  = static_cast<float>(island_state.island_width),
-            .height = static_cast<float>(island_state.island_height),
-        },
+        bg = ctx.create_rect(root, Object::RectDesc{
+            .frame = Frame{
+                .x      = 0.f,
+                .y      = 0.f,
+                .width  = static_cast<float>(island_state.island_width),
+                .height = static_cast<float>(island_state.island_height),
+            },
 
-        .color  = island_state.color,
-        .radius = island_state.radius,
-    });
+            .color  = island_state.color,
+            .radius = island_state.radius,
+        });
 
-    ctx.set_layout(root, Object::LayoutData{
-        .dir     = Object::Direction::Row,
-        .justify = Object::Justify::Center,
-    });
+        ctx.set_layout(root, Object::LayoutData{
+            .dir     = Object::Direction::Row,
+            .justify = Object::Justify::Center,
+        });
 
-    ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Fixed);
-    ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Fixed);
-    ctx.on_click(bg, on_bg_click);
-    ctx.set_pivot(bg, .5f, 0.f);
-    ctx.on(bg, Object::EventType::HoverEnter | Object::EventType::HoverLeave, on_hovered);
-}
-
-Object::Context& StateManager::context() {
-    return ctx;
-}
-
-void StateManager::sync_surface() {
-    // Root follows the surface: it may only change in the frame the new buffer is used.
-    Wayland::sync_surface();
-    if (!root)
-        return;
-    // Actual size: the backend pads and rounds the requested one.
-    if (!Wayland::resize_pending()) {
-        const auto [w, h] = Wayland::get_surface_size();
-        ctx.set_size(root, static_cast<float>(w), static_cast<float>(h));
-        ctx.layout();
+        ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Fixed);
+        ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Fixed);
+        ctx.on_click(bg, on_bg_click);
+        ctx.set_pivot(bg, .5f, 0.f);
+        ctx.on(bg, Object::EventType::HoverEnter | Object::EventType::HoverLeave, on_hovered);
     }
 
-    Wayland::set_blur(island_state.blur);
-    if (island_state.blur) {
-        const Frame f = ctx.absolute_frame(bg);
-        Wayland::set_blur_shape(f.x, f.y, f.width, f.height, ctx.rect(bg).radius());
-    }
-}
-
-void StateManager::switch_state(const StateType state) {
-    stop();
-
-    Island::set_state(state);
-    if (ctx.scale(bg) != 1.f || ctx.is_animating(bg, Prop::Scale))
-        scale_bg(1.f);
-
-    if (state == StateType::Clock) {
-        resize(140, 38, false, 19);
-        ClockView::start(bg, resources.main_font);
+    Object::Context& context() {
+        return ctx;
     }
 
-    else if (state == StateType::MusicPLayer) {
-        resize(410, 165, true, 32);
-        MusicPlayerView::start(
-            bg,
-            {
-                .title  = resources.title,
-                .artist = resources.artist,
-                .time   = resources.time,
-                .icon   = resources.icon,
-            });
+    void sync_surface() {
+        // Root follows the surface: it may only change in the frame the new buffer is used.
+        Wayland::sync_surface();
+        if (!root)
+            return;
+        // Actual size: the backend pads and rounds the requested one.
+        if (!Wayland::resize_pending()) {
+            const auto [w, h] = Wayland::get_surface_size();
+            ctx.set_size(root, static_cast<float>(w), static_cast<float>(h));
+            ctx.layout();
+        }
+
+        Wayland::set_blur(island_state.blur);
+        if (island_state.blur) {
+            const Frame f = ctx.absolute_frame(bg);
+            Wayland::set_blur_shape(f.x, f.y, f.width, f.height, ctx.rect(bg).radius());
+        }
     }
 
-    Island::request_redraw(true);
-}
+    void switch_state(const StateType state) {
+        stop();
 
-void StateManager::stop() {
-    switch (Island::get_state()) {
-    case StateType::Clock:
-        ClockView::stop();
-        break;
-    case StateType::MusicPLayer:
-        MusicPlayerView::stop();
-        break;
-    default:
-        break;
+        Island::set_state(state);
+        if (ctx.scale(bg) != 1.f || ctx.is_animating(bg, Prop::Scale))
+            scale_bg(1.f);
+
+        if (state == StateType::Clock) {
+            resize(140, 38, false, 19);
+            ClockView::start(bg, resources.main_font);
+        }
+
+        else if (state == StateType::MusicPLayer) {
+            resize(410, 165, true, 32);
+            MusicPlayerView::start(
+                bg,
+                {
+                    .title  = resources.title,
+                    .artist = resources.artist,
+                    .time   = resources.time,
+                    .icon   = resources.icon,
+                });
+        }
+
+        Island::request_redraw(true);
     }
-}
+
+    void stop() {
+        switch (Island::get_state()) {
+        case StateType::Clock:
+            ClockView::stop();
+            break;
+        case StateType::MusicPLayer:
+            MusicPlayerView::stop();
+            break;
+        default:
+            break;
+        }
+    }
+
+} // namespace StateManager

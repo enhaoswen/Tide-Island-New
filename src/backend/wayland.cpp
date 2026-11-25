@@ -643,472 +643,475 @@ constexpr zwlr_layer_surface_v1_listener layer_surface_listener{
 // [Public API Implementation]
 // ============================================================================
 
-void Wayland::init(std::uint16_t island_width, std::uint16_t island_height, int32_t exclusive_zone, int32_t margin_top) {
-    if (island_width == 0 || island_height == 0) {
-        Log::fatal("Invalid island size: {}*{}", island_width, island_height);
-    }
+namespace Wayland {
+    void init(std::uint16_t island_width, std::uint16_t island_height, int32_t exclusive_zone, int32_t margin_top) {
+        if (island_width == 0 || island_height == 0) {
+            Log::fatal("Invalid island size: {}*{}", island_width, island_height);
+        }
 
-    // Hyprland Error
-    // see more info in Hyprland Discussion #12878
-    // we add 1 pixel to avoid the issue
-    // Widen before adding so a configured size of 65535 does not wrap to zero.
-    const uint32_t width{static_cast<uint32_t>(island_width) + 1};
-    const uint32_t height{static_cast<uint32_t>(island_height) + 1};
+        // Hyprland Error
+        // see more info in Hyprland Discussion #12878
+        // we add 1 pixel to avoid the issue
+        // Widen before adding so a configured size of 65535 does not wrap to zero.
+        const uint32_t width{static_cast<uint32_t>(island_width) + 1};
+        const uint32_t height{static_cast<uint32_t>(island_height) + 1};
 
-    requested_width    = width;
-    requested_height   = height;
-    asked_width        = width;
-    asked_height       = height;
-    surface_configured = false;
+        requested_width    = width;
+        requested_height   = height;
+        asked_width        = width;
+        asked_height       = height;
+        surface_configured = false;
 
-    // 1. Establish Wayland Connection & Registry
-    display.reset(wl_display_connect(nullptr));
-    if (!display) {
-        Log::fatal("Failed to connect Wayland");
-    }
+        // 1. Establish Wayland Connection & Registry
+        display.reset(wl_display_connect(nullptr));
+        if (!display) {
+            Log::fatal("Failed to connect Wayland");
+        }
 
-    registry.reset(wl_display_get_registry(display.get()));
+        registry.reset(wl_display_get_registry(display.get()));
 
-    if (!registry) {
-        Log::fatal("Failed to get registry");
-    }
+        if (!registry) {
+            Log::fatal("Failed to get registry");
+        }
 
-    if (wl_registry_add_listener(
-        registry.get(),
-        &registry_listener,
-        nullptr) == -1) {
-        Log::fatal("Failed to add Wayland registry listener");
-    }
-    if (wl_display_roundtrip(display.get()) == -1) {
-        Log::fatal("Wayland roundtrip failed");
-    }
+        if (wl_registry_add_listener(
+            registry.get(),
+            &registry_listener,
+            nullptr) == -1) {
+            Log::fatal("Failed to add Wayland registry listener");
+        }
+        if (wl_display_roundtrip(display.get()) == -1) {
+            Log::fatal("Wayland roundtrip failed");
+        }
 
-    if (wl_display_roundtrip(display.get()) == -1) {
-        Log::fatal("Wayland roundtrip failed");
-    }
+        if (wl_display_roundtrip(display.get()) == -1) {
+            Log::fatal("Wayland roundtrip failed");
+        }
 
-    if (!compositor) {
-        Log::fatal("No compositor found");
-    }
+        if (!compositor) {
+            Log::fatal("No compositor found");
+        }
 
-    if (!layer_shell) {
-        Log::fatal("No layer shell found");
-    }
+        if (!layer_shell) {
+            Log::fatal("No layer shell found");
+        }
 
-    // 2. Setup Wayland Surface & Layer Shell
-    surface.reset(wl_compositor_create_surface(compositor.get()));
+        // 2. Setup Wayland Surface & Layer Shell
+        surface.reset(wl_compositor_create_surface(compositor.get()));
 
-    if (!surface) {
-        Log::fatal("Failed to create surface");
-    }
+        if (!surface) {
+            Log::fatal("Failed to create surface");
+        }
 
-    if (fractional_scale_manager) {
-        fractional_scale.reset(wp_fractional_scale_manager_v1_get_fractional_scale(
-            fractional_scale_manager.get(), surface.get()
+        if (fractional_scale_manager) {
+            fractional_scale.reset(wp_fractional_scale_manager_v1_get_fractional_scale(
+                fractional_scale_manager.get(), surface.get()
+                ));
+            if (!fractional_scale) {
+                Log::fatal("Failed to create fractional scale object");
+            }
+            if (wp_fractional_scale_v1_add_listener(
+                fractional_scale.get(), &fractional_scale_listener, nullptr) == -1) {
+                Log::fatal("Failed to add fractional scale listener");
+            }
+        }
+
+        if (viewporter) {
+            viewport.reset(wp_viewporter_get_viewport(viewporter.get(), surface.get()));
+            if (!viewport) {
+                Log::fatal("Failed to create viewport");
+            }
+        }
+
+        if (effect_manager) {
+            background_effect.reset(ext_background_effect_manager_v1_get_background_effect(
+                effect_manager.get(), surface.get()
+                ));
+            if (!background_effect) {
+                Log::logger(Log::Error, "Failed to create background effect object, blur disabled");
+            }
+        }
+
+        layer_surface.reset(zwlr_layer_shell_v1_get_layer_surface(
+            layer_shell.get(),
+            surface.get(),
+            nullptr,
+            ZWLR_LAYER_SHELL_V1_LAYER_TOP,
+            "tide-island"
             ));
-        if (!fractional_scale) {
-            Log::fatal("Failed to create fractional scale object");
+
+        if (!layer_surface) {
+            Log::fatal("Failed to create layer surface");
         }
-        if (wp_fractional_scale_v1_add_listener(
-            fractional_scale.get(), &fractional_scale_listener, nullptr) == -1) {
-            Log::fatal("Failed to add fractional scale listener");
-        }
-    }
 
-    if (viewporter) {
-        viewport.reset(wp_viewporter_get_viewport(viewporter.get(), surface.get()));
-        if (!viewport) {
-            Log::fatal("Failed to create viewport");
-        }
-    }
-
-    if (effect_manager) {
-        background_effect.reset(ext_background_effect_manager_v1_get_background_effect(
-            effect_manager.get(), surface.get()
-            ));
-        if (!background_effect) {
-            Log::logger(Log::Error, "Failed to create background effect object, blur disabled");
-        }
-    }
-
-    layer_surface.reset(zwlr_layer_shell_v1_get_layer_surface(
-        layer_shell.get(),
-        surface.get(),
-        nullptr,
-        ZWLR_LAYER_SHELL_V1_LAYER_TOP,
-        "tide-island"
-        ));
-
-    if (!layer_surface) {
-        Log::fatal("Failed to create layer surface");
-    }
-
-    zwlr_layer_surface_v1_set_anchor(
-        layer_surface.get(),
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP
-        );
-    zwlr_layer_surface_v1_set_size(
-        layer_surface.get(),
-        width,
-        height
-        );
-    zwlr_layer_surface_v1_set_exclusive_zone(layer_surface.get(), exclusive_zone);
-    zwlr_layer_surface_v1_set_margin(layer_surface.get(), margin_top, 0, 0, 0);
-
-    if (zwlr_layer_surface_v1_add_listener(
-        layer_surface.get(),
-        &layer_surface_listener,
-        nullptr) == -1) {
-        Log::fatal("Failed to add layer surface listener");
-    }
-    wl_surface_commit(surface.get());
-
-    if (wl_display_roundtrip(display.get()) == -1) {
-        Log::fatal("Wayland roundtrip failed");
-    }
-
-    // clangd says infinity loop, but actually not.
-    while (!surface_configured) {
-        if (wl_display_dispatch(display.get()) == -1) {
-            Log::fatal("Failed to wait for initial layer surface configure");
-        }
-    }
-
-    // 3. Setup EGL Window & Display
-    egl_window.reset(wl_egl_window_create(
-        surface.get(),
-        static_cast<int>(buffer_width),
-        static_cast<int>(buffer_height)
-        ));
-    if (!egl_window) {
-        Log::fatal("Failed to create wl_egl_window");
-    }
-
-    // Name the platform explicitly: legacy eglGetDisplay makes libglvnd guess what
-    // the native pointer is, which some vendors (NVIDIA) refuse.
-    egl_display = eglGetPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, display.get(), nullptr);
-    if (egl_display == EGL_NO_DISPLAY) {
-        Log::logger(Log::Warning, "eglGetPlatformDisplay failed (0x{:x}), falling back to eglGetDisplay", eglGetError());
-        egl_display = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(display.get()));
-    }
-    if (egl_display == EGL_NO_DISPLAY) {
-        Log::fatal("eglGetDisplay failed (0x{:x})", eglGetError());
-    }
-
-    EGLint major{};
-    EGLint minor{};
-    if (!eglInitialize(egl_display, &major, &minor)) {
-        Log::fatal("eglInitialize failed");
-    }
-    logger(Log::Debug, "Using EGL {}.{}", major, minor);
-
-    if (!eglBindAPI(EGL_OPENGL_ES_API)) {
-        Log::fatal("eglBindAPI failed");
-    }
-
-    // 4. Configure EGL Surface & Context
-    constexpr array<EGLint, 13> attribs = {
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-        EGL_NONE,
-    };
-
-    EGLint count{};
-    if (!eglChooseConfig(egl_display, attribs.data(), &egl_config, 1, &count)
-        || count == 0) {
-        Log::fatal("eglChooseConfig failed");
-    }
-
-    constexpr array<EGLint, 3> ctx_attribs = {
-        EGL_CONTEXT_CLIENT_VERSION, 3,
-        EGL_NONE
-    };
-
-    egl_context = eglCreateContext(
-        egl_display,
-        egl_config,
-        EGL_NO_CONTEXT,
-        ctx_attribs.data()
-        );
-    if (egl_context == EGL_NO_CONTEXT) {
-        Log::fatal("eglCreateContext failed");
-    }
-
-    egl_surface = eglCreateWindowSurface(
-        egl_display,
-        egl_config,
-        reinterpret_cast<EGLNativeWindowType>(egl_window.get()),
-        nullptr
-        );
-
-    if (egl_surface == EGL_NO_SURFACE) {
-        Log::fatal("eglCreateWindowSurface failed");
-    }
-
-    if (!eglMakeCurrent(
-        egl_display,
-        egl_surface,
-        egl_surface,
-        egl_context
-        )) {
-        Log::fatal("eglMakeCurrent failed");
-    }
-
-    // Swap interval 0: the main loop paces frames itself (Timer::wait), so the
-    // driver must not. With interval >= 1 NVIDIA's egl-wayland2 attaches
-    // wp_fifo_v1 / wp_commit_timing_v1 to every commit; on Hyprland that lets the
-    // layer size / viewport of a resize take effect a frame before the matching
-    // buffer, so the island flashes at the wrong scale on every expand/collapse.
-    // TIDE_SWAP_INTERVAL overrides it for testing.
-    int swap_interval{0};
-    if (const char* value = getenv("TIDE_SWAP_INTERVAL"); value && *value != '\0') {
-        swap_interval = atoi(value);
-    }
-    if (!eglSwapInterval(egl_display, swap_interval)) {
-        Log::logger(Log::Warning, "eglSwapInterval({}) failed (0x{:x})", swap_interval, eglGetError());
-    }
-
-    const auto* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-    Log::logger(Log::Debug, "EGL vendor=\"{}\", GL renderer=\"{}\"",
-        eglQueryString(egl_display, EGL_VENDOR), renderer ? renderer : "unknown");
-    if (renderer && (string_view(renderer).contains("llvmpipe") ||
-        string_view(renderer).contains("softpipe") ||
-        string_view(renderer).contains("Software Rasterizer"))) {
-        Log::logger(Log::Warning, "Using software rendering; check the GPU driver if CPU or RAM usage is high");
-    }
-
-    wayland_fd = wl_display_get_fd(display.get());
-}
-
-void Wayland::swap_buffer() {
-    flush_blur();
-    // Must precede the swap to be part of its commit.
-    if (frame_callback)
-        wl_callback_destroy(frame_callback);
-    frame_callback = wl_surface_frame(surface.get());
-    wl_callback_add_listener(frame_callback, &frame_listener, nullptr);
-    frame_requested = chrono::steady_clock::now();
-    if (!eglSwapBuffers(egl_display, egl_surface)) {
-        Log::fatal("eglSwapBuffers failed");
-    }
-}
-
-void Wayland::request_resize(
-    std::uint16_t width,
-    std::uint16_t height
-    ) {
-    if (!layer_surface) {
-        Log::fatal("request_resize called before layer_surface creation");
-    }
-
-    if (width == 0 || height == 0) {
-        Log::fatal("Island width and height must be positive");
-    }
-
-    if (!egl_window) {
-        Log::fatal("EGL_window is not initialized");
-    }
-
-    // Hyprland Error
-    // see more info in Hyprland Discussion #12878
-    // we add 1 pixel to avoid the issue
-    // Widen before adding so a configured size of 65535 does not wrap to zero.
-
-    // plus another 1 for the sake of safety
-    asked_width  = static_cast<uint32_t>(width) + 1;
-    asked_height = static_cast<uint32_t>(height) + 1;
-    apply_size();
-
-}
-
-array<uint32_t, 2> Wayland::get_surface_size() {
-    return {current_width, current_height};
-}
-
-array<uint32_t, 2> Wayland::get_buffer_size() {
-    return {buffer_width, buffer_height};
-}
-
-float Wayland::get_scale() {
-    return viewport && fractional_scale ? surface_scale : 1.0f;
-}
-
-void Wayland::apply_config(
-    std::uint16_t width,
-    std::uint16_t height,
-    int32_t       exclusive_zone,
-    int32_t       margin_top
-    ) {
-    if (width == 0 || height == 0) {
-        Log::fatal("Island width and height must be positive");
-    }
-    requested_width  = width;
-    requested_height = height;
-
-    zwlr_layer_surface_v1_set_exclusive_zone(
-        layer_surface.get(),
-        exclusive_zone
-        );
-
-    zwlr_layer_surface_v1_set_margin(
-        layer_surface.get(),
-        margin_top,
-        0, 0, 0
-        );
-
-    // The layer size is set together with the buffer once the driver catches up.
-    stage_size(width, height);
-
-    logger(Log::Debug, "Applyed config: {}*{}", width, height);
-}
-
-void Wayland::set_blur(bool enabled) {
-    if (enabled && !blur_warned && (!background_effect || !blur_capable)) {
-        blur_warned = true;
-        Log::logger(Log::Warning,
-            "Compositor does not support blur via ext-background-effect-v1; background blur is disabled");
-    }
-    blur_enabled = enabled;
-}
-
-void Wayland::set_blur_shape(float x, float y, float width, float height, float radius) {
-    blur_shape = {x, y, width, height, radius};
-}
-
-void Wayland::set_pointer_callbacks(const PointerCallbacks& callbacks) {
-    pointer_callbacks = callbacks;
-}
-
-void Wayland::handle_events(short revents) {
-    if (revents & (POLLERR | POLLHUP | POLLNVAL)) {
-        wl_display_cancel_read(display.get());
-        Log::fatal(
-            "Wayland fd poll error: {}",
-            revents
+        zwlr_layer_surface_v1_set_anchor(
+            layer_surface.get(),
+            ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP
             );
+        zwlr_layer_surface_v1_set_size(
+            layer_surface.get(),
+            width,
+            height
+            );
+        zwlr_layer_surface_v1_set_exclusive_zone(layer_surface.get(), exclusive_zone);
+        zwlr_layer_surface_v1_set_margin(layer_surface.get(), margin_top, 0, 0, 0);
+
+        if (zwlr_layer_surface_v1_add_listener(
+            layer_surface.get(),
+            &layer_surface_listener,
+            nullptr) == -1) {
+            Log::fatal("Failed to add layer surface listener");
+        }
+        wl_surface_commit(surface.get());
+
+        if (wl_display_roundtrip(display.get()) == -1) {
+            Log::fatal("Wayland roundtrip failed");
+        }
+
+        // clangd says infinity loop, but actually not.
+        while (!surface_configured) {
+            if (wl_display_dispatch(display.get()) == -1) {
+                Log::fatal("Failed to wait for initial layer surface configure");
+            }
+        }
+
+        // 3. Setup EGL Window & Display
+        egl_window.reset(wl_egl_window_create(
+            surface.get(),
+            static_cast<int>(buffer_width),
+            static_cast<int>(buffer_height)
+            ));
+        if (!egl_window) {
+            Log::fatal("Failed to create wl_egl_window");
+        }
+
+        // Name the platform explicitly: legacy eglGetDisplay makes libglvnd guess what
+        // the native pointer is, which some vendors (NVIDIA) refuse.
+        egl_display = eglGetPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, display.get(), nullptr);
+        if (egl_display == EGL_NO_DISPLAY) {
+            Log::logger(Log::Warning, "eglGetPlatformDisplay failed (0x{:x}), falling back to eglGetDisplay", eglGetError());
+            egl_display = eglGetDisplay(reinterpret_cast<EGLNativeDisplayType>(display.get()));
+        }
+        if (egl_display == EGL_NO_DISPLAY) {
+            Log::fatal("eglGetDisplay failed (0x{:x})", eglGetError());
+        }
+
+        EGLint major{};
+        EGLint minor{};
+        if (!eglInitialize(egl_display, &major, &minor)) {
+            Log::fatal("eglInitialize failed");
+        }
+        logger(Log::Debug, "Using EGL {}.{}", major, minor);
+
+        if (!eglBindAPI(EGL_OPENGL_ES_API)) {
+            Log::fatal("eglBindAPI failed");
+        }
+
+        // 4. Configure EGL Surface & Context
+        constexpr array<EGLint, 13> attribs = {
+            EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+            EGL_RED_SIZE, 8,
+            EGL_GREEN_SIZE, 8,
+            EGL_BLUE_SIZE, 8,
+            EGL_ALPHA_SIZE, 8,
+            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+            EGL_NONE,
+        };
+
+        EGLint count{};
+        if (!eglChooseConfig(egl_display, attribs.data(), &egl_config, 1, &count)
+            || count == 0) {
+            Log::fatal("eglChooseConfig failed");
+        }
+
+        constexpr array<EGLint, 3> ctx_attribs = {
+            EGL_CONTEXT_CLIENT_VERSION, 3,
+            EGL_NONE
+        };
+
+        egl_context = eglCreateContext(
+            egl_display,
+            egl_config,
+            EGL_NO_CONTEXT,
+            ctx_attribs.data()
+            );
+        if (egl_context == EGL_NO_CONTEXT) {
+            Log::fatal("eglCreateContext failed");
+        }
+
+        egl_surface = eglCreateWindowSurface(
+            egl_display,
+            egl_config,
+            reinterpret_cast<EGLNativeWindowType>(egl_window.get()),
+            nullptr
+            );
+
+        if (egl_surface == EGL_NO_SURFACE) {
+            Log::fatal("eglCreateWindowSurface failed");
+        }
+
+        if (!eglMakeCurrent(
+            egl_display,
+            egl_surface,
+            egl_surface,
+            egl_context
+            )) {
+            Log::fatal("eglMakeCurrent failed");
+        }
+
+        // Swap interval 0: the main loop paces frames itself (Timer::wait), so the
+        // driver must not. With interval >= 1 NVIDIA's egl-wayland2 attaches
+        // wp_fifo_v1 / wp_commit_timing_v1 to every commit; on Hyprland that lets the
+        // layer size / viewport of a resize take effect a frame before the matching
+        // buffer, so the island flashes at the wrong scale on every expand/collapse.
+        // TIDE_SWAP_INTERVAL overrides it for testing.
+        int swap_interval{0};
+        if (const char* value = getenv("TIDE_SWAP_INTERVAL"); value && *value != '\0') {
+            swap_interval = atoi(value);
+        }
+        if (!eglSwapInterval(egl_display, swap_interval)) {
+            Log::logger(Log::Warning, "eglSwapInterval({}) failed (0x{:x})", swap_interval, eglGetError());
+        }
+
+        const auto* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        Log::logger(Log::Debug, "EGL vendor=\"{}\", GL renderer=\"{}\"",
+            eglQueryString(egl_display, EGL_VENDOR), renderer ? renderer : "unknown");
+        if (renderer && (string_view(renderer).contains("llvmpipe") ||
+            string_view(renderer).contains("softpipe") ||
+            string_view(renderer).contains("Software Rasterizer"))) {
+            Log::logger(Log::Warning, "Using software rendering; check the GPU driver if CPU or RAM usage is high");
+        }
+
+        wayland_fd = wl_display_get_fd(display.get());
     }
 
-    if (revents & POLLIN) {
-        if (wl_display_read_events(display.get()) == -1) {
-            Log::fatal(
-                "wl_display_read_events failed: {}",
-                strerror(errno)
-                );
+    void swap_buffer() {
+        flush_blur();
+        // Must precede the swap to be part of its commit.
+        if (frame_callback)
+            wl_callback_destroy(frame_callback);
+        frame_callback = wl_surface_frame(surface.get());
+        wl_callback_add_listener(frame_callback, &frame_listener, nullptr);
+        frame_requested = chrono::steady_clock::now();
+        if (!eglSwapBuffers(egl_display, egl_surface)) {
+            Log::fatal("eglSwapBuffers failed");
         }
     }
-    else {
-        wl_display_cancel_read(display.get());
+
+    void request_resize(
+        std::uint16_t width,
+        std::uint16_t height
+        ) {
+        if (!layer_surface) {
+            Log::fatal("request_resize called before layer_surface creation");
+        }
+
+        if (width == 0 || height == 0) {
+            Log::fatal("Island width and height must be positive");
+        }
+
+        if (!egl_window) {
+            Log::fatal("EGL_window is not initialized");
+        }
+
+        // Hyprland Error
+        // see more info in Hyprland Discussion #12878
+        // we add 1 pixel to avoid the issue
+        // Widen before adding so a configured size of 65535 does not wrap to zero.
+
+        // plus another 1 for the sake of safety
+        asked_width  = static_cast<uint32_t>(width) + 1;
+        asked_height = static_cast<uint32_t>(height) + 1;
+        apply_size();
+
     }
 
-    if (revents & POLLOUT) {
-        if (wl_display_flush(display.get()) == -1 &&
-            errno != EAGAIN) {
+    array<uint32_t, 2> get_surface_size() {
+        return {current_width, current_height};
+    }
+
+    array<uint32_t, 2> get_buffer_size() {
+        return {buffer_width, buffer_height};
+    }
+
+    float get_scale() {
+        return viewport && fractional_scale ? surface_scale : 1.0f;
+    }
+
+    void apply_config(
+        std::uint16_t width,
+        std::uint16_t height,
+        int32_t       exclusive_zone,
+        int32_t       margin_top
+        ) {
+        if (width == 0 || height == 0) {
+            Log::fatal("Island width and height must be positive");
+        }
+        requested_width  = width;
+        requested_height = height;
+
+        zwlr_layer_surface_v1_set_exclusive_zone(
+            layer_surface.get(),
+            exclusive_zone
+            );
+
+        zwlr_layer_surface_v1_set_margin(
+            layer_surface.get(),
+            margin_top,
+            0, 0, 0
+            );
+
+        // The layer size is set together with the buffer once the driver catches up.
+        stage_size(width, height);
+
+        logger(Log::Debug, "Applyed config: {}*{}", width, height);
+    }
+
+    void set_blur(bool enabled) {
+        if (enabled && !blur_warned && (!background_effect || !blur_capable)) {
+            blur_warned = true;
+            Log::logger(Log::Warning,
+                "Compositor does not support blur via ext-background-effect-v1; background blur is disabled");
+        }
+        blur_enabled = enabled;
+    }
+
+    void set_blur_shape(float x, float y, float width, float height, float radius) {
+        blur_shape = {x, y, width, height, radius};
+    }
+
+    void set_pointer_callbacks(const PointerCallbacks& callbacks) {
+        pointer_callbacks = callbacks;
+    }
+
+    void handle_events(short revents) {
+        if (revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            wl_display_cancel_read(display.get());
             Log::fatal(
-                "wl_display_flush failed: {}",
-                strerror(errno)
+                "Wayland fd poll error: {}",
+                revents
                 );
         }
-    }
 
-    if (wl_display_dispatch_pending(display.get()) == -1) {
-        Log::fatal("wl_display_dispatch_pending failed");
-    }
-}
+        if (revents & POLLIN) {
+            if (wl_display_read_events(display.get()) == -1) {
+                Log::fatal(
+                    "wl_display_read_events failed: {}",
+                    strerror(errno)
+                    );
+            }
+        }
+        else {
+            wl_display_cancel_read(display.get());
+        }
 
-short Wayland::prepare_events() {
-    while (wl_display_prepare_read(display.get()) == -1) {
+        if (revents & POLLOUT) {
+            if (wl_display_flush(display.get()) == -1 &&
+                errno != EAGAIN) {
+                Log::fatal(
+                    "wl_display_flush failed: {}",
+                    strerror(errno)
+                    );
+            }
+        }
+
         if (wl_display_dispatch_pending(display.get()) == -1) {
             Log::fatal("wl_display_dispatch_pending failed");
         }
     }
-    short events = POLLIN;
 
-    if (wl_display_flush(display.get()) == -1) {
-        if (errno == EAGAIN) {
-            events |= POLLOUT;
+    short prepare_events() {
+        while (wl_display_prepare_read(display.get()) == -1) {
+            if (wl_display_dispatch_pending(display.get()) == -1) {
+                Log::fatal("wl_display_dispatch_pending failed");
+            }
         }
-        else {
-            wl_display_cancel_read(display.get());
-            Log::fatal(
-                "wl_display_flush failed: {}",
-                strerror(errno)
+        short events = POLLIN;
+
+        if (wl_display_flush(display.get()) == -1) {
+            if (errno == EAGAIN) {
+                events |= POLLOUT;
+            }
+            else {
+                wl_display_cancel_read(display.get());
+                Log::fatal(
+                    "wl_display_flush failed: {}",
+                    strerror(errno)
+                    );
+            }
+        }
+
+        return events;
+    }
+
+    int get_wayland_fd() {
+        return wayland_fd;
+    }
+
+    void cancel_events() {
+        wl_display_cancel_read(display.get());
+    }
+
+    void shutdown() {
+        if (!display) {
+            return;
+        }
+
+        if (frame_callback) {
+            wl_callback_destroy(frame_callback);
+            frame_callback = nullptr;
+        }
+
+        // 1. Terminate EGL Environment
+        if (egl_display != EGL_NO_DISPLAY) {
+            eglMakeCurrent(
+                egl_display,
+                EGL_NO_SURFACE,
+                EGL_NO_SURFACE,
+                EGL_NO_CONTEXT
                 );
+
+            if (egl_surface != EGL_NO_SURFACE) {
+                eglDestroySurface(egl_display, egl_surface);
+                egl_surface = EGL_NO_SURFACE;
+            }
+
+            if (egl_context != EGL_NO_CONTEXT) {
+                eglDestroyContext(egl_display, egl_context);
+                egl_context = EGL_NO_CONTEXT;
+            }
+
+            eglTerminate(egl_display);
+            egl_display = EGL_NO_DISPLAY;
+            egl_config  = nullptr;
         }
     }
 
-    return events;
-}
-
-int Wayland::get_wayland_fd() {
-    return wayland_fd;
-}
-
-void Wayland::cancel_events() {
-    wl_display_cancel_read(display.get());
-}
-
-void Wayland::shutdown() {
-    if (!display) {
-        return;
-    }
-
-    if (frame_callback) {
-        wl_callback_destroy(frame_callback);
-        frame_callback = nullptr;
-    }
-
-    // 1. Terminate EGL Environment
-    if (egl_display != EGL_NO_DISPLAY) {
-        eglMakeCurrent(
-            egl_display,
-            EGL_NO_SURFACE,
-            EGL_NO_SURFACE,
-            EGL_NO_CONTEXT
-            );
-
-        if (egl_surface != EGL_NO_SURFACE) {
-            eglDestroySurface(egl_display, egl_surface);
-            egl_surface = EGL_NO_SURFACE;
+    bool sync_surface() {
+        if (!has_pending) {
+            return false;
         }
-
-        if (egl_context != EGL_NO_CONTEXT) {
-            eglDestroyContext(egl_display, egl_context);
-            egl_context = EGL_NO_CONTEXT;
-        }
-
-        eglTerminate(egl_display);
-        egl_display = EGL_NO_DISPLAY;
-        egl_config  = nullptr;
+        // Apply in the frame that is about to be drawn: every EGL driver seen so far
+        // (Mesa, NVIDIA egl-wayland2) reallocates the color buffer on the first draw
+        // after wl_egl_window_resize, so this frame already renders into the new size.
+        // Note: eglQuerySurface cannot be used to wait for that, NVIDIA still reports
+        // the old size until the first draw.
+        apply_pending();
+        return true;
     }
-}
 
-bool Wayland::sync_surface() {
-    if (!has_pending) {
-        return false;
+    bool resize_pending() {
+        return has_pending;
     }
-    // Apply in the frame that is about to be drawn: every EGL driver seen so far
-    // (Mesa, NVIDIA egl-wayland2) reallocates the color buffer on the first draw
-    // after wl_egl_window_resize, so this frame already renders into the new size.
-    // Note: eglQuerySurface cannot be used to wait for that, NVIDIA still reports
-    // the old size until the first draw.
-    apply_pending();
-    return true;
-}
 
-bool Wayland::resize_pending() {
-    return has_pending;
-}
+    bool frame_ready() {
+        // Hidden surfaces get no frame callbacks; don't freeze animations.
+        constexpr auto k_frame_timeout = chrono::milliseconds{250};
+        return !frame_callback || chrono::steady_clock::now() - frame_requested > k_frame_timeout;
+    }
 
-bool Wayland::frame_ready() {
-    // Hidden surfaces get no frame callbacks; don't freeze animations.
-    constexpr auto k_frame_timeout = chrono::milliseconds{250};
-    return !frame_callback || chrono::steady_clock::now() - frame_requested > k_frame_timeout;
-}
+    bool get_wayland_redraw() {
+        return exchange(wayland_needs_redraw, false);
+    }
 
-bool Wayland::get_wayland_redraw() {
-    return exchange(wayland_needs_redraw, false);
-}
+} // namespace Wayland

@@ -160,131 +160,134 @@ void notify(Media::Update u) {
 
 }
 
-void Media::init() {
-    if (client)
-        return;
-    auto created = lyricsmpris::Client::create();
-    if (!created) {
-        Log::logger(Log::Warning, "MPRIS unavailable: {}", created.error().message);
-        return;
-    }
-    client.emplace(std::move(*created));
-}
-
-void Media::shutdown() {
-    listener = nullptr;
-    http.reset();
-    client.reset();
-    artwork_url.clear();
-    artwork_pixels.reset();
-    artwork_request = 0;
-}
-
-bool Media::available() {
-    return client.has_value();
-}
-
-const lyricsmpris::State* Media::state() {
-    return client ? &client->state() : nullptr;
-}
-
-lyricsmpris::Milliseconds Media::position() {
-    return client ? client->position() : lyricsmpris::Milliseconds{};
-}
-
-const Image::Pixels* Media::artwork() {
-    return artwork_pixels ? &*artwork_pixels : nullptr;
-}
-
-namespace {
-
-void report(const char* what, const expected<void, lyricsmpris::Error>& r) {
-    if (!r)
-        Log::logger(Log::Warning, "Media {} failed: {}", what, r.error().message);
-}
-
-}
-
-void Media::resync_position() {
-    if (client)
-        client->resync_position();
-}
-
-void Media::play_pause() {
-    if (!client)
-        return;
-    const auto& caps = client->state().capabilities;
-    if (caps.play && caps.pause)
-        report("play/pause", client->play_pause());
-    else if (client->state().playback == lyricsmpris::Playback::Playing)
-        report("pause", client->pause());
-    else
-        report("play", client->play());
-}
-
-void Media::next() {
-    if (client)
-        report("next", client->next());
-}
-
-void Media::previous() {
-    if (client)
-        report("previous", client->previous());
-}
-
-void Media::set_listener(void (*l)(Update)) {
-    listener = l;
-}
-
-void Media::append_poll_fds(vector<pollfd>& out) {
-    if (!client)
-        return;
-    const auto fds = client->poll_fds();
-    out.insert(out.end(), fds.begin(), fds.end());
-    if (http) {
-        const auto h = http->poll_fds();
-        out.insert(out.end(), h.begin(), h.end());
-    }
-}
-
-optional<steady_clock::time_point> Media::next_deadline() {
-    if (!client)
-        return nullopt;
-    auto deadline = client->next_deadline();
-    if (http) {
-        if (const auto h = http->deadline(); h && (!deadline || *h < *deadline))
-            deadline = h;
-    }
-    return deadline;
-}
-
-void Media::process(span<const pollfd> ready) {
-    if (!client)
-        return;
-
-    const auto now     = steady_clock::now();
-    const auto changes = client->process(ready, now);
-    if (!changes) {
-        Log::logger(Log::Error, "MPRIS client failed, media disabled: {}", changes.error().message);
-        shutdown();
-        return;
+namespace Media {
+    void init() {
+        if (client)
+            return;
+        auto created = lyricsmpris::Client::create();
+        if (!created) {
+            Log::logger(Log::Warning, "MPRIS unavailable: {}", created.error().message);
+            return;
+        }
+        client.emplace(std::move(*created));
     }
 
-    using lyricsmpris::Changes;
-    constexpr auto state_changes = Changes::Player | Changes::Track | Changes::Playback | Changes::Position
-        | Changes::Capabilities | Changes::Error;
-    constexpr auto lyric_changes = Changes::Lyrics | Changes::Line | Changes::Search;
+    void shutdown() {
+        listener = nullptr;
+        http.reset();
+        client.reset();
+        artwork_url.clear();
+        artwork_pixels.reset();
+        artwork_request = 0;
+    }
 
-    Update update = Update::None;
-    if (lyricsmpris::contains(*changes, state_changes))
-        update = update | Update::State;
-    if (lyricsmpris::contains(*changes, lyric_changes))
-        update = update | Update::Lyrics;
+    bool available() {
+        return client.has_value();
+    }
 
-    if (const auto& s = client->state(); fetch_artwork(s.has_player ? s.artwork_url : string{}))
-        update = update | Update::Artwork;
-    if (process_http(ready, now))
-        update = update | Update::Artwork;
+    const lyricsmpris::State* state() {
+        return client ? &client->state() : nullptr;
+    }
 
-    notify(update);
-}
+    lyricsmpris::Milliseconds position() {
+        return client ? client->position() : lyricsmpris::Milliseconds{};
+    }
+
+    const Image::Pixels* artwork() {
+        return artwork_pixels ? &*artwork_pixels : nullptr;
+    }
+
+    namespace {
+
+        void report(const char* what, const expected<void, lyricsmpris::Error>& r) {
+            if (!r)
+                Log::logger(Log::Warning, "Media {} failed: {}", what, r.error().message);
+        }
+
+    }
+
+    void resync_position() {
+        if (client)
+            client->resync_position();
+    }
+
+    void play_pause() {
+        if (!client)
+            return;
+        const auto& caps = client->state().capabilities;
+        if (caps.play && caps.pause)
+            report("play/pause", client->play_pause());
+        else if (client->state().playback == lyricsmpris::Playback::Playing)
+            report("pause", client->pause());
+        else
+            report("play", client->play());
+    }
+
+    void next() {
+        if (client)
+            report("next", client->next());
+    }
+
+    void previous() {
+        if (client)
+            report("previous", client->previous());
+    }
+
+    void set_listener(void (*l)(Update)) {
+        listener = l;
+    }
+
+    void append_poll_fds(vector<pollfd>& out) {
+        if (!client)
+            return;
+        const auto fds = client->poll_fds();
+        out.insert(out.end(), fds.begin(), fds.end());
+        if (http) {
+            const auto h = http->poll_fds();
+            out.insert(out.end(), h.begin(), h.end());
+        }
+    }
+
+    optional<steady_clock::time_point> next_deadline() {
+        if (!client)
+            return nullopt;
+        auto deadline = client->next_deadline();
+        if (http) {
+            if (const auto h = http->deadline(); h && (!deadline || *h < *deadline))
+                deadline = h;
+        }
+        return deadline;
+    }
+
+    void process(span<const pollfd> ready) {
+        if (!client)
+            return;
+
+        const auto now     = steady_clock::now();
+        const auto changes = client->process(ready, now);
+        if (!changes) {
+            Log::logger(Log::Error, "MPRIS client failed, media disabled: {}", changes.error().message);
+            shutdown();
+            return;
+        }
+
+        using lyricsmpris::Changes;
+        constexpr auto state_changes = Changes::Player | Changes::Track | Changes::Playback | Changes::Position
+            | Changes::Capabilities | Changes::Error;
+        constexpr auto lyric_changes = Changes::Lyrics | Changes::Line | Changes::Search;
+
+        Update update = Update::None;
+        if (lyricsmpris::contains(*changes, state_changes))
+            update = update | Update::State;
+        if (lyricsmpris::contains(*changes, lyric_changes))
+            update = update | Update::Lyrics;
+
+        if (const auto& s = client->state(); fetch_artwork(s.has_player ? s.artwork_url : string{}))
+            update = update | Update::Artwork;
+        if (process_http(ready, now))
+            update = update | Update::Artwork;
+
+        notify(update);
+    }
+
+} // namespace Media
