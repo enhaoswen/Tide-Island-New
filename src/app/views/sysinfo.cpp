@@ -220,9 +220,9 @@ void step_battery() {
     if (osd.shown_plugged != now) {
         osd.shown_plugged = now;
         if (now)
-            play(osd.icon, "charging-icons/transition/charge-plug-in.png", 0, k_plug_end);
+            play(osd.icon, "charging-icons/transition/charge-plug-in.png", 1, k_plug_end); // 0 == 1
         else
-            play(osd.icon, "charging-icons/transition/charge-unplug.png", 0, k_unplug_end);
+            play(osd.icon, "charging-icons/transition/charge-unplug.png", 1, k_unplug_end);
         return;
     }
     if (charging())
@@ -415,9 +415,9 @@ void on_hide() {
         switch_state(previous);
 }
 
-void restart_hide() {
+void restart_hide(microseconds after = k_hide_after) {
     API::cancel_event(osd.hide_timer);
-    osd.hide_timer = API::push_event(duration_cast<microseconds>(k_hide_after), on_hide, 0.f);
+    osd.hide_timer = API::push_event(after, on_hide, 0.f);
 }
 
 // Opens the OSD for `k`, or refreshes it if already showing. switch_state is synchronous,
@@ -459,9 +459,12 @@ void on_sysinfo(SysInfo::Update u) {
         const auto p    = SysInfo::power();
         const auto prev = exchange(last_power, p);
         if (prev && p && prev->plugged != p->plugged) {
-            if (show(Kind::Power) && is_open()) {
-                osd.shown_plugged = prev->plugged;
+            const bool opened = show(Kind::Power);
+            if (is_open() && kind == Kind::Power) {
+                if (opened)
+                    osd.shown_plugged = prev->plugged;
                 step_icon();
+                restart_hide();
             }
         }
         else if (is_open() && kind == Kind::Power) {
@@ -520,7 +523,9 @@ void start(Object::Handle arg_bg) {
 
     auto& c = ctx();
     c.set_opacity(osd.content, 0.f);
-    c.animate(Object::TAnimDesc{.h = osd.content, .to = 1.f, .t = Timings::Smooth, .delay = 0.f, .p = Prop::Opacity});
+    // Power keeps the clock's size, so nothing to wait for: show it almost at once.
+    const Timing& fade = kind == Kind::Power ? Timings::Instant : Timings::Smooth;
+    c.animate(Object::TAnimDesc{.h = osd.content, .to = 1.f, .t = fade, .delay = 0.f, .p = Prop::Opacity});
     restart_hide();
 }
 
