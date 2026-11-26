@@ -43,17 +43,17 @@ struct StateSize {
 StateSize size_of(StateType t) {
     switch (t) {
     case StateType::Clock:
-        return {140, 38, 19};
+        return {.w = 140, .h = 38, .r = 19};
     case StateType::Lyrics:
-        return {220, 38, 19};
+        return {.w = 220, .h = 38, .r = 19};
     case StateType::MusicPLayer:
-        return {410, 165, 32};
+        return {.w = 410, .h = 165, .r = 32};
     case StateType::ControlCenter:
-        return {420, 352, 28};
+        return {.w = 420, .h = 352, .r = 28};
     case StateType::Osd:
-        return {SysInfoView::width(), 38, 19};
+        return {.w = SysInfoView::width(), .h = 38, .r = 19};
     }
-    return {140, 38, 19};
+    return {.w = 140, .h = 38, .r = 19};
 }
 
 Island::IslandState     island_state;
@@ -94,13 +94,13 @@ void hover(bool on);
 
 void resize(const uint32_t width, const uint32_t height, bool expended, float radius = -1) {
 
-    Island::set_priority(expended ? Island::k_priority_idle : Island::k_priority_transition);
+    Island::set_priority(expended ? Island::k_priority_expended : Island::k_priority_transition);
 
     AnimCallback on_done{};
     if (!expended) {
         on_done = [width, height] {
             if (!ctx.is_animating(bg, Prop::W) && !ctx.is_animating(bg, Prop::H)) {
-                Island::set_priority(Island::k_priority_idle);
+                Island::set_priority(Island::k_priority_normal);
                 // Hover events were dropped during the transition; catch up with the pointer.
                 if (ctx.hovered() == bg)
                     hover(true);

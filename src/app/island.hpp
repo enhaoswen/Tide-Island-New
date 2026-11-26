@@ -30,9 +30,11 @@ struct IslandState {
     StateType     state{StateType::Clock};
 };
 
-constexpr float k_priority_idle       = 0.f;
+constexpr float k_priority_normal     = 0.f;
 constexpr float k_priority_hover      = 1.f;
 constexpr float k_priority_transition = 2.f;
+constexpr float k_priority_sys_info   = 3.f;
+constexpr float k_priority_expended   = 5.f;
 
 const IslandState& get_island();
 

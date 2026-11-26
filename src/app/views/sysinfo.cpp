@@ -24,20 +24,32 @@ enum class Kind : uint8_t { Volume, Brightness, Power };
 enum class Level : uint8_t { L25, L50, L75, L100, Muted };
 
 constexpr uint32_t k_progress_w = 248;
-constexpr uint32_t k_text_w     = 220;
+constexpr uint32_t k_icon_w     = 140; // icon-only split, as in the QML island
 constexpr float    k_height     = 38.f;
 constexpr float    k_icon       = 36.f;
+constexpr float    k_ring       = 30.f;
 
-// The speaker art sits low-left in its 64px cell, leaving the top-right for the +/- sign.
-constexpr float k_art_left     = 7.f / 64.f;
-constexpr float k_art_right    = 61.f / 64.f; // right edge of the sign
-constexpr float k_art_center_y = 35.5f / 64.f;
-constexpr float k_ring         = 30.f;
+// Where the drawing sits in its 64px cell. `right` includes the +/- sign when there is one.
+struct Art {
+    float left, right, center_y;
+};
+
+struct Sprites {
+    string_view dir;
+    string_view name;
+    int         step_end; // transitions are settled from this frame on
+    Art         art;
+};
+
+constexpr Sprites k_volume{"volume-icons", "volume", 19, {7.f / 64.f, 61.f / 64.f, 35.5f / 64.f}};
+constexpr Sprites k_brightness{"brightness-icons", "brightness", 26, {3.f / 64.f, 62.f / 64.f, 38.f / 64.f}};
+constexpr Art     k_battery_art{6.f / 64.f, 59.f / 64.f, 32.f / 64.f};
 
 constexpr int   k_frames     = 30;
-constexpr int   k_step_end   = 19; // transitions are settled from here on
 constexpr int   k_mute_end   = 22;
-constexpr float k_sign_shift = 5.f; // pulls the sign toward the speaker
+constexpr int   k_plug_end   = 18;
+constexpr int   k_unplug_end = 15;
+constexpr float k_sign_shift = 5.f; // pulls the sign toward the icon
 
 // The sign strip is a seamless loop with no in/out frames, so those are opacity fades.
 
@@ -45,10 +57,10 @@ constexpr auto k_frame_time = 16667us;
 constexpr auto k_hide_after = 1250ms;
 
 const Color k_track{1.f, 1.f, 1.f, .16f};
-const Color k_label{"#8e8e93"};
 
 struct Clip {
     Object::Handle node{};
+    string         strip{}; // loaded sprite, so replaying it (loops) skips the decode
     int            frame{};
     int            end{};
     int            step{1};
@@ -59,8 +71,9 @@ struct Clip {
 // so this has to live at file scope.
 struct Osd {
     Object::Handle     content{}, value{}, ring{};
-    Clip               speaker{}, sign{};
+    Clip               icon{}, sign{};
     Level              shown{};
+    bool               shown_plugged{};
     int                sign_dir{};
     bool               sign_again{}; // another change arrived during this cycle: loop once more
     Timer::EventHandle hide_timer{}, frame_timer{};
@@ -83,52 +96,59 @@ Object::Context& ctx() { return *context; }
 
 bool is_open() { return static_cast<bool>(osd.content); }
 
+const Sprites& sprites() { return kind == Kind::Brightness ? k_brightness : k_volume; }
+
 int percent(float v) { return static_cast<int>(lround(v * 100.f)); }
 
-Level level_of(const SysInfo::Volume& v) {
-    if (v.muted)
-        return Level::Muted;
-    const int quarter = clamp(static_cast<int>(ceil(v.level * 4.f - 1e-3f)), 1, 4);
-    return static_cast<Level>(quarter - 1);
-}
+Level quarter(float v) { return static_cast<Level>(clamp(static_cast<int>(ceil(v * 4.f - 1e-3f)), 1, 4) - 1); }
+
+Level level_of(const SysInfo::Volume& v) { return v.muted ? Level::Muted : quarter(v.level); }
 
 Level target() {
+    if (kind == Kind::Brightness) {
+        const auto b = SysInfo::brightness();
+        return b ? quarter(*b) : Level::L100;
+    }
     const auto v = SysInfo::volume();
     return v ? level_of(*v) : Level::L100;
 }
 
 int percent_of(Level l) { return (to_underlying(l) + 1) * 25; }
 
-string power_text(const SysInfo::Power& p) {
-    string s = !p.plugged
-        ? "On Battery"
-        : p.status == SysInfo::Charge::Charging
-        ? "Charging"
-        : "Plugged In";
-    if (p.battery)
-        s += format(" · {}%", *p.battery);
-    return s;
+bool plugged() {
+    const auto p = SysInfo::power();
+    return p && p->plugged;
+}
+
+bool charging() {
+    const auto p = SysInfo::power();
+    return p && p->plugged && p->status == SysInfo::Charge::Charging;
 }
 
 // ---- Sprites ----------------------------------------------------------------
 
-bool load(Object::Handle node, string_view sprite, int frames) {
+bool load(Clip& c, const string& sprite, int frames) {
+    if (c.strip == sprite)
+        return true;
     const float scale = Renderer::text_scale();
     const int   side  = max(1, static_cast<int>(lround(k_icon * scale)));
-    const auto  path  = format("{}/volume-icons/{}", TIDE_RESOURCE_DIR, sprite);
+    const auto  path  = format("{}/{}", TIDE_RESOURCE_DIR, sprite);
     auto        px    = Image::load_strip(path.c_str(), frames, side);
-    if (!px)
+    if (!px) {
+        c.strip.clear();
         return false;
+    }
     Texture t{};
     t.upload(px->width, px->height, Texture::Format::RGBA8, px->rgba);
     t.set_scale(scale);
-    ctx().image(node).set_texture(std::move(t));
+    ctx().image(c.node).set_texture(std::move(t));
+    c.strip = sprite;
     return true;
 }
 
 void show_frame(const Clip& c) {
     constexpr float w = 1.f / k_frames;
-    ctx().image(c.node).set_uv({.u0 = static_cast<float>(c.frame) * w, .v0     = 0.f,
+    ctx().image(c.node).set_uv({.u0 = static_cast<float>(c.frame) * w, .v0 = 0.f,
                                 .u1 = static_cast<float>(c.frame + 1) * w, .v1 = 1.f});
 }
 
@@ -139,8 +159,8 @@ void schedule_frame() {
         osd.frame_timer = API::push_event(k_frame_time, on_frame, 0.f);
 }
 
-void play(Clip& c, string_view sprite, int from, int to) {
-    c.active = load(c.node, sprite, k_frames);
+void play(Clip& c, const string& sprite, int from, int to) {
+    c.active = load(c, sprite, k_frames);
     if (!c.active)
         return;
     c.frame = from;
@@ -150,42 +170,72 @@ void play(Clip& c, string_view sprite, int from, int to) {
     schedule_frame();
 }
 
-void show_rest(Level l) {
-    if (l != Level::Muted) {
-        if (load(osd.speaker.node, format("static/volume-{}.png", percent_of(l)), 1))
-            ctx().image(osd.speaker.node).set_uv({});
-        return;
-    }
-    if (load(osd.speaker.node, "mute/volume-mute.png", k_frames)) {
-        osd.speaker.frame = k_frames - 1;
-        show_frame(osd.speaker);
+void rest(const string& sprite) {
+    osd.icon.active = false;
+    if (load(osd.icon, sprite, 1))
+        ctx().image(osd.icon.node).set_uv({});
+}
+
+void rest_muted() {
+    osd.icon.active = false;
+    if (load(osd.icon, format("{}/mute/volume-mute.png", k_volume.dir), k_frames)) {
+        osd.icon.frame = k_frames - 1;
+        show_frame(osd.icon);
     }
 }
 
 // One clip per call; adjacent levels only, so 25 -> 100 plays three steps.
-void step_speaker() {
-    const Level want = target();
+void step_level() {
+    const Sprites& s    = sprites();
+    const Level    want = target();
+    const string   mute = format("{}/mute/volume-mute.png", s.dir);
     if (osd.shown == want) {
-        osd.speaker.active = false;
-        show_rest(osd.shown);
+        if (want == Level::Muted)
+            rest_muted();
+        else
+            rest(format("{}/static/{}-{}.png", s.dir, s.name, percent_of(want)));
         return;
     }
     if (want == Level::Muted) {
         osd.shown = Level::Muted;
-        play(osd.speaker, "mute/volume-mute.png", 0, k_mute_end);
+        play(osd.icon, mute, 0, k_mute_end);
         return;
     }
     if (osd.shown == Level::Muted) {
         // The mute strip is drawn at another size, so unmuting ends on a cut to the static icon.
         osd.shown = want;
-        play(osd.speaker, "mute/volume-mute.png", k_mute_end, 0);
+        play(osd.icon, mute, k_mute_end, 0);
         return;
     }
     const bool up   = to_underlying(want) > to_underlying(osd.shown);
     const auto next = static_cast<Level>(to_underlying(osd.shown) + (up ? 1 : -1));
-    play(osd.speaker, format("transition/volume-{}-{}-{}.png", up ? "up" : "down", percent_of(osd.shown), percent_of(next)),
-        0, k_step_end);
+    play(osd.icon, format("{}/transition/{}-{}-{}-{}.png", s.dir, s.name, up ? "up" : "down", percent_of(osd.shown), percent_of(next)),
+         0, s.step_end);
     osd.shown = next;
+}
+
+// Plug in / unplug transition first, then the charging loop for as long as it charges.
+void step_battery() {
+    const bool now = plugged();
+    if (osd.shown_plugged != now) {
+        osd.shown_plugged = now;
+        if (now)
+            play(osd.icon, "charging-icons/transition/charge-plug-in.png", 0, k_plug_end);
+        else
+            play(osd.icon, "charging-icons/transition/charge-unplug.png", 0, k_unplug_end);
+        return;
+    }
+    if (charging())
+        play(osd.icon, "charging-icons/loop/charging-loop.png", 0, k_frames - 1);
+    else
+        rest(now ? "charging-icons/static/battery-charging.png" : "charging-icons/static/battery.png");
+}
+
+void step_icon() {
+    if (kind == Kind::Power)
+        step_battery();
+    else
+        step_level();
 }
 
 void fade_sign(float to) {
@@ -209,9 +259,9 @@ void play_sign(int dir) {
         return;
     }
     const bool visible = osd.sign.active || ctx().is_animating(osd.sign.node, Prop::Opacity);
-    osd.sign_dir         = dir;
-    osd.sign_again       = false;
-    play(osd.sign, dir > 0 ? "sign/sign-plus.png" : "sign/sign-minus.png", 0, k_frames - 1);
+    osd.sign_dir       = dir;
+    osd.sign_again     = false;
+    play(osd.sign, format("{}/sign/sign-{}.png", sprites().dir, dir > 0 ? "plus" : "minus"), 0, k_frames - 1);
     ctx().set_visible(osd.sign.node, true);
     if (!visible)
         ctx().set_opacity(osd.sign.node, 0.f);
@@ -222,13 +272,13 @@ void on_frame() {
     osd.frame_timer = {};
     if (!is_open())
         return;
-    if (osd.speaker.active) {
-        if (osd.speaker.frame == osd.speaker.end) {
-            step_speaker();
+    if (osd.icon.active) {
+        if (osd.icon.frame == osd.icon.end) {
+            step_icon();
         }
         else {
-            osd.speaker.frame += osd.speaker.step;
-            show_frame(osd.speaker);
+            osd.icon.frame += osd.icon.step;
+            show_frame(osd.icon);
         }
     }
     if (osd.sign.active) {
@@ -246,7 +296,7 @@ void on_frame() {
             fade_sign(0.f);
         }
     }
-    if (osd.speaker.active || osd.sign.active)
+    if (osd.icon.active || osd.sign.active)
         schedule_frame();
     Island::request_redraw(true);
 }
@@ -259,14 +309,19 @@ Object::Handle make_text(Object::Handle parent, FontHandle font, const Color& co
     return t;
 }
 
-Object::Handle make_icon(Object::Handle box, float dx = 0.f) {
+Object::Handle make_icon(Object::Handle box, const Art& art, float dx = 0.f) {
     auto&                c = ctx();
     const Object::Handle h = c.create_image(box, Object::ImageDesc{
-        .frame = {-k_art_left * k_icon + dx, (.5f - k_art_center_y) * k_icon, k_icon, k_icon},
+        .frame = {-art.left * k_icon + dx, (.5f - art.center_y) * k_icon, k_icon, k_icon},
     });
     c.set_size_mode(h, Object::Axis::Horizontal, Object::SizeMode::Fixed);
     c.set_size_mode(h, Object::Axis::Vertical, Object::SizeMode::Fixed);
     return h;
+}
+
+// Sized to the drawing rather than the cell, so layout spacing is measured from the art.
+Object::Handle make_icon_box(Object::Handle parent, const Art& art, float shrink = 0.f) {
+    return ctx().create_group(parent, Frame{0.f, 0.f, (art.right - art.left) * k_icon - shrink, k_icon});
 }
 
 void build(Object::Handle bg) {
@@ -280,9 +335,13 @@ void build(Object::Handle bg) {
 
     osd.content = c.create_group(bg, Frame{0.f, 0.f, static_cast<float>(SysInfoView::width()), k_height});
 
+    Object::LayoutData row{};
+    row.align = Object::Alignment::Center;
+
     if (kind == Kind::Power) {
-        c.set_layout(osd.content, centered);
-        osd.value = make_text(osd.content, fonts.label, Color::White);
+        row.justify = Object::Justify::Center;
+        c.set_layout(osd.content, row);
+        osd.icon = Clip{.node = make_icon(make_icon_box(osd.content, k_battery_art), k_battery_art)};
         return;
     }
 
@@ -295,20 +354,14 @@ void build(Object::Handle bg) {
     const Object::Handle left = c.create_group(osd.content, Frame{0.f, 0.f, 0.f, 0.f});
     c.set_size_mode(left, Object::Axis::Horizontal, Object::SizeMode::Fit);
     c.set_size_mode(left, Object::Axis::Vertical, Object::SizeMode::Fit);
-    Object::LayoutData row{};
-    row.align   = Object::Alignment::Center;
-    row.spacing = kind == Kind::Volume ? 4.f : 12.f;
+    row.spacing = 4.f;
     c.set_layout(left, row);
 
-    if (kind == Kind::Volume) {
-        const Object::Handle box = c.create_group(left, Frame{0.f, 0.f, (k_art_right - k_art_left) * k_icon - k_sign_shift, k_icon});
-        osd.speaker                  = Clip{.node = make_icon(box)};
-        osd.sign                     = Clip{.node = make_icon(box, -k_sign_shift)};
-        c.set_visible(osd.sign.node, false);
-    }
-    else {
-        c.text(make_text(left, fonts.label, k_label)).set_text("Brightness");
-    }
+    const Art&           art = sprites().art;
+    const Object::Handle box = make_icon_box(left, art, k_sign_shift);
+    osd.icon                 = Clip{.node = make_icon(box, art)};
+    osd.sign                 = Clip{.node = make_icon(box, art, -k_sign_shift)};
+    c.set_visible(osd.sign.node, false);
     osd.value = make_text(left, fonts.value, Color::White);
 
     osd.ring = c.create_ring(osd.content, Object::RingDesc{
@@ -330,8 +383,6 @@ void refresh(bool animate) {
             return;
         c.text(osd.value).set_text(format("{}%", percent(v->level)));
         progress = v->level;
-        if (!osd.speaker.active)
-            step_speaker();
         break;
     }
     case Kind::Brightness: {
@@ -343,11 +394,13 @@ void refresh(bool animate) {
         break;
     }
     case Kind::Power: {
-        if (const auto p = SysInfo::power())
-            c.text(osd.value).set_text(power_text(*p));
+        if (!osd.icon.active)
+            step_icon();
         return;
     }
     }
+    if (!osd.icon.active)
+        step_icon();
 
     progress = clamp(progress, 0.f, 1.f);
     if (animate)
@@ -370,9 +423,9 @@ void restart_hide() {
 // Opens the OSD for `k`, or refreshes it if already showing. switch_state is synchronous,
 // so on true the nodes exist and the caller can start extra animations right away.
 bool show(Kind k) {
-    const StateType s = Island::get_state();
-    if (s == StateType::MusicPLayer || s == StateType::ControlCenter)
+    if (Island::get_island().current_priority > Island::k_priority_sys_info)
         return false;
+    const StateType s = Island::get_state();
     if (is_open() && kind == k) {
         refresh(true);
         restart_hide();
@@ -386,12 +439,30 @@ bool show(Kind k) {
     return is_open();
 }
 
+// Shared by volume and brightness: animate from the old level when freshly opened, and
+// show +/- for the direction of the change.
+void level_changed(Kind k, Level from, Level to, int was, int now, bool sign) {
+    const bool opened = show(k);
+    if (!is_open() || kind != k)
+        return;
+    if (opened && from != to) {
+        osd.shown = from;
+        step_icon();
+    }
+    if (sign && now != was)
+        play_sign(now > was ? 1 : -1);
+}
+
 void on_sysinfo(SysInfo::Update u) {
+    // Several sources can change in one wakeup, so each is checked on its own.
     if (SysInfo::contains(u, SysInfo::Update::Power)) {
         const auto p    = SysInfo::power();
         const auto prev = exchange(last_power, p);
         if (prev && p && prev->plugged != p->plugged) {
-            show(Kind::Power);
+            if (show(Kind::Power) && is_open()) {
+                osd.shown_plugged = prev->plugged;
+                step_icon();
+            }
         }
         else if (is_open() && kind == Kind::Power) {
             refresh(true);
@@ -399,31 +470,21 @@ void on_sysinfo(SysInfo::Update u) {
         }
     }
 
-    else if (SysInfo::contains(u, SysInfo::Update::Volume)) {
+    if (SysInfo::contains(u, SysInfo::Update::Volume)) {
         const auto v    = SysInfo::volume();
         const auto prev = exchange(last_volume, v);
         // nullopt -> value is (re)connecting, not the user changing anything.
-        if (prev && v && *prev != *v) {
-            const int  now    = percent(v->level), was = percent(prev->level);
-            const bool opened = show(Kind::Volume);
-            if (!is_open())
-                return;
-            if (opened && level_of(*prev) != level_of(*v)) {
-                osd.shown = level_of(*prev);
-                step_speaker();
-            }
-            if (v->muted == prev->muted && now != was)
-                play_sign(now > was ? 1 : -1);
-        }
+        if (prev && v && *prev != *v)
+            level_changed(Kind::Volume, level_of(*prev), level_of(*v), percent(prev->level), percent(v->level),
+                          v->muted == prev->muted);
     }
 
-    else if (SysInfo::contains(u, SysInfo::Update::Brightness)) {
+    if (SysInfo::contains(u, SysInfo::Update::Brightness)) {
         const auto b    = SysInfo::brightness();
         const auto prev = exchange(last_brightness, b);
         if (prev && b && *prev != *b)
-            show(Kind::Brightness);
+            level_changed(Kind::Brightness, quarter(*prev), quarter(*b), percent(*prev), percent(*b), true);
     }
-
 }
 
 }
@@ -451,10 +512,10 @@ void start(Object::Handle arg_bg) {
         return;
     build(arg_bg);
 
-    if (kind == Kind::Volume) {
+    if (kind == Kind::Power)
+        osd.shown_plugged = plugged();
+    else
         osd.shown = target();
-        show_rest(osd.shown);
-    }
     refresh(false);
 
     auto& c = ctx();
@@ -474,6 +535,6 @@ void stop() {
     osd = {};
 }
 
-uint32_t width() { return kind == Kind::Power ? k_text_w : k_progress_w; }
+uint32_t width() { return kind == Kind::Power ? k_icon_w : k_progress_w; }
 
 }
