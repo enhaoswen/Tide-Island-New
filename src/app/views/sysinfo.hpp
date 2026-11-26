@@ -1,5 +1,6 @@
 #pragma once
 
+#include "scene/context.hpp"
 #include "scene/struct.hpp"
 #include "utils/struct.hpp"
 
@@ -14,7 +15,8 @@ struct Fonts {
     FontHandle label{};
 };
 
-void init(const Fonts& fonts);
+// `switch_state` is how the OSD opens itself and later returns to the previous state.
+void init(Object::Context& ctx, const Fonts& fonts, void (*switch_state)(StateType));
 void shutdown();
 
 void start(Object::Handle bg);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "scene/context.hpp"
 #include "scene/struct.hpp"
 #include "utils/struct.hpp"
 
@@ -12,7 +13,7 @@ struct Fonts {
     FontHandle icon{};
 };
 
-void start(Object::Handle bg, const Fonts& fonts);
+void start(Object::Context& ctx, Object::Handle bg, const Fonts& fonts);
 
 void stop();
 

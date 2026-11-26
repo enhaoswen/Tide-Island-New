@@ -2,7 +2,6 @@
 
 #include "app/API.hpp"
 #include "app/island.hpp"
-#include "app/state_manager.hpp"
 #include "backend/timer.hpp"
 #include "graphics/renderer.hpp"
 #include "graphics/text.hpp"
@@ -119,7 +118,9 @@ Timer::EventHandle predict_timer{};
 string shown_fav_uri;
 bool   shown_liked{};
 
-Object::Context& ctx() { return StateManager::context(); }
+Object::Context* context{};
+
+Object::Context& ctx() { return *context; }
 
 void set_text_cached(Handle h, string& cache, const string& s) {
     if (cache == s)
@@ -825,61 +826,62 @@ void build(const MusicPlayerView::Fonts& f) {
 }
 
 namespace MusicPlayerView {
-    void start(Handle arg_bg, const Fonts& fonts) {
-        if (!arg_bg) {
-            Log::logger(Log::Error, "MusicPlayerView: invalid background");
-            return;
-        }
-
-        stop();
-        bg = arg_bg;
-        SpotifyBridge::reload(); // one stat; picks up a setup run after launch
-        build(fonts);
-
-        running = true;
-        playing = false;
-        phase   = 0.f;
-        shown_title.clear();
-        shown_artist.clear();
-        shown_time_l.clear();
-        shown_time_r.clear();
-        shown_time_shape.clear();
-
-        ctx().layout();
-        refresh();
-        refresh_artwork();
-
-        auto& c = ctx();
-        c.set_opacity(content, 0.f);
-        c.animate(Object::TAnimDesc{.h = content, .to = 1.f, .t = k_reveal_fade, .delay = k_reveal_delay, .p = Prop::Opacity});
-        Media::set_listener(on_media);
-        SpotifyBridge::set_listener(on_bridge);
-        Media::resync_position(); // the local estimate may have drifted while hidden
+void start(Object::Context& arg_ctx, Handle arg_bg, const Fonts& fonts) {
+    if (!arg_bg) {
+        Log::logger(Log::Error, "MusicPlayerView: invalid background");
+        return;
     }
 
-    void stop() {
-        if (!running)
-            return;
-        running = false;
-        playing = false;
-        Media::set_listener(nullptr);
-        SpotifyBridge::set_listener(nullptr);
-        clear_prediction();
-        API::cancel_event(ticker);
-        ticker = {};
+    stop();
+    context = &arg_ctx;
+    bg      = arg_bg;
+    SpotifyBridge::reload(); // one stat; picks up a setup run after launch
+    build(fonts);
 
-        auto&          c = ctx();
-        vector<Handle> kids;
-        for (const Handle h : c.children(bg))
-            kids.push_back(h);
-        for (const Handle h : kids)
-            c.destroy(h);
-        c.clear_layout(bg);
-        c.set_clip(bg, false);
+    running = true;
+    playing = false;
+    phase   = 0.f;
+    shown_title.clear();
+    shown_artist.clear();
+    shown_time_l.clear();
+    shown_time_r.clear();
+    shown_time_shape.clear();
 
-        n       = {};
-        content = {};
-        bg      = {};
-    }
+    ctx().layout();
+    refresh();
+    refresh_artwork();
+
+    auto& c = ctx();
+    c.set_opacity(content, 0.f);
+    c.animate(Object::TAnimDesc{.h = content, .to = 1.f, .t = k_reveal_fade, .delay = k_reveal_delay, .p = Prop::Opacity});
+    Media::set_listener(on_media);
+    SpotifyBridge::set_listener(on_bridge);
+    Media::resync_position(); // the local estimate may have drifted while hidden
+}
+
+void stop() {
+    if (!running)
+        return;
+    running = false;
+    playing = false;
+    Media::set_listener(nullptr);
+    SpotifyBridge::set_listener(nullptr);
+    clear_prediction();
+    API::cancel_event(ticker);
+    ticker = {};
+
+    auto&          c = ctx();
+    vector<Handle> kids;
+    for (const Handle h : c.children(bg))
+        kids.push_back(h);
+    for (const Handle h : kids)
+        c.destroy(h);
+    c.clear_layout(bg);
+    c.set_clip(bg, false);
+
+    n       = {};
+    content = {};
+    bg      = {};
+}
 
 } // namespace MusicPlayerView

@@ -1,6 +1,5 @@
 #include "app/views/clock_view.hpp"
 #include "app/API.hpp"
-#include "app/state_manager.hpp"
 #include "backend/timer.hpp"
 #include "utils/log.hpp"
 
@@ -12,6 +11,7 @@ using namespace std;
 
 namespace {
 
+Object::Context*   context{};
 Object::Handle     time_text{};
 Timer::EventHandle next_tick{};
 bool               running{};
@@ -19,8 +19,7 @@ string             last{};
 
 void update() {
     const auto now  = chrono::system_clock::now();
-    auto&      ctx  = StateManager::context();
-    auto       view = ctx.text(time_text);
+    auto       view = context->text(time_text);
 
     const string s{format("{:%H:%M}", chrono::current_zone()->to_local(now))};
     if (s != last) {
@@ -52,7 +51,7 @@ void schedule_next_tick() {
 }
 
 namespace ClockView {
-    void start(Object::Handle bg, FontHandle font, std::source_location l) {
+    void start(Object::Context& arg_ctx, Object::Handle bg, FontHandle font, std::source_location l) {
         if (!font.id) {
             Log::logger(Log::Error, "{}:{}: Invalid font id", l.file_name(), l.line());
             return;
@@ -65,7 +64,8 @@ namespace ClockView {
 
         stop();
 
-        auto& ctx = StateManager::context();
+        context   = &arg_ctx;
+        auto& ctx = arg_ctx;
 
         time_text = ctx.create_text(bg, {});
         ctx.text(time_text).set_font(font).set_color(Color::White);
@@ -86,7 +86,7 @@ namespace ClockView {
         API::cancel_event(next_tick);
         next_tick = {};
         if (time_text) {
-            StateManager::context().destroy(time_text);
+            context->destroy(time_text);
             time_text = {};
         }
     }

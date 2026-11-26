@@ -213,7 +213,7 @@ void init(const Resources& arg_resources) {
     ctx.set_pivot(bg, .5f, 0.f);
     ctx.on(bg, Object::EventType::HoverEnter | Object::EventType::HoverLeave, on_hovered);
 
-    SysInfoView::init({.value = resources.main_font, .label = resources.title});
+    SysInfoView::init(ctx, {.value = resources.main_font, .label = resources.title}, StateManager::switch_state);
 }
 
 Object::Context& context() {
@@ -248,12 +248,13 @@ void switch_state(const StateType state) {
 
     if (state == StateType::Clock) {
         resize(140, 38, false, 19);
-        ClockView::start(bg, resources.main_font);
+        ClockView::start(ctx, bg, resources.main_font);
     }
 
     else if (state == StateType::MusicPLayer) {
         resize(410, 165, true, 32);
         MusicPlayerView::start(
+            ctx,
             bg,
             {
                 .title  = resources.title,

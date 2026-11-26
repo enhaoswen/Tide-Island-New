@@ -6,7 +6,7 @@
 
 namespace ClockView {
 
-void start(Object::Handle root, FontHandle font, std::source_location l = std::source_location::current());
+void start(Object::Context& ctx, Object::Handle root, FontHandle font, std::source_location l = std::source_location::current());
 
 void stop();
 

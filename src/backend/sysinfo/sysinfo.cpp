@@ -13,6 +13,7 @@ using namespace std;
 namespace {
 
 int epoll_fd{-1};
+
 void (*listener)(SysInfo::Update){};
 
 uint64_t pack(int fd, SysInfo::Detail::Tag tag) {
@@ -38,7 +39,7 @@ void unwatch(int fd) {
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
 }
 
-} // namespace Detail
+}
 
 void init() {
     if (epoll_fd != -1)
@@ -68,8 +69,8 @@ void process() {
     if (epoll_fd == -1)
         return;
     array<epoll_event, 16> evs{};
-    const int n = epoll_wait(epoll_fd, evs.data(), evs.size(), 0);
-    Update changed{};
+    const int              n = epoll_wait(epoll_fd, evs.data(), evs.size(), 0);
+    Update                 changed{};
     for (int i = 0; i < n; ++i) {
         switch (static_cast<Detail::Tag>(evs[i].data.u64 >> 32)) {
         case Detail::Tag::Pipewire:
@@ -93,7 +94,7 @@ void process() {
 void set_listener(void (*l)(Update)) { listener = l; }
 
 optional<Volume> volume() { return Pipewire::volume(); }
-optional<float> brightness() { return Backlight::brightness(); }
-optional<Power> power() { return Supply::power(); }
+optional<float>  brightness() { return Backlight::brightness(); }
+optional<Power>  power() { return Supply::power(); }
 
 } // namespace SysInfo

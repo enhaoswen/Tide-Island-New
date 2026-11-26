@@ -39,10 +39,10 @@ int main() {
 
     const StateManager::Resources resources{
         .main_font = API::load_font("Sans Serif", 18, Text::Weight::Bold),
-        .title = API::load_font("Sans Serif", 16, Text::Weight::DemiBold),
-        .artist = API::load_font("Sans Serif", 14, Text::Weight::Medium),
-        .time = API::load_font("Sans Serif", 12, Text::Weight::Medium),
-        .icon = API::load_font("Sans Serif", 22, Text::Weight::Regular),
+        .title     = API::load_font("Sans Serif", 16, Text::Weight::DemiBold),
+        .artist    = API::load_font("Sans Serif", 14, Text::Weight::Medium),
+        .time      = API::load_font("Sans Serif", 12, Text::Weight::Medium),
+        .icon      = API::load_font("Sans Serif", 22, Text::Weight::Regular),
     };
 
     StateManager::init(resources);

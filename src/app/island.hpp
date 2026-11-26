@@ -55,6 +55,7 @@ void set_size(std::uint16_t width, std::uint16_t height);
 void set_animation_scale(float scale);
 
 StateType get_state();
+
 void set_state(StateType state);
 
-} // namespace Island
+}
