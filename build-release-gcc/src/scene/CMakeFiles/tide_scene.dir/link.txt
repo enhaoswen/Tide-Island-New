@@ -1,0 +1,2 @@
+/usr/bin/ar qc libtide_scene.a CMakeFiles/tide_scene.dir/animation.cpp.o CMakeFiles/tide_scene.dir/context.cpp.o CMakeFiles/tide_scene.dir/input.cpp.o CMakeFiles/tide_scene.dir/layout.cpp.o
+/usr/bin/ranlib libtide_scene.a

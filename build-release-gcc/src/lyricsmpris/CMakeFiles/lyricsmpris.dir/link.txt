@@ -1,0 +1,2 @@
+/usr/bin/ar qc liblyricsmpris.a CMakeFiles/lyricsmpris.dir/Lyrics.cpp.o CMakeFiles/lyricsmpris.dir/Client.cpp.o CMakeFiles/lyricsmpris.dir/detail/Normalize.cpp.o CMakeFiles/lyricsmpris.dir/detail/Http.cpp.o CMakeFiles/lyricsmpris.dir/detail/Mpris.cpp.o CMakeFiles/lyricsmpris.dir/detail/Providers.cpp.o CMakeFiles/lyricsmpris.dir/detail/Resolver.cpp.o
+/usr/bin/ranlib liblyricsmpris.a

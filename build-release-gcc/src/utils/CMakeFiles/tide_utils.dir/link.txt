@@ -1,0 +1,2 @@
+/usr/bin/ar qc libtide_utils.a CMakeFiles/tide_utils.dir/color.cpp.o
+/usr/bin/ranlib libtide_utils.a

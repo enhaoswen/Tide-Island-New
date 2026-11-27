@@ -1,0 +1,13 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/swen/Code/Tide-Island-New/build-release-gcc/cmake_install.cmake",
+		"/home/swen/Code/Tide-Island-New/build-release-gcc/src/lyricsmpris/cmake_install.cmake",
+		"/home/swen/Code/Tide-Island-New/build-release-gcc/src/utils/cmake_install.cmake",
+		"/home/swen/Code/Tide-Island-New/build-release-gcc/src/backend/cmake_install.cmake",
+		"/home/swen/Code/Tide-Island-New/build-release-gcc/src/graphics/cmake_install.cmake",
+		"/home/swen/Code/Tide-Island-New/build-release-gcc/src/scene/cmake_install.cmake",
+		"/home/swen/Code/Tide-Island-New/build-release-gcc/src/backend/sysinfo/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
