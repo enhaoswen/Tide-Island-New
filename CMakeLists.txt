@@ -7,6 +7,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(TIDE_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+if(TIDE_SANITIZE)
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined)
+    add_link_options(-fsanitize=address,undefined)
+endif()
+
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
@@ -22,6 +28,8 @@ add_subdirectory(src/lyricsmpris)
 add_subdirectory(src/utils)
 add_subdirectory(src/backend)
 add_subdirectory(src/graphics)
+add_subdirectory(src/scene)
+add_subdirectory(src/backend/sysinfo)
 
 set(SRC
         src/app/main.cpp
@@ -33,25 +41,8 @@ set(SRC
         src/command/command.cpp
         src/app/state_manager.cpp
         src/app/views/music_player.cpp
-        src/app/views/music_player.hpp
         src/app/views/sysinfo.cpp
-        src/app/views/sysinfo.hpp
-        src/scene/context.cpp
-        src/scene/context.hpp
-        src/scene/struct.hpp
-        src/scene/animation.cpp
-        src/scene/animation.hpp
-        src/scene/layout.cpp
-        src/scene/render.hpp
-        src/scene/input.cpp
         src/music/media.cpp
-        src/music/media.hpp
-        src/backend/sysinfo/sysinfo.cpp
-        src/backend/sysinfo/sysinfo.hpp
-        src/backend/sysinfo/source.hpp
-        src/backend/sysinfo/pipewire.cpp
-        src/backend/sysinfo/backlight.cpp
-        src/backend/sysinfo/power.cpp
 )
 
 add_executable(Tide-island ${SRC})
@@ -78,10 +69,11 @@ target_link_libraries(Tide-island PRIVATE
         Freetype::Freetype
         lyricsmpris_glaze
         LyricsMpris::LyricsMpris
-        PkgConfig::PIPEWIRE
         tide_utils
         tide_platform
         tide_gfx
+        tide_scene
+        tide_sysinfo
 )
 
 target_compile_options(Tide-island PRIVATE -Wall -Wextra)

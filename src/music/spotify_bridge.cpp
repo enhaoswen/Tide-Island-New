@@ -27,14 +27,11 @@ using namespace std::chrono;
 
 namespace SpotifyBridge::wire {
 
-namespace {
-
 struct ConfigFile {
     int    version{};
     int    port{};
     string token{};
 };
-}
 
 struct Message {
     string         type{};
