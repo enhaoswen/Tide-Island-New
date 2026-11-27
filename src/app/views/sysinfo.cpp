@@ -261,7 +261,7 @@ void play_sign(int dir) {
     const bool visible = osd.sign.active || ctx().is_animating(osd.sign.node, Prop::Opacity);
     osd.sign_dir       = dir;
     osd.sign_again     = false;
-    play(osd.sign, format("{}/sign/sign-{}.png", sprites().dir, dir > 0 ? "plus" : "minus"), 0, k_frames - 1);
+    play(osd.sign, format("sign-icons/sign-{}.png", dir > 0 ? "plus" : "minus"), 0, k_frames - 1);
     ctx().set_visible(osd.sign.node, true);
     if (!visible)
         ctx().set_opacity(osd.sign.node, 0.f);
