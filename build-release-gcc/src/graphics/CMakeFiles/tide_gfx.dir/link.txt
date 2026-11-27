@@ -1,2 +1,0 @@
-/usr/bin/ar qc libtide_gfx.a CMakeFiles/tide_gfx.dir/driver_memory.cpp.o CMakeFiles/tide_gfx.dir/image.cpp.o CMakeFiles/tide_gfx.dir/renderer.cpp.o CMakeFiles/tide_gfx.dir/text.cpp.o CMakeFiles/tide_gfx.dir/texture.cpp.o
-/usr/bin/ranlib libtide_gfx.a
