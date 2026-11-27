@@ -15,6 +15,8 @@ ColumnLimit: 120
 
 BreakBeforeBraces: Attach
 FixNamespaceComments: false
+BreakTemplateDeclarations: Yes
+SpaceAfterTemplateKeyword: false
 
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false

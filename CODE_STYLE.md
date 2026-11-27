@@ -48,10 +48,28 @@ string get_url();       // not get_URL
 ```
 
 **Booleans carry a predicate prefix** (`is_`, `has_`, `should_`, `can_`, ...).
+This applies to bool variables and members, and to bool-returning functions that are **pure queries** with no side effects.
 
 ```cpp
 bool is_running_{true};
 bool has_focus() const;
+bool is_empty() const;
+```
+
+A query already phrased as a third-person verb reads as a predicate and needs no prefix.
+
+```cpp
+bool extends_cluster(uint32_t cp, uint32_t previous);   // not is_extends_cluster
+bool pattern_covers(FcPattern* pattern, ...);           // not is_pattern_covers
+```
+
+**Action functions keep their verb**, even when they return `bool` to report success or change.
+Mark them `[[nodiscard]]` when ignoring the result would be a bug.
+
+```cpp
+[[nodiscard]] bool read(Config& out);   // not try_read
+bool dispatch();                         // not has_changed
+bool connect();                          // not try_connect
 ```
 
 **Accessors use `get_` / `set_`.**

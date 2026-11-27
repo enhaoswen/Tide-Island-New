@@ -1,113 +1,97 @@
-#include "command.hpp"
-#include "app/island.hpp"
-#include "utils/log.hpp"
+#include "command/command.hpp"
 
 #include <optional>
 #include <ranges>
 #include <span>
 #include <vector>
 
+#include "app/island.hpp"
+#include "utils/log.hpp"
+
 using namespace std;
 
 namespace {
 
 vector<string_view> split(string_view str, char delimiter = ' ') {
-    vector<string_view> result{};
+	vector<string_view> result{};
 
-    size_t start{};
+	size_t start{};
 
-    while (start < str.size()) {
-        start = str.find_first_not_of(delimiter, start);
-        if (start == string_view::npos)
-            break;
+	while(start < str.size()) {
+		start = str.find_first_not_of(delimiter, start);
+		if(start == string_view::npos)
+			break;
 
-        const size_t end{str.find(delimiter, start)};
+		const size_t end{str.find(delimiter, start)};
 
-        if (end == string_view::npos) {
-            result.push_back(str.substr(start));
-            break;
-        }
+		if(end == string_view::npos) {
+			result.push_back(str.substr(start));
+			break;
+		}
 
-        result.push_back(str.substr(start, end - start));
-        start = end + 1;
-    }
+		result.push_back(str.substr(start, end - start));
+		start = end + 1;
+	}
 
-    return result;
+	return result;
 }
 
 optional<float> to_float(string_view str) {
-    float value{};
+	float value{};
 
-    const auto [ptr, ec] = from_chars(
-        str.data(),
-        str.data() + str.size(),
-        value
-        );
+	const auto [ptr, ec] = from_chars(str.data(), str.data() + str.size(), value);
 
-    if (ec != errc{} || ptr != str.data() + str.size()) {
-        return nullopt;
-    }
+	if(ec != errc{} || ptr != str.data() + str.size()) {
+		return nullopt;
+	}
 
-    return value;
+	return value;
 }
 
 void handle_animation(span<const string_view> args) {
-    if (args[1] == "speed") {
-        const auto value = to_float(args[2]);
+	if(args[1] == "speed") {
+		const auto value{to_float(args[2])};
 
-        if (!value) {
+		if(!value) {
+			const auto cmd{args | views::join_with(' ') | ranges::to<string>()};
+			Log::logger(Log::LogLevel::Error, "Error speed value {} in {}, should be float", args[2], cmd);
+			return;
+		}
 
-            // c++ is a amazing language
-            const auto cmd = args
-                | views::join_with(' ')
-                | ranges::to<string>();
-
-            logger(Log::Error, "Error speed value {} in {}, should be float", args[2], cmd);
-            return;
-        }
-
-        Island::set_animation_scale(value.value());
-        Log::logger(Log::Debug, "Animation scale {}", value.value());
-
-    }
-
-    else {
-        const auto cmd = args
-            | views::join_with(' ')
-            | ranges::to<string>();
-
-        Log::logger(Log::Error, "Invalid animation value {} in {}", args[1], cmd);
-    }
-
+		Island::set_animation_scale(value.value());
+		Log::logger(Log::LogLevel::Debug, "Animation scale {}", value.value());
+	} else {
+		const auto cmd{args | views::join_with(' ') | ranges::to<string>()};
+		Log::logger(Log::LogLevel::Error, "Invalid animation value {} in {}", args[1], cmd);
+	}
 }
-
 
 }
 
 namespace Command {
-    void handle_command(string_view cmd) {
-        vector<string_view> result = split(cmd);
+void handle_command(string_view cmd) {
+	vector<string_view> result{split(cmd)};
 
-        if (result.empty()) {
-            return;
-        }
+	if(result.empty()) {
+		return;
+	}
 
-        if (result[0] == "quit") {
-            exit(EXIT_SUCCESS);
-        }
+	if(result[0] == "quit") {
+		exit(EXIT_SUCCESS);
+	}
 
-        if (result[0] == "animation") {
-            if (result.size() <= 2) {
-                Log::logger(Log::Error, R"_(Command "animation" requires more args. {})_", cmd);
-                return;
-            }
-            handle_animation(result);
-            return;
-        }
+	if(result[0] == "animation") {
+		if(result.size() <= 2) {
+			Log::logger(Log::LogLevel::Error, R"_(Command "animation" requires more args. {})_", cmd);
+			return;
+		}
+		handle_animation(result);
+		return;
+	}
 
-        if (result[0] == "help") {
+	if(result[0] == "help") {
 
-            string const help = R"(TIDE ISLAND HELP
+		const string help{R"(TIDE ISLAND HELP
 
 Commands:
   quit            Exit Tide Island.
@@ -118,14 +102,12 @@ Commands:
 
     Example:
       animation speed 1.5
-)";
+)"};
 
-            Log::frame_logger(Log::Warning, help);
-        }
+		Log::frame_logger(Log::LogLevel::Warning, help);
+	} else {
+		Log::logger(Log::LogLevel::Error, "Invalid command {}", cmd);
+	}
+}
 
-        else {
-            Log::logger(Log::Error, "Invalid command {}", cmd);
-        }
-    }
-
-} // namespace Command
+}

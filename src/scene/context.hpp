@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <unordered_map>
@@ -12,621 +13,756 @@
 #include "struct.hpp"
 
 namespace Object {
+
+/// @brief Description of a rectangle to create.
 struct RectDesc {
-    Frame frame{};
-    Color color{};
-    float radius{};
+	Frame frame_{};
+	Color color_{};
+	float radius_{};
 };
 
+/// @brief Description of an image to create.
 struct ImageDesc {
-    Frame   frame{};
-    Texture texture{};
-    float   radius{};
+	Frame   frame_{};
+	Texture texture_{};
+	float   radius_{};
 };
 
+/// @brief Description of a text node to create.
 struct TextDesc {
-    Frame      frame{};
-    Texture    texture{};
-    FontHandle font{};
-    Color      color{};
+	Frame      frame_{};
+	Texture    texture_{};
+	FontHandle font_{};
+	Color      color_{};
 };
 
+/// @brief Description of a ring to create.
 struct RingDesc {
-    Frame                frame{};
-    Color                color{};
-    std::optional<Color> track{};
-    float                progress{};
-    float                thickness = 4.f;
+	Frame                frame_{};
+	Color                color_{};
+	std::optional<Color> track_{};
+	float                progress_{};
+	float                thickness_{4.f};
 };
 
+/// @brief Description of a spring animation.
 struct SAnimDesc {
-    Handle        h;
-    float         to{};
-    const Spring& s;
-    float         delay{};
-    Prop          p{};
-    AnimCallback  on_done{};
+	Handle        h_;
+	float         to_{};
+	const Spring& s_;
+	float         delay_{};
+	Prop          p_{};
+	AnimCallback  on_done_{};
 };
 
+/// @brief Description of a timed animation.
 struct TAnimDesc {
-    Handle        h;
-    float         to{};
-    const Timing& t;
-    float         delay{};
-    Prop          p{};
-    AnimCallback  on_done{};
+	Handle        h_;
+	float         to_{};
+	const Timing& t_;
+	float         delay_{};
+	Prop          p_{};
+	AnimCallback  on_done_{};
 };
 
 class Context;
 
+/// @brief Typed accessor for a rectangle node.
 class RectView {
 public:
-    RectView() = default;
+	RectView() = default;
 
-    [[nodiscard]] explicit operator bool() const;
+	/// @brief Returns true if the view is valid.
+	[[nodiscard]] explicit operator bool() const;
 
-    RectView& set_color(const Color& c);
+	/// @brief Sets the rectangle fill color.
+	RectView& set_color(const Color& c);
 
-    RectView& set_radius(float r);
+	/// @brief Sets the corner radius in pixels.
+	RectView& set_radius(float r);
 
-    [[nodiscard]] Color color() const;
+	/// @brief Returns the current color.
+	[[nodiscard]] Color get_color() const;
 
-    [[nodiscard]] float radius() const;
+	/// @brief Returns the corner radius in pixels.
+	[[nodiscard]] float get_radius() const;
 
 private:
-    friend class Context;
+	friend class Context;
 
-    RectView(Context* c, Handle h) : ctx_(c), h_(h) {
-    }
+	RectView(Context* c, Handle h) :
+		ctx_(c),
+		h_(h) {}
 
-    [[nodiscard]] RectData* data() const;
+	[[nodiscard]] RectData* data() const;
 
-    Context* ctx_ = nullptr;
-    Handle   h_{};
+	Context* ctx_{nullptr};
+	Handle   h_{};
 };
 
+/// @brief Typed accessor for an image node.
 class ImageView {
 public:
-    ImageView() = default;
+	ImageView() = default;
 
-    [[nodiscard]] explicit operator bool() const;
+	/// @brief Returns true if the view is valid.
+	[[nodiscard]] explicit operator bool() const;
 
-    ImageView& set_texture(Texture t);           // may change the Fit size -> re-layout
-    ImageView& set_image(std::string_view path); // loads then set_texture; no path stored
-    ImageView& set_radius(float r);
-    ImageView& set_uv(const UvRect& uv); // e.g. one frame of a sprite strip
+	/// @brief Replaces the image texture and re-lays out.
+	ImageView& set_texture(Texture t); // may change the Fit size -> re-layout
+	/// @brief Loads an image from path.
+	ImageView& set_image(std::string_view path); // loads then set_texture; no path stored
+	/// @brief Sets the corner radius in pixels.
+	ImageView& set_radius(float r);
+	/// @brief Sets the source rectangle of the texture.
+	ImageView& set_uv(const UvRect& uv); // e.g. one frame of a sprite strip
 
-    [[nodiscard]] float radius() const;
+	/// @brief Returns the corner radius in pixels.
+	[[nodiscard]] float get_radius() const;
 
 private:
-    friend class Context;
+	friend class Context;
 
-    ImageView(Context* c, Handle h) : ctx_(c), h_(h) {
-    }
+	ImageView(Context* c, Handle h) :
+		ctx_(c),
+		h_(h) {}
 
-    [[nodiscard]] ImageData* data() const;
+	[[nodiscard]] ImageData* data() const;
 
-    Context* ctx_ = nullptr;
-    Handle   h_{};
+	Context* ctx_{nullptr};
+	Handle   h_{};
 };
 
+/// @brief Typed accessor for a ring node.
 class RingView {
 public:
-    RingView() = default;
+	RingView() = default;
 
-    [[nodiscard]] explicit operator bool() const;
+	/// @brief Returns true if the view is valid.
+	[[nodiscard]] explicit operator bool() const;
 
-    RingView& set_progress(float p); // clamped to [0, 1]
-    RingView& set_thickness(float t);
+	/// @brief Sets the progress in [0, 1].
+	RingView& set_progress(float p); // clamped to [0, 1]
+	/// @brief Sets the ring thickness in pixels.
+	RingView& set_thickness(float t);
 
-    RingView& set_color(const Color& c);
+	/// @brief Sets the ring color.
+	RingView& set_color(const Color& c);
 
-    RingView& set_track(const Color& c);
+	/// @brief Sets the track color.
+	RingView& set_track(const Color& c);
 
-    [[nodiscard]] float progress() const;
+	/// @brief Returns the progress in [0, 1].
+	[[nodiscard]] float get_progress() const;
 
-    [[nodiscard]] float thickness() const;
+	/// @brief Returns the ring thickness in pixels.
+	[[nodiscard]] float get_thickness() const;
 
-    [[nodiscard]] Color color() const;
+	/// @brief Returns the current color.
+	[[nodiscard]] Color get_color() const;
 
-    [[nodiscard]] Color track() const;
+	/// @brief Returns the track color.
+	[[nodiscard]] Color get_track() const;
 
 private:
-    friend class Context;
+	friend class Context;
 
-    RingView(Context* c, Handle h) : ctx_(c), h_(h) {
-    }
+	RingView(Context* c, Handle h) :
+		ctx_(c),
+		h_(h) {}
 
-    [[nodiscard]] RingData* data() const;
+	[[nodiscard]] RingData* data() const;
 
-    Context* ctx_ = nullptr;
-    Handle   h_{};
+	Context* ctx_{nullptr};
+	Handle   h_{};
 };
 
+/// @brief Typed accessor for a text node.
 class TextView {
 public:
-    TextView() = default;
+	TextView() = default;
 
-    [[nodiscard]] explicit operator bool() const;
+	/// @brief Returns true if the view is valid.
+	[[nodiscard]] explicit operator bool() const;
 
-    TextView& set_texture(Texture t); // text is rendered to a texture by the caller
-    // Procedural glyph: `fn` draws it now and again whenever the output scale changes.
-    TextView& set_raster(RasterFn fn, std::uintptr_t arg);
+	/// @brief Sets a pre-rendered text texture.
+	TextView& set_texture(Texture t); // text is rendered to a texture by the caller
+	// Procedural glyph: `fn` draws it now and again whenever the output scale changes.
+	/// @brief Sets a procedural glyph renderer.
+	TextView& set_raster(RasterFn fn, uintptr_t arg);
 
-    // Logical size of the current texture (0 x 0 if none).
-    [[nodiscard]] float texture_width() const;
+	// Logical size of the current texture (0 x 0 if none).
+	/// @brief Returns the logical texture width.
+	[[nodiscard]] float get_texture_width() const;
 
-    [[nodiscard]] float texture_height() const;
+	/// @brief Returns the logical texture height.
+	[[nodiscard]] float get_texture_height() const;
 
-    TextView& set_text(std::string_view s); // rasterizes with the stored font; keeps the string for scale changes
-    TextView& set_font(FontHandle f);
+	/// @brief Sets the text and rasterizes it with the stored font.
+	TextView& set_text(std::string_view s); // rasterizes with the stored font; keeps the string for scale changes
+	/// @brief Sets the font used for rasterization.
+	TextView& set_font(FontHandle f);
 
-    TextView& set_color(const Color& c);
+	/// @brief Sets the text color.
+	TextView& set_color(const Color& c);
 
-    [[nodiscard]] Color color() const;
+	/// @brief Returns the current color.
+	[[nodiscard]] Color get_color() const;
 
 private:
-    friend class Context;
+	friend class Context;
 
-    TextView(Context* c, Handle h) : ctx_(c), h_(h) {
-    }
+	TextView(Context* c, Handle h) :
+		ctx_(c),
+		h_(h) {}
 
-    [[nodiscard]] TextData* data() const;
+	[[nodiscard]] TextData* data() const;
 
-    Context* ctx_ = nullptr;
-    Handle   h_{};
+	Context* ctx_{nullptr};
+	Handle   h_{};
 };
 
+/// @brief Scene graph owning nodes, draw data, layout and input state.
 class Context {
 public:
-    explicit Context(std::size_t reserve_nodes = 128);
+	/// @brief Creates an empty context, reserving room for reserve_nodes nodes.
+	explicit Context(size_t reserve_nodes = 128);
 
-    Context(const Context&) = delete;
+	/// @brief Contexts are non-copyable; node indices would alias.
+	Context(const Context&) = delete;
 
-    Context& operator=(const Context&) = delete;
+	/// @brief Contexts are non-copyable; node indices would alias.
+	Context& operator=(const Context&) = delete;
 
-    Context(Context&&) = default;
+	/// @brief Moves the whole scene graph.
+	Context(Context&&) = default;
 
-    Context& operator=(Context&&) = default;
+	/// @brief Move-assigns the whole scene graph.
+	Context& operator=(Context&&) = default;
 
-    Handle create_root(float width, float height);
+	/// @brief Creates a root node covering the given surface size.
+	Handle create_root(float width, float height);
 
-    Handle create_group(Handle parent = {}, const Frame& frame = {});
+	/// @brief Creates a group node.
+	Handle create_group(Handle parent = {}, const Frame& frame = {});
 
-    Handle create_rect(Handle parent = {}, const RectDesc& desc = {});
+	/// @brief Creates a rectangle node.
+	Handle create_rect(Handle parent = {}, const RectDesc& desc = {});
 
-    Handle create_image(Handle parent = {}, ImageDesc desc = {});
+	/// @brief Creates an image node.
+	Handle create_image(Handle parent = {}, ImageDesc desc = {});
 
-    Handle create_text(Handle parent = {}, TextDesc desc = {});
+	/// @brief Creates a text node.
+	Handle create_text(Handle parent = {}, TextDesc desc = {});
 
-    Handle create_ring(Handle parent = {}, const RingDesc& desc = {});
+	/// @brief Creates a ring node.
+	Handle create_ring(Handle parent = {}, const RingDesc& desc = {});
 
-    void                      destroy(Handle h); // whole subtree; stale handles become invalid
-    void                      clear();           // destroy every root
-    [[nodiscard]] bool        alive(Handle h) const { return node(h) != nullptr; }
-    [[nodiscard]] std::size_t node_count() const { return live_; }
+	/// @brief Destroys a node and its whole subtree.
+	void destroy(Handle h); // whole subtree; stale handles become invalid
+	/// @brief Destroys every root node.
+	void clear(); // destroy every root
 
-    bool attach(Handle child, Handle parent); // appended on top; re-parents if needed
-    bool detach(Handle h);
+	/// @brief Returns true if the handle refers to a live node.
+	[[nodiscard]] bool is_alive(Handle h) const { return node(h) != nullptr; }
 
-    void move_to_front(Handle h); // z-order
-    void move_to_back(Handle h);
+	/// @brief Returns the number of live nodes.
+	[[nodiscard]] size_t get_node_count() const { return live_; }
 
-    [[nodiscard]] Handle parent(Handle h) const;
+	/// @brief Attaches a child on top of parent; returns true on success.
+	bool attach(Handle child, Handle parent); // appended on top; re-parents if needed
+	/// @brief Detaches a node from its parent; returns true on success.
+	bool detach(Handle h);
 
-    class ChildRange {
-    public:
-        class iterator {
-        public:
-            Handle operator*() const { return ctx_->handle_of(i_); }
+	/// @brief Moves a node to the front of its siblings.
+	void move_to_front(Handle h); // z-order
+	/// @brief Moves a node to the back of its siblings.
+	void move_to_back(Handle h);
 
-            iterator& operator++() {
-                i_ = ctx_->nodes_[i_].next;
-                return *this;
-            }
+	/// @brief Returns the parent handle, or an empty handle.
+	[[nodiscard]] Handle parent(Handle h) const;
 
-            bool operator==(const iterator&) const = default;
+	/// @brief Range over the children of a node.
+	class ChildRange {
+	public:
+		/// @brief Forward iterator over the children of a node.
+		class iterator {
+		public:
+			/// @brief Returns the handle of the current child.
+			Handle operator*() const { return ctx_->handle_of(i_); }
 
-        private:
-            friend class ChildRange;
+			/// @brief Advances to the next sibling.
+			iterator& operator++() {
+				i_ = ctx_->nodes_[i_].next_;
+				return *this;
+			}
 
-            iterator(const Context* c, uint16_t i) : ctx_(c), i_(i) {
-            }
+			/// @brief Returns true if both iterators point at the same child.
+			bool operator==(const iterator&) const = default;
 
-            const Context* ctx_;
-            uint16_t       i_;
-        };
+		private:
+			friend class ChildRange;
 
-        [[nodiscard]] iterator begin() const { return {ctx_, first_}; }
-        [[nodiscard]] iterator end() const { return {ctx_, k_none}; }
+			iterator(const Context* c, uint16_t i) :
+				ctx_(c),
+				i_(i) {}
 
-    private:
-        friend class Context;
+			const Context* ctx_;
+			uint16_t       i_;
+		};
 
-        ChildRange(const Context* c, uint16_t f) : ctx_(c), first_(f) {
-        }
+		/// @brief Returns an iterator to the first child.
+		[[nodiscard]] iterator begin() const { return {ctx_, first_}; }
 
-        const Context* ctx_;
-        uint16_t       first_;
-    };
+		/// @brief Returns the end iterator.
+		[[nodiscard]] iterator end() const { return {ctx_, k_none}; }
 
-    // Back-most to front-most. Do not create / destroy / re-parent while iterating.
-    [[nodiscard]] ChildRange children(Handle h) const;
+	private:
+		friend class Context;
 
-    void set_pos(Handle h, float x, float y);
+		ChildRange(const Context* c, uint16_t f) :
+			ctx_(c),
+			first_(f) {}
 
-    void set_size(Handle h, float w, float hgt);
+		const Context* ctx_;
+		uint16_t       first_;
+	};
 
-    void set_size_mode(Handle h, Axis axis, SizeMode mode);
+	// Back-most to front-most. Do not create / destroy / re-parent while iterating.
+	/// @brief Returns the children of a node, back to front.
+	[[nodiscard]] ChildRange children(Handle h) const;
 
-    void set_grow(Handle h, Axis axis, const GrowParams& params = {});
+	/// @brief Sets the node position.
+	void set_pos(Handle h, float x, float y);
 
-    void set_visible(Handle h, bool v);
+	/// @brief Sets the node size.
+	void set_size(Handle h, float w, float hgt);
 
-    void set_opacity(Handle h, float v);
+	/// @brief Sets how the node derives its size along an axis.
+	void set_size_mode(Handle h, Axis axis, SizeMode mode);
 
-    // Visual only: layout ignores it; drawing and hit testing follow it.
-    void set_scale(Handle h, float s);
+	/// @brief Sets grow weight and limits along an axis.
+	void set_grow(Handle h, Axis axis, const GrowParams& params = {});
 
-    // Normalized point of the node that stays fixed while scaling; (0.5, 0.5) by default.
-    void set_pivot(Handle h, float x, float y);
+	/// @brief Shows or hides the node.
+	void set_visible(Handle h, bool is_visible);
 
-    [[nodiscard]] float scale(Handle h) const;
+	/// @brief Sets the node opacity in [0, 1].
+	void set_opacity(Handle h, float v);
 
-    void set_clip(Handle h, bool v);
+	// Visual only: layout ignores it; drawing and hit testing follow it.
+	/// @brief Sets the visual scale of the node.
+	void set_scale(Handle h, float s);
 
-    void set_tag(Handle h, uint32_t tag);
+	// Normalized point of the node that stays fixed while scaling; (0.5, 0.5) by default.
+	/// @brief Sets the normalized pivot used while scaling.
+	void set_pivot(Handle h, float x, float y);
 
-    void set_clickable(Handle h, bool v);
+	/// @brief Returns the visual scale of the node.
+	[[nodiscard]] float scale(Handle h) const;
 
-    void set_hoverable(Handle h, bool v);
+	/// @brief Enables or disables clipping to the node bounds.
+	void set_clip(Handle h, bool is_enabled);
 
-    void set_draggable(Handle h, bool v);
+	/// @brief Sets the caller tag of the node.
+	void set_tag(Handle h, uint32_t tag);
 
-    void set_layout(Handle h, const LayoutData& layout);
+	/// @brief Enables or disables click handling.
+	void set_clickable(Handle h, bool is_enabled);
 
-    void clear_layout(Handle h);
+	/// @brief Enables or disables hover handling.
+	void set_hoverable(Handle h, bool is_enabled);
 
-    [[nodiscard]] Frame frame(Handle h) const;
+	/// @brief Enables or disables drag handling.
+	void set_draggable(Handle h, bool is_enabled);
 
-    [[nodiscard]] Frame absolute_frame(Handle h) const; // after scaling
+	/// @brief Sets the layout configuration of a node.
+	void set_layout(Handle h, const LayoutData& layout);
 
-    [[nodiscard]] uint32_t tag(Handle h) const;
+	/// @brief Removes the layout configuration of a node.
+	void clear_layout(Handle h);
 
-    [[nodiscard]] std::optional<float> get_prop(Handle h, Prop p) const;
+	/// @brief Returns the local frame of the node.
+	[[nodiscard]] Frame frame(Handle h) const;
 
-    bool set_prop(Handle h, Prop p, float value);
+	/// @brief Returns the frame after applying parent scaling.
+	[[nodiscard]] Frame absolute_frame(Handle h) const; // after scaling
 
-    // Typed views; empty (false) if the handle is dead or of another Kind.
-    [[nodiscard]] RectView rect(Handle h);
+	/// @brief Returns the caller tag of the node.
+	[[nodiscard]] uint32_t tag(Handle h) const;
 
-    [[nodiscard]] ImageView image(Handle h);
+	/// @brief Reads an animatable property, if supported.
+	[[nodiscard]] std::optional<float> get_prop(Handle h, Prop p) const;
 
-    [[nodiscard]] TextView text(Handle h);
+	/// @brief Writes an animatable property; returns true if supported.
+	bool set_prop(Handle h, Prop p, float value);
 
-    [[nodiscard]] RingView ring(Handle h);
+	// Typed views; empty (false) if the handle is dead or of another Kind.
+	/// @brief Returns a typed view of a rectangle node.
+	[[nodiscard]] RectView rect(Handle h);
 
-    bool animate(SAnimDesc desc);
+	/// @brief Returns a typed view of an image node.
+	[[nodiscard]] ImageView image(Handle h);
 
-    bool animate(TAnimDesc desc);
+	/// @brief Returns a typed view of a text node.
+	[[nodiscard]] TextView text(Handle h);
 
-    void               cancel_animation(Handle h, Prop p) { anim_.cancel(h, p); }
-    [[nodiscard]] bool is_animating(Handle h, Prop p) const { return anim_.active(h, p); }
-    [[nodiscard]] bool animating() const { return !anim_.empty(); }
+	/// @brief Returns a typed view of a ring node.
+	[[nodiscard]] RingView ring(Handle h);
 
-    void update(float dt);
+	/// @brief Starts a spring animation.
+	bool animate(SAnimDesc desc);
 
-    bool layout();
+	/// @brief Starts a timed animation.
+	bool animate(TAnimDesc desc);
 
-    // ---- Event callbacks ----------------------------------------------------
-    //
-    // Events go to the top-most interactive node under the pointer only (no bubbling).
-    // Each (node, EventType) pair holds at most one callback: binding replaces what was bound
-    // to those types, and an empty callback unbinds them. Binding also turns on the interaction
-    // flag the types need (Click -> clickable, Hover* -> hoverable, Drag* -> draggable,
-    // Press / Release -> clickable unless already clickable or draggable). Unbinding leaves
-    // flags alone, so a node made clickable keeps blocking clicks to whatever is beneath it.
-    // Bindings die with the node.
-    bool on(Handle h, EventMask mask, EventCallback cb);
+	/// @brief Stops the animation of a property.
+	void cancel_animation(Handle h, Prop p) { anim_.cancel(h, p); }
 
-    bool on_click(Handle h, EventCallback cb) { return on(h, EventType::Click, cb); }
+	/// @brief Returns true if the property is animated.
+	[[nodiscard]] bool is_animating(Handle h, Prop p) const { return anim_.is_active(h, p); }
 
-    void off(Handle h, EventMask mask = EventMask::all());
+	/// @brief Returns true if any animation is running.
+	[[nodiscard]] bool is_animating() const { return !anim_.is_empty(); }
 
-    // Runs the callbacks for queued events, in order. Call it outside input handling; callbacks
-    // may freely create, destroy, rebind or animate nodes (including their own target).
-    // Returns whether any callback ran.
-    bool dispatch_events();
+	/// @brief Advances animations and layout by dt milliseconds.
+	void update(float dt);
 
-    // ---- Pointer input (surface coordinates) --------------------------------
-    // Only events that have a bound callback are queued, so unhandled input costs nothing.
-    void pointer_move(float x, float y);
+	/// @brief Lays out dirty roots; returns true if any work was done.
+	bool layout();
 
-    void pointer_button(Button b, bool down);
+	// Events go to the top-most interactive node under the pointer only (no bubbling).
+	// Each (node, EventType) pair holds at most one callback: binding replaces what was bound
+	// to those types, and an empty callback unbinds them. Binding also turns on the interaction
+	// flag the types need (Click -> clickable, Hover* -> hoverable, Drag* -> draggable,
+	// Press / Release -> clickable unless already clickable or draggable). Unbinding leaves
+	// flags alone, so a node made clickable keeps blocking clicks to whatever is beneath it.
+	// Bindings die with the node.
+	/// @brief Binds a callback for the given event types.
+	bool on(Handle h, EventMask mask, EventCallback cb);
 
-    void                 pointer_cancel();                 // pointer left the surface, focus lost etc.
-    [[nodiscard]] Handle hit_test(float x, float y) const; // top-most interactive node
-    [[nodiscard]] Handle hovered() const { return hovered_; }
-    void                 set_drag_threshold(float px) { drag_threshold_ = px; }
+	/// @brief Binds a click callback.
+	bool on_click(Handle h, EventCallback cb) { return on(h, EventType::Click, cb); }
+
+	/// @brief Unbinds callbacks for the given event types.
+	void off(Handle h, EventMask mask = EventMask::all());
+
+	// Runs the callbacks for queued events, in order. Call it outside input handling; callbacks
+	// may freely create, destroy, rebind or animate nodes (including their own target).
+	// Returns whether any callback ran.
+	/// @brief Dispatches queued events; returns true if any callback ran.
+	bool dispatch_events();
+
+	// Only events that have a bound callback are queued, so unhandled input costs nothing.
+	/// @brief Updates the pointer position.
+	void pointer_move(float x, float y);
+
+	/// @brief Handles a pointer button press or release.
+	void pointer_button(Button b, bool is_down);
+
+	/// @brief Cancels the current pointer interaction.
+	void pointer_cancel(); // pointer left the surface, focus lost etc.
+	/// @brief Returns the top-most interactive node at a point.
+	[[nodiscard]] Handle hit_test(float x, float y) const; // top-most interactive node
+
+	/// @brief Returns the currently hovered node.
+	[[nodiscard]] Handle get_hovered() const { return hovered_; }
+
+	/// @brief Sets the distance a pointer must move to start a drag.
+	void set_drag_threshold(float px) { drag_threshold_ = px; }
 
 private:
-    friend class RectView;
-    friend class ImageView;
-    friend class TextView;
-    friend class RingView;
-    friend struct Drawer;
+	friend class RectView;
+	friend class ImageView;
+	friend class TextView;
+	friend class RingView;
+	friend struct Drawer;
 
-    [[nodiscard]] Node* node(Handle h) {
-        return h.id < nodes_.size() && nodes_[h.id].gen == h.gen ? &nodes_[h.id] : nullptr;
-    }
+	[[nodiscard]] Node* node(Handle h) {
+		return h.id_ < nodes_.size() && nodes_[h.id_].gen_ == h.gen_ ? &nodes_[h.id_] : nullptr;
+	}
 
-    [[nodiscard]] const Node* node(Handle h) const {
-        return h.id < nodes_.size() && nodes_[h.id].gen == h.gen ? &nodes_[h.id] : nullptr;
-    }
+	[[nodiscard]] const Node* node(Handle h) const {
+		return h.id_ < nodes_.size() && nodes_[h.id_].gen_ == h.gen_ ? &nodes_[h.id_] : nullptr;
+	}
 
-    [[nodiscard]] Handle handle_of(uint16_t i) const { return {i, nodes_[i].gen}; }
+	[[nodiscard]] Handle handle_of(uint16_t i) const { return {i, nodes_[i].gen_}; }
 
-    [[nodiscard]] uint16_t alloc_node();
+	[[nodiscard]] uint16_t alloc_node();
 
-    void release_node(uint16_t i);
+	void release_node(uint16_t i);
 
-    void release_data(Kind kind, uint16_t data);
+	void release_data(Kind kind, uint16_t data);
 
-    [[nodiscard]] Handle spawn(Kind kind, uint16_t data, const Frame& frame, Handle parent);
+	[[nodiscard]] Handle spawn(Kind kind, uint16_t data, const Frame& frame, Handle parent);
 
-    void link_last(uint16_t parent, uint16_t child);
+	void link_last(uint16_t parent, uint16_t child);
 
-    void link_first(uint16_t parent, uint16_t child);
+	void link_first(uint16_t parent, uint16_t child);
 
-    uint16_t unlink(uint16_t child);
+	uint16_t unlink(uint16_t child);
 
-    void mark_dirty(uint16_t i);
+	void mark_dirty(uint16_t i);
 
-    [[nodiscard]] float text_zoom(uint16_t i) const;
+	[[nodiscard]] float text_zoom(uint16_t i) const;
 
-    [[nodiscard]] static std::uint64_t raster_key(const TextData& d, float scale, int phase_x, int phase_y);
+	[[nodiscard]] static uint64_t raster_key(const TextData& d, float scale, int phase_x, int phase_y);
 
-    [[nodiscard]] static Texture raster_text(const TextData& d, float scale, float sub_x, float sub_y);
+	[[nodiscard]] static Texture raster_text(const TextData& d, float scale, float sub_x, float sub_y);
 
-    void rasterize(uint16_t i, TextData& d);
+	void rasterize(uint16_t i, TextData& d);
 
-    [[nodiscard]] static Frame prepare_text_draw(TextData& d, const Frame& abs);
+	[[nodiscard]] static Frame prepare_text_draw(TextData& d, const Frame& abs);
 
-    void set_flag(Handle h, uint16_t bit, bool on);
+	void set_flag(Handle h, uint16_t bit, bool is_on);
 
-    void measure(uint16_t i);
+	void measure(uint16_t i);
 
-    void arrange(uint16_t i);
+	void arrange(uint16_t i);
 
-    void arrange_children(Node& n);
+	void arrange_children(Node& n);
 
-    float resolve_grow(Node& n, Axis axis, float space);
+	float resolve_grow(Node& n, Axis axis, float space);
 
-    [[nodiscard]] GrowParams grow_params(uint16_t id, Axis axis) const;
+	[[nodiscard]] GrowParams grow_params(uint16_t id, Axis axis) const;
 
-    [[nodiscard]] float radius_of(const Node& n) const;
+	[[nodiscard]] float radius_of(const Node& n) const;
 
-    [[nodiscard]] Transform& transform_of(Node& n);
+	[[nodiscard]] Transform& transform_of(Node& n);
 
-    [[nodiscard]] Placed place(const Node& n, const Placed& parent) const;
+	[[nodiscard]] Placed place(const Node& n, const Placed& parent) const;
 
-    [[nodiscard]] Placed placed(uint16_t i) const;
+	[[nodiscard]] Placed placed(uint16_t i) const;
 
-    [[nodiscard]] uint16_t hit_node(uint16_t i, float x, float y, const Placed& parent) const;
+	[[nodiscard]] uint16_t hit_node(uint16_t i, float x, float y, const Placed& parent) const;
 
-    void update_hover();
+	void update_hover();
 
-    void validate_input();
+	void validate_input();
 
-    void emit(Handle target, EventType type, Button b, float dx, float dy);
+	void emit(Handle target, EventType type, Button b, float dx, float dy);
 
-    [[nodiscard]] bool poll_event(Event& out);
+	[[nodiscard]] bool poll_event(Event& out);
 
-    [[nodiscard]] EventCallback listener(const Node& n, EventType type) const;
+	[[nodiscard]] EventCallback listener(const Node& n, EventType type) const;
 
-    void unbind(Node& n, EventMask mask);
+	void unbind(Node& n, EventMask mask);
 
-    std::vector<Node>   nodes_;
-    uint16_t            free_head_ = k_none;
-    std::size_t         live_      = 0;
-    std::vector<Handle> roots_; // back-to-front
+	std::vector<Node>   nodes_;
+	uint16_t            free_head_{k_none};
+	size_t              live_ = 0;
+	std::vector<Handle> roots_; // back-to-front
 
-    SlotVec<RectData>                      rects_;
-    SlotVec<ImageData>                     images_;
-    SlotVec<TextData>                      texts_;
-    SlotVec<RingData>                      rings_;
-    SlotVec<LayoutData>                    layouts_;
-    SlotVec<Listener>                      listeners_;
-    SlotVec<Transform>                     transforms_;
-    std::unordered_map<uint16_t, GrowData> grow_;
+	SlotVec<RectData>                      rects_;
+	SlotVec<ImageData>                     images_;
+	SlotVec<TextData>                      texts_;
+	SlotVec<RingData>                      rings_;
+	SlotVec<LayoutData>                    layouts_;
+	SlotVec<Listener>                      listeners_;
+	SlotVec<Transform>                     transforms_;
+	std::unordered_map<uint16_t, GrowData> grow_;
 
-    Animator anim_;
+	Animator anim_;
 
-    std::vector<Event> events_;
-    std::size_t        event_head_ = 0;
-    Handle             hovered_{};
-    Handle             pressed_{};
-    Button             pressed_button_ = Button::None;
-    float              px_             = 0.f, py_      = 0.f;
-    float              press_x_        = 0.f, press_y_ = 0.f;
-    float              drag_threshold_ = 4.f;
-    bool               has_pointer_    = false;
-    bool               dragging_       = false;
+	std::vector<Event> events_;
+	size_t             event_head_ = 0;
+	Handle             hovered_{};
+	Handle             pressed_{};
+	Button             pressed_button_{Button::None};
+	float              px_{}, py_{};
+	float              press_x_{}, press_y_{};
+	float              drag_threshold_{4.f};
+	bool               has_pointer_{false};
+	bool               is_dragging_{false};
 };
 
 inline RectData* RectView::data() const {
-    Node* n = ctx_ ? ctx_->node(h_) : nullptr;
-    return n ? &ctx_->rects_[n->data] : nullptr;
+	Node* n{ctx_ ? ctx_->node(h_) : nullptr};
+	return n ? &ctx_->rects_[n->data_] : nullptr;
 }
 
 inline ImageData* ImageView::data() const {
-    Node* n = ctx_ ? ctx_->node(h_) : nullptr;
-    return n ? &ctx_->images_[n->data] : nullptr;
+	Node* n{ctx_ ? ctx_->node(h_) : nullptr};
+	return n ? &ctx_->images_[n->data_] : nullptr;
 }
 
 inline TextData* TextView::data() const {
-    Node* n = ctx_ ? ctx_->node(h_) : nullptr;
-    return n ? &ctx_->texts_[n->data] : nullptr;
+	Node* n{ctx_ ? ctx_->node(h_) : nullptr};
+	return n ? &ctx_->texts_[n->data_] : nullptr;
 }
 
 inline RingData* RingView::data() const {
-    Node* n = ctx_ ? ctx_->node(h_) : nullptr;
-    return n ? &ctx_->rings_[n->data] : nullptr;
+	Node* n{ctx_ ? ctx_->node(h_) : nullptr};
+	return n ? &ctx_->rings_[n->data_] : nullptr;
 }
 
 inline Placed Context::place(const Node& n, const Placed& parent) const {
-    Transform t{};
-    if (n.transform != k_none)
-        t = transforms_[n.transform];
+	Transform t{};
+	if(n.transform_ != k_none)
+		t = transforms_[n.transform_];
 
-    const float s  = parent.scale * t.scale;
-    const float w  = n.frame.width * s;
-    const float h  = n.frame.height * s;
-    const float px = parent.frame.x + (n.frame.x + n.frame.width * t.pivot_x) * parent.scale;
-    const float py = parent.frame.y + (n.frame.y + n.frame.height * t.pivot_y) * parent.scale;
+	const float s{parent.scale_ * t.scale_};
+	const float w{n.frame_.width_ * s};
+	const float h{n.frame_.height_ * s};
+	const float px{parent.frame_.x_ + (n.frame_.x_ + n.frame_.width_ * t.pivot_x_) * parent.scale_};
+	const float py{parent.frame_.y_ + (n.frame_.y_ + n.frame_.height_ * t.pivot_y_) * parent.scale_};
 
-    return {
-        .frame = {
-            .x     = px - w * t.pivot_x,
-            .y     = py - h * t.pivot_y,
-            .width = w, .height = h,
-        },
-        .scale = s,
-    };
+	return {
+		.frame_ =
+			{
+				.x_      = px - w * t.pivot_x_,
+				.y_      = py - h * t.pivot_y_,
+				.width_  = w,
+				.height_ = h,
+			},
+		.scale_ = s,
+	};
 }
 
-inline RectView::operator bool() const { return ctx_ && ctx_->alive(h_); }
-inline ImageView::operator bool() const { return ctx_ && ctx_->alive(h_); }
-inline TextView::operator bool() const { return ctx_ && ctx_->alive(h_); }
-inline RingView::operator bool() const { return ctx_ && ctx_->alive(h_); }
+inline RectView::operator bool() const {
+	return ctx_ && ctx_->is_alive(h_);
+}
+
+inline ImageView::operator bool() const {
+	return ctx_ && ctx_->is_alive(h_);
+}
+
+inline TextView::operator bool() const {
+	return ctx_ && ctx_->is_alive(h_);
+}
+
+inline RingView::operator bool() const {
+	return ctx_ && ctx_->is_alive(h_);
+}
 
 inline RingView& RingView::set_progress(float p) {
-    if (auto* d = data())
-        d->progress = std::clamp(p, 0.f, 1.f);
-    return *this;
+	if(auto* d = data())
+		d->progress_ = std::clamp(p, 0.f, 1.f);
+	return *this;
 }
 
 inline RingView& RingView::set_thickness(float t) {
-    if (auto* d = data())
-        d->thickness = t < 0.f ? 0.f : t;
-    return *this;
+	if(auto* d = data())
+		d->thickness_ = t < 0.f ? 0.f : t;
+	return *this;
 }
 
 inline RingView& RingView::set_color(const Color& c) {
-    if (auto* d = data())
-        d->color = c;
-    return *this;
+	if(auto* d = data())
+		d->color_ = c;
+	return *this;
 }
 
 inline RingView& RingView::set_track(const Color& c) {
-    if (auto* d = data())
-        d->track = c;
-    return *this;
+	if(auto* d = data())
+		d->track_ = c;
+	return *this;
 }
 
-inline float RingView::progress() const {
-    auto* d = data();
-    return d ? d->progress : 0.f;
+inline float RingView::get_progress() const {
+	auto* d{data()};
+	return d ? d->progress_ : 0.f;
 }
 
-inline float RingView::thickness() const {
-    auto* d = data();
-    return d ? d->thickness : 0.f;
+inline float RingView::get_thickness() const {
+	auto* d{data()};
+	return d ? d->thickness_ : 0.f;
 }
 
-inline Color RingView::color() const {
-    auto* d = data();
-    return d ? d->color : Color{};
+inline Color RingView::get_color() const {
+	auto* d{data()};
+	return d ? d->color_ : Color{};
 }
 
-inline Color RingView::track() const {
-    auto* d = data();
-    return d ? d->track : Color{};
+inline Color RingView::get_track() const {
+	auto* d{data()};
+	return d ? d->track_ : Color{};
 }
 
 inline RectView& RectView::set_color(const Color& c) {
-    if (auto* d = data())
-        d->color = c;
-    return *this;
+	if(auto* d = data())
+		d->color_ = c;
+	return *this;
 }
 
 inline RectView& RectView::set_radius(float r) {
-    if (auto* d = data())
-        d->radius = r < 0.f ? 0.f : r;
-    return *this;
+	if(auto* d = data())
+		d->radius_ = r < 0.f ? 0.f : r;
+	return *this;
 }
 
-inline Color RectView::color() const {
-    auto* d = data();
-    return d ? d->color : Color{};
+inline Color RectView::get_color() const {
+	auto* d{data()};
+	return d ? d->color_ : Color{};
 }
 
-inline float RectView::radius() const {
-    auto* d = data();
-    return d ? d->radius : 0.f;
+inline float RectView::get_radius() const {
+	auto* d{data()};
+	return d ? d->radius_ : 0.f;
 }
 
 inline ImageView& ImageView::set_texture(Texture t) {
-    if (auto* d = data()) {
-        d->texture = std::move(t);
-        ctx_->mark_dirty(h_.id);
-    }
-    return *this;
+	if(auto* d = data()) {
+		d->texture_ = std::move(t);
+		ctx_->mark_dirty(h_.id_);
+	}
+	return *this;
 }
 
 inline ImageView& ImageView::set_radius(float r) {
-    if (auto* d = data())
-        d->radius = r < 0.f ? 0.f : r;
-    return *this;
+	if(auto* d = data())
+		d->radius_ = r < 0.f ? 0.f : r;
+	return *this;
 }
 
 inline ImageView& ImageView::set_uv(const UvRect& uv) {
-    if (auto* d = data(); d && d->uv != uv) {
-        d->uv = uv;
-        ctx_->mark_dirty(h_.id);
-    }
-    return *this;
+	if(auto* d = data(); d && d->uv_ != uv) {
+		d->uv_ = uv;
+		ctx_->mark_dirty(h_.id_);
+	}
+	return *this;
 }
 
-inline float ImageView::radius() const {
-    auto* d = data();
-    return d ? d->radius : 0.f;
+inline float ImageView::get_radius() const {
+	auto* d{data()};
+	return d ? d->radius_ : 0.f;
 }
 
-inline float TextView::texture_width() const {
-    const auto* d = data();
-    return d ? d->natural_w : 0.f;
+inline float TextView::get_texture_width() const {
+	const auto* d{data()};
+	return d ? d->natural_w_ : 0.f;
 }
 
-inline float TextView::texture_height() const {
-    const auto* d = data();
-    return d ? d->natural_h : 0.f;
+inline float TextView::get_texture_height() const {
+	const auto* d{data()};
+	return d ? d->natural_h_ : 0.f;
 }
 
 inline TextView& TextView::set_texture(Texture t) {
-    if (auto* d = data()) {
-        d->raster = nullptr;
-        d->text.clear();
-        d->set_content(std::move(t));
-        ctx_->mark_dirty(h_.id);
-    }
-    return *this;
+	if(auto* d = data()) {
+		d->raster_ = nullptr;
+		d->text_.clear();
+		d->set_content(std::move(t));
+		ctx_->mark_dirty(h_.id_);
+	}
+	return *this;
 }
 
 inline TextView& TextView::set_font(FontHandle f) {
-    if (auto* d = data())
-        d->font = f;
-    return *this;
+	if(auto* d = data())
+		d->font_ = f;
+	return *this;
 }
 
 inline TextView& TextView::set_color(const Color& c) {
-    if (auto* d = data())
-        d->color = c;
-    return *this;
+	if(auto* d = data())
+		d->color_ = c;
+	return *this;
 }
 
-inline Color TextView::color() const {
-    auto* d = data();
-    return d ? d->color : Color{};
+inline Color TextView::get_color() const {
+	auto* d{data()};
+	return d ? d->color_ : Color{};
 }
+
 }

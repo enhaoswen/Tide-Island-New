@@ -7,15 +7,17 @@
 
 namespace Image {
 
+/// @brief Decoded 8-bit RGBA pixels, top-down, tightly packed.
 struct Pixels {
-    int                       width{};
-    int                       height{};
-    std::vector<std::uint8_t> rgba{};
+	int                  width_{};
+	int                  height_{};
+	std::vector<uint8_t> rgba_{};
 };
 
-[[nodiscard]] std::optional<Pixels> decode_square(std::span<const std::uint8_t> encoded, int side);
+/// @brief Decodes an encoded image and center-crops it to a `side` x `side` square, area-averaged down.
+[[nodiscard]] std::optional<Pixels> decode_square(std::span<const uint8_t> encoded, int side);
 
-// A horizontal strip of `frames` square frames, each area-averaged down to `side` px.
+/// @brief Loads a horizontal strip of `frames` square frames from `path`, area-averaged down to `side` px.
 [[nodiscard]] std::optional<Pixels> load_strip(const char* path, int frames, int side);
 
 }

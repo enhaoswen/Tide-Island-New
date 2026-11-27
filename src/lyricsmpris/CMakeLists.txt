@@ -16,13 +16,13 @@ target_include_directories(lyricsmpris_glaze SYSTEM INTERFACE
 target_compile_features(lyricsmpris_glaze INTERFACE cxx_std_23)
 
 add_library(lyricsmpris STATIC
-    Lyrics.cpp
-    Client.cpp
-    detail/Normalize.cpp
-    detail/Http.cpp
-    detail/Mpris.cpp
-    detail/Providers.cpp
-    detail/Resolver.cpp
+    lyrics.cpp
+    client.cpp
+    detail/normalize.cpp
+    detail/http.cpp
+    detail/mpris.cpp
+    detail/providers.cpp
+    detail/resolver.cpp
 )
 add_library(LyricsMpris::LyricsMpris ALIAS lyricsmpris)
 target_compile_features(lyricsmpris PUBLIC cxx_std_23)

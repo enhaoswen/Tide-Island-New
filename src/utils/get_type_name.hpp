@@ -5,126 +5,139 @@
 #include <type_traits>
 
 namespace Log {
-namespace detail {
 
-template <class T>
-consteval auto pretty() noexcept {
-    return std::string_view{__PRETTY_FUNCTION__};
+namespace Detail {
+
+/// @brief Returns __PRETTY_FUNCTION__ as a string_view.
+template<class T>
+consteval auto pretty() {
+	return std::string_view{__PRETTY_FUNCTION__};
 }
 
-inline constexpr std::string_view k_probe = "double";
-inline constexpr std::string_view k_sample = pretty<double>();
-inline constexpr std::size_t k_head = k_sample.find(k_probe);
-inline constexpr std::size_t k_tail = k_sample.size() - k_head - k_probe.size();
+inline constexpr std::string_view k_probe{"double"};
+inline constexpr std::string_view k_sample{pretty<double>()};
+inline constexpr size_t           k_head{k_sample.find(k_probe)};
+inline constexpr size_t           k_tail{k_sample.size() - k_head - k_probe.size()};
 static_assert(k_head != std::string_view::npos, "unsupported compiler: __PRETTY_FUNCTION__ layout");
 
-template <class T>
-consteval std::string_view raw() noexcept {
-    constexpr auto s = pretty<T>();
-    return s.substr(k_head, s.size() - k_head - k_tail);
+/// @brief Extracts the raw type name from __PRETTY_FUNCTION__.
+template<class T>
+consteval std::string_view raw() {
+	constexpr auto k_s{pretty<T>()};
+	return k_s.substr(k_head, k_s.size() - k_head - k_tail);
 }
 
+/// @brief A single substring rewrite applied to a raw type name.
 struct Rule {
-    std::string_view from, to;
+	std::string_view from_;
+	std::string_view to_;
 };
 
 inline constexpr Rule k_rules[] = {
-    {"std::__cxx11::", "std::"}, // libstdc++
-    {"std::__1::", "std::"},     // libc++
-    {"long long unsigned int", "unsigned long long"},
-    {"long long int", "long long"},
-    {"long unsigned int", "unsigned long"},
-    {"short unsigned int", "unsigned short"},
-    {"long int", "long"},
-    {"short int", "short"},
-    {"std::basic_string<char>", "std::string"},
-    {"std::basic_string<wchar_t>", "std::wstring"},
-    {"std::basic_string<char8_t>", "std::u8string"},
-    {"std::basic_string<char16_t>", "std::u16string"},
-    {"std::basic_string<char32_t>", "std::u32string"},
-    {"std::basic_string_view<char>", "std::string_view"},
-    {"std::basic_string_view<wchar_t>", "std::wstring_view"},
-    {"std::basic_string_view<char8_t>", "std::u8string_view"},
-    {"std::basic_string_view<char16_t>", "std::u16string_view"},
-    {"std::basic_string_view<char32_t>", "std::u32string_view"},
-    {"(anonymous namespace)", "{anonymous}"},
-    {" &&", "&&"},
-    {" &", "&"},
-    {" *", "*"},
-    {" [", "["},
-    {" >", ">"},
-    {"* const", "*const"},
+	{"std::__cxx11::", "std::"}, // libstdc++
+	{"std::__1::", "std::"},     // libc++
+	{"long long unsigned int", "unsigned long long"},
+	{"long long int", "long long"},
+	{"long unsigned int", "unsigned long"},
+	{"short unsigned int", "unsigned short"},
+	{"long int", "long"},
+	{"short int", "short"},
+	{"std::basic_string<char>", "std::string"},
+	{"std::basic_string<wchar_t>", "std::wstring"},
+	{"std::basic_string<char8_t>", "std::u8string"},
+	{"std::basic_string<char16_t>", "std::u16string"},
+	{"std::basic_string<char32_t>", "std::u32string"},
+	{"std::basic_string_view<char>", "std::string_view"},
+	{"std::basic_string_view<wchar_t>", "std::wstring_view"},
+	{"std::basic_string_view<char8_t>", "std::u8string_view"},
+	{"std::basic_string_view<char16_t>", "std::u16string_view"},
+	{"std::basic_string_view<char32_t>", "std::u32string_view"},
+	{"(anonymous namespace)", "{anonymous}"},
+	{" &&", "&&"},
+	{" &", "&"},
+	{" *", "*"},
+	{" [", "["},
+	{" >", ">"},
+	{"* const", "*const"},
 };
 
-consteval bool rules_never_grow() {
-    for (const Rule& r : k_rules)
-        if (r.to.size() > r.from.size())
-            return false;
-    return true;
+/// @brief Checks that no rewrite rule can increase the buffer size.
+consteval bool has_no_growing_rules() {
+	for(const Rule& r : k_rules)
+		if(r.to_.size() > r.from_.size())
+			return false;
+	return true;
 }
 
-static_assert(rules_never_grow());
+static_assert(has_no_growing_rules());
 
-constexpr bool is_ident(char c) noexcept {
-    return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+/// @brief Checks whether c can appear in a C++ identifier.
+constexpr bool is_ident(char c) {
+	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
-template <std::size_t N>
+/// @brief Fixed-size character buffer used during constexpr normalization.
+template<size_t N>
 struct Buffer {
-    char data[N + 1]{};
-    std::size_t size{};
-    [[nodiscard]] constexpr std::string_view view() const noexcept { return {data, size}; }
+	char   data_[N + 1]{};
+	size_t size_{};
+
+	/// @brief Returns the current buffer contents.
+	[[nodiscard]] constexpr std::string_view view() const { return {data_, size_}; }
 };
 
-template <std::size_t N>
+/// @brief Applies one rewrite rule in place.
+template<size_t N>
 constexpr void replace_all(Buffer<N>& b, const Rule& r) {
-    const bool need_left = is_ident(r.from.front());
-    const bool need_right = is_ident(r.from.back());
-    Buffer<N> out;
-    for (std::size_t i = 0; i < b.size;) {
-        const std::size_t end = i + r.from.size();
-        const bool hit =
-            b.view().substr(i).starts_with(r.from) &&
-            !(need_left && i > 0 && is_ident(b.data[i - 1])) &&
-            !(need_right && end < b.size && is_ident(b.data[end]));
+	const bool needs_left{is_ident(r.from_.front())};
+	const bool needs_right{is_ident(r.from_.back())};
+	Buffer<N>  out;
+	for(size_t i = 0; i < b.size_;) {
+		const size_t end{i + r.from_.size()};
+		const bool   is_hit = b.view().substr(i).starts_with(r.from_) &&
+			!(needs_left && i > 0 && is_ident(b.data_[i - 1])) &&
+			!(needs_right && end < b.size_ && is_ident(b.data_[end]));
 
-        if (hit) {
-            for (char c : r.to)
-                out.data[out.size++] = c;
-            i = end;
-        }
-        else {
-            out.data[out.size++] = b.data[i++];
-        }
-    }
-    b = out;
+		if(is_hit) {
+			for(char c : r.to_)
+				out.data_[out.size_++] = c;
+			i = end;
+		} else {
+			out.data_[out.size_++] = b.data_[i++];
+		}
+	}
+	b = out;
 }
 
-template <class T>
+/// @brief Computes the normalized type name for T.
+template<class T>
 consteval auto normalize() {
-    constexpr std::string_view src = raw<T>();
-    Buffer<src.size()> b;
-    for (std::size_t i = 0; i < src.size(); ++i)
-        b.data[i] = src[i];
-    b.size = src.size();
-    for (const Rule& r : k_rules)
-        replace_all(b, r);
-    return b;
+	constexpr std::string_view src{raw<T>()};
+	Buffer<src.size()>         b;
+	for(size_t i = 0; i < src.size(); ++i)
+		b.data_[i] = src[i];
+	b.size_ = src.size();
+	for(const Rule& r : k_rules)
+		replace_all(b, r);
+	return b;
 }
 
-template <class T>
-inline constexpr auto storage = normalize<T>();
+/// @brief Cached normalized type name for T.
+template<class T>
+inline constexpr auto storage{normalize<T>()};
 
-} // namespace detail
-
-template <class T>
-[[nodiscard]] consteval std::string_view type_name() noexcept {
-    return detail::storage<T>.view();
 }
 
-template <class T>
-[[nodiscard]] consteval std::string_view type_name_of(T&&) noexcept {
-    return type_name<std::remove_reference_t<T>>();
+/// @brief Returns a readable, normalized name for type T at compile time.
+template<class T>
+[[nodiscard]] consteval std::string_view type_name() {
+	return Detail::storage<T>.view();
 }
 
-} // namespace Log
+/// @brief Returns a readable, normalized name for the type of value at compile time.
+template<class T>
+[[nodiscard]] consteval std::string_view type_name_of(T&&) {
+	return type_name<std::remove_reference_t<T>>();
+}
+
+}

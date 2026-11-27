@@ -1,20 +1,14 @@
-#include "state_manager.hpp"
 #include "app/API.hpp"
+#include "app/state_manager.hpp"
 #include "utils/log.hpp"
 #include "utils/struct.hpp"
 
 using namespace std;
 
-namespace {
-
-}
-
 int main() {
 
-    // init
-
-    print(
-        R"_(
+	print(
+		R"_(
 
 
     ooooooooooooo  o8o        .o8                 ooooo          oooo                              .o8
@@ -27,28 +21,26 @@ int main() {
 
 )_");
 
-    frame_logger(Log::Debug,
-        "This build was compiled in debug mode.",
-        "Performance may be reduced and additional debug output may appear.");
+	frame_logger(Log::LogLevel::Debug,
+		"This build was compiled in debug mode.",
+		"Performance may be reduced and additional debug output may appear.");
 
-    API::select_for_wayland();
+	Api::select_for_wayland();
 
-    API::init();
+	Api::init();
 
-    // prepare resource
+	const StateManager::Resources resources{
+		.main_font_ = Api::load_font("Sans Serif", 18, Text::Weight::Bold),
+		.title_     = Api::load_font("Sans Serif", 16, Text::Weight::DemiBold),
+		.artist_    = Api::load_font("Sans Serif", 14, Text::Weight::Medium),
+		.time_      = Api::load_font("Sans Serif", 12, Text::Weight::Medium),
+		.icon_      = Api::load_font("Sans Serif", 22, Text::Weight::Regular),
+	};
 
-    const StateManager::Resources resources{
-        .main_font = API::load_font("Sans Serif", 18, Text::Weight::Bold),
-        .title     = API::load_font("Sans Serif", 16, Text::Weight::DemiBold),
-        .artist    = API::load_font("Sans Serif", 14, Text::Weight::Medium),
-        .time      = API::load_font("Sans Serif", 12, Text::Weight::Medium),
-        .icon      = API::load_font("Sans Serif", 22, Text::Weight::Regular),
-    };
+	StateManager::init(resources);
+	StateManager::switch_state(StateType::Clock);
 
-    StateManager::init(resources);
-    StateManager::switch_state(StateType::Clock);
-
-    API::run();
-    API::shutdown();
-    return 0;
+	Api::run();
+	Api::shutdown();
+	return 0;
 }

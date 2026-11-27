@@ -113,13 +113,13 @@ protected:
     float* animation_target(AnimationTarget target) {
         switch (target) {
         case AnimationTarget::Width:
-            return &info.frame.width;
+            return &info.frame.width_;
         case AnimationTarget::Height:
-            return &info.frame.height;
+            return &info.frame.height_;
         case AnimationTarget::X:
-            return &info.frame.x;
+            return &info.frame.x_;
         case AnimationTarget::Y:
-            return &info.frame.y;
+            return &info.frame.y_;
 
         case AnimationTarget::Radius:
             if constexpr (requires { info.radius; })
@@ -153,7 +153,7 @@ public:
 
     std::pair<float, float> actual_size()
         requires has_fix<T> {
-        return {this->info.frame.width, this->info.frame.height};
+        return {this->info.frame.width_, this->info.frame.height_};
     }
 
     void add_animation(AnimationDesc animation_desc) {
@@ -167,7 +167,7 @@ public:
 
     void set_radius(float, std::source_location l = std::source_location::current()) {
         Log::logger(
-            Log::Warning,
+            Log::LogLevel::Warning,
             "{}:{}: {} does not support function set_radius",
             l.file_name(),
             l.line(),
@@ -182,7 +182,7 @@ public:
 
     void set_color(Color, std::source_location l = std::source_location::current()) {
         Log::logger(
-            Log::Warning,
+            Log::LogLevel::Warning,
             "{}:{}: {} does not support function set_color",
             l.file_name(),
             l.line(),
@@ -190,10 +190,10 @@ public:
             );
     }
 
-    [[nodiscard]] float left() { return info.frame.x; }
-    [[nodiscard]] float right() { return info.frame.x + info.frame.width; }
-    [[nodiscard]] float top() { return info.frame.y; }
-    [[nodiscard]] float bottom() { return info.frame.y + info.frame.height; }
+    [[nodiscard]] float left() { return info.frame.x_; }
+    [[nodiscard]] float right() { return info.frame.x_ + info.frame.width_; }
+    [[nodiscard]] float top() { return info.frame.y_; }
+    [[nodiscard]] float bottom() { return info.frame.y_ + info.frame.height_; }
 
 };
 
@@ -248,9 +248,9 @@ public:
 
     bool contains(float x, float y) const
         requires clickable {
-        if (this->info.frame.width <= 0 || this->info.frame.height <= 0 ||
-            x < this->info.frame.x || x > this->info.frame.x + this->info.frame.width ||
-            y < this->info.frame.y || y > this->info.frame.y + this->info.frame.height) {
+        if (this->info.frame.width_ <= 0 || this->info.frame.height_ <= 0 ||
+            x < this->info.frame.x_ || x > this->info.frame.x_ + this->info.frame.width_ ||
+            y < this->info.frame.y_ || y > this->info.frame.y_ + this->info.frame.height_) {
             return false;
         }
 
@@ -260,20 +260,20 @@ public:
             corner_radius = std::clamp(
                 this->info.radius,
                 0.0f,
-                std::min(this->info.frame.width, this->info.frame.height) / 2
+                std::min(this->info.frame.width_, this->info.frame.height_) / 2
                 );
         }
 
         const float dx = x - std::clamp(
             x,
-            this->info.frame.x + corner_radius,
-            this->info.frame.x + this->info.frame.width - corner_radius
+            this->info.frame.x_ + corner_radius,
+            this->info.frame.x_ + this->info.frame.width_ - corner_radius
             );
 
         const float dy = y - std::clamp(
             y,
-            this->info.frame.y + corner_radius,
-            this->info.frame.y + this->info.frame.height - corner_radius
+            this->info.frame.y_ + corner_radius,
+            this->info.frame.y_ + this->info.frame.height_ - corner_radius
             );
 
         return dx * dx + dy * dy <= corner_radius * corner_radius;
@@ -457,7 +457,7 @@ inline void remove(Handle h) {
     if (const auto fn = Detail::erase_table[h.type])
         fn(h.id, h.gen);
     else
-        Log::logger(Log::Warning, "remove: invalid handle type {:#04x}", h.type);
+        Log::logger(Log::LogLevel::Warning, "remove: invalid handle type {:#04x}", h.type);
 }
 
 template <typename F>

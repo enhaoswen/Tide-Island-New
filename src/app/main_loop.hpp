@@ -2,6 +2,7 @@
 
 namespace MainLoop {
 
-bool wait(bool animating);
+/// @brief Polls all event sources; returns true when a redraw is needed.
+[[nodiscard]] bool wait(bool is_animating);
 
 }

@@ -4,36 +4,48 @@
 #include <limits>
 #include <string>
 
+/// @brief Axis-aligned rectangle in surface coordinates.
 struct Frame {
-    float x, y, width, height = std::numeric_limits<float>::max();
+	float x_{};
+	float y_{};
+	float width_{};
+	float height_{std::numeric_limits<float>::max()};
 
-    bool operator==(const Frame&) const = default;
+	bool operator==(const Frame&) const = default;
 };
 
+/// @brief 2D position in surface coordinates.
 struct Position {
-    float x, y;
+	float x_{};
+	float y_{};
 };
 
-// Normalized source rectangle of a texture.
+/// @brief Normalized source rectangle of a texture.
 struct UvRect {
-    float u0{0}, v0{0}, u1{1}, v1{1};
+	float u0_{0.f};
+	float v0_{0.f};
+	float u1_{1.f};
+	float v1_{1.f};
 
-    bool operator==(const UvRect&) const = default;
+	bool operator==(const UvRect&) const = default;
 };
 
+/// @brief Opaque handle to a loaded font.
 struct FontHandle {
-    std::uint64_t id{};
+	uint64_t id_{};
 };
 
+/// @brief Font family path and pixel size.
 struct Font {
-    std::string path;
-    std::uint16_t size{};
+	std::string path_{};
+	uint16_t    size_{};
 };
 
-enum struct StateType : std::uint8_t {
-    Clock,
-    Lyrics,
-    MusicPLayer,
-    ControlCenter,
-    Osd,
+/// @brief Kind of content shown in an island state.
+enum class StateType : uint8_t {
+	Clock,
+	Lyrics,
+	MusicPlayer,
+	ControlCenter,
+	Osd,
 };

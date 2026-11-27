@@ -1,13 +1,13 @@
-#include "state_manager.hpp"
+#include "app/state_manager.hpp"
 
 #include <cmath>
 
-#include "island.hpp"
+#include "app/island.hpp"
+#include "app/views/clock_view.hpp"
+#include "app/views/music_player.hpp"
+#include "app/views/sysinfo.hpp"
 #include "backend/wayland.hpp"
 #include "scene/animation.hpp"
-#include "views/clock_view.hpp"
-#include "views/music_player.hpp"
-#include "views/sysinfo.hpp"
 
 using namespace std;
 
@@ -36,28 +36,29 @@ using namespace std;
 namespace {
 
 struct StateSize {
-    uint32_t w, h;
-    float    r;
+	uint32_t width_{};
+	uint32_t height_{};
+	float    radius_{};
 };
 
 StateSize size_of(StateType t) {
-    switch (t) {
-    case StateType::Clock:
-        return {.w = 140, .h = 38, .r = 19};
-    case StateType::Lyrics:
-        return {.w = 220, .h = 38, .r = 19};
-    case StateType::MusicPLayer:
-        return {.w = 410, .h = 165, .r = 32};
-    case StateType::ControlCenter:
-        return {.w = 420, .h = 352, .r = 28};
-    case StateType::Osd:
-        return {.w = SysInfoView::width(), .h = 38, .r = 19};
-    }
-    return {.w = 140, .h = 38, .r = 19};
+	switch(t) {
+		case StateType::Clock:
+			return {.width_ = 140, .height_ = 38, .radius_ = 19};
+		case StateType::Lyrics:
+			return {.width_ = 220, .height_ = 38, .radius_ = 19};
+		case StateType::MusicPlayer:
+			return {.width_ = 410, .height_ = 165, .radius_ = 32};
+		case StateType::ControlCenter:
+			return {.width_ = 420, .height_ = 352, .radius_ = 28};
+		case StateType::Osd:
+			return {.width_ = SysInfoView::width(), .height_ = 38, .radius_ = 19};
+	}
+	return {.width_ = 140, .height_ = 38, .radius_ = 19};
 }
 
-Island::IslandState     island_state;
-StateManager::Resources resources;
+Island::IslandState     island_state{};
+StateManager::Resources resources{};
 Object::Context         ctx{};
 Object::Handle          root{};
 Object::Handle          bg{};
@@ -65,227 +66,223 @@ Object::Handle          bg{};
 constexpr float k_hover_scale = 1.03f;
 
 bool is_expended(StateType type) {
-    switch (type) {
-    case StateType::Clock:
-    case StateType::Lyrics:
-    case StateType::Osd:
-        return false;
+	switch(type) {
+		case StateType::Clock:
+		case StateType::Lyrics:
+		case StateType::Osd:
+			return false;
 
-    case StateType::MusicPLayer:
-    case StateType::ControlCenter:
-        return true;
-    }
+		case StateType::MusicPlayer:
+		case StateType::ControlCenter:
+			return true;
+	}
 
-    return false;
+	return false;
 }
 
 void on_bg_click(const Object::Event& e) {
-    if (e.button == Object::Button::Left) {
-        StateManager::switch_state(
-            is_expended(Island::get_state()) ? StateType::Clock : StateType::MusicPLayer);
-    }
+	if(e.button_ == Object::Button::Left) {
+		StateManager::switch_state(is_expended(Island::get_state()) ? StateType::Clock : StateType::MusicPlayer);
+	}
 }
 
 void set_surface(const uint32_t width, const uint32_t height) {
-    Wayland::request_resize(width, height);
+	Wayland::request_resize(width, height);
 }
 
-void hover(bool on);
+void hover(bool is_on);
 
-void resize(const uint32_t width, const uint32_t height, bool expended, float radius = -1) {
+void resize(const uint32_t width, const uint32_t height, bool is_expended, float radius = -1.f) {
 
-    Island::set_priority(expended ? Island::k_priority_expended : Island::k_priority_transition);
+	Island::set_priority(is_expended ? Island::k_priority_expended : Island::k_priority_transition);
 
-    AnimCallback on_done{};
-    if (!expended) {
-        on_done = [width, height] {
-            if (!ctx.is_animating(bg, Prop::W) && !ctx.is_animating(bg, Prop::H)) {
-                Island::set_priority(Island::k_priority_normal);
-                // Hover events were dropped during the transition; catch up with the pointer.
-                if (ctx.hovered() == bg)
-                    hover(true);
-                else
-                    set_surface(width, height);
-                Island::request_redraw(true);
-            }
-        };
-    }
+	AnimCallback on_done{};
+	if(!is_expended) {
+		on_done = [width, height] {
+			if(!ctx.is_animating(bg, Prop::W) && !ctx.is_animating(bg, Prop::H)) {
+				Island::set_priority(Island::k_priority_normal);
+				// Hover events were dropped during the transition; catch up with the pointer.
+				if(ctx.get_hovered() == bg)
+					hover(true);
+				else
+					set_surface(width, height);
+				Island::request_redraw(true);
+			}
+		};
+	}
 
-    ctx.animate(Object::SAnimDesc{
-        .h       = bg,
-        .to      = static_cast<float>(width),
-        .s       = Springs::Smooth,
-        .delay   = 0,
-        .p       = Prop::W,
-        .on_done = on_done,
-    });
+	ctx.animate(Object::SAnimDesc{
+		.h_       = bg,
+		.to_      = static_cast<float>(width),
+		.s_       = Springs::k_smooth,
+		.delay_   = 0,
+		.p_       = Prop::W,
+		.on_done_ = on_done,
+	});
 
-    ctx.animate(Object::SAnimDesc{
-        .h       = bg,
-        .to      = static_cast<float>(height),
-        .s       = Springs::Smooth,
-        .delay   = 0,
-        .p       = Prop::H,
-        .on_done = on_done,
-    });
+	ctx.animate(Object::SAnimDesc{
+		.h_       = bg,
+		.to_      = static_cast<float>(height),
+		.s_       = Springs::k_smooth,
+		.delay_   = 0,
+		.p_       = Prop::H,
+		.on_done_ = on_done,
+	});
 
-    if (radius != -1.f) {
-        ctx.animate(Object::TAnimDesc{
-            .h       = bg,
-            .to      = radius,
-            .t       = Timings::Smooth,
-            .delay   = 0,
-            .p       = Prop::Radius,
-            .on_done = nullptr,
-        });
-    }
+	if(radius != -1.f) {
+		ctx.animate(Object::TAnimDesc{
+			.h_       = bg,
+			.to_      = radius,
+			.t_       = Timings::k_smooth,
+			.delay_   = 0,
+			.p_       = Prop::Radius,
+			.on_done_ = nullptr,
+		});
+	}
 
-    if (expended)
-        set_surface(width, height);
-    else if (const auto [sw, sh] = Wayland::get_surface_size(); width > sw || height > sh)
-        set_surface(max(width, sw), max(height, sh)); // growing: room now, exact size once settled
+	if(is_expended)
+		set_surface(width, height);
+	else if(const auto [sw, sh] = Wayland::get_surface_size(); width > sw || height > sh)
+		set_surface(max(width, sw), max(height, sh)); // growing: room now, exact size once settled
 }
 
 void scale_bg(const float to, AnimCallback on_done = {}) {
-    ctx.animate(Object::SAnimDesc{
-        .h       = bg,
-        .to      = to,
-        .s       = Springs::Gentle,
-        .delay   = 0,
-        .p       = Prop::Scale,
-        .on_done = std::move(on_done),
-    });
+	ctx.animate(Object::SAnimDesc{
+		.h_       = bg,
+		.to_      = to,
+		.s_       = Springs::k_gentle,
+		.delay_   = 0,
+		.p_       = Prop::Scale,
+		.on_done_ = std::move(on_done),
+	});
 }
 
-void hover(const bool on) {
-    const StateSize size = size_of(Island::get_state());
+void hover(const bool is_on) {
+	const StateSize size{size_of(Island::get_state())};
 
-    if (on) {
-        const auto grown = [](const uint32_t v) {
-            return v + static_cast<uint32_t>(ceil(static_cast<float>(v) * (k_hover_scale - 1.f)));
-        };
-        set_surface(grown(size.w), grown(size.h));
-        scale_bg(k_hover_scale);
-    }
-    else {
-        scale_bg(1.f, [size] {
-            set_surface(size.w, size.h);
-            Island::request_redraw(true);
-        });
-    }
+	if(is_on) {
+		const auto grown = [](const uint32_t v) {
+			return v + static_cast<uint32_t>(ceil(static_cast<float>(v) * (k_hover_scale - 1.f)));
+		};
+		set_surface(grown(size.width_), grown(size.height_));
+		scale_bg(k_hover_scale);
+	} else {
+		scale_bg(1.f, [size] {
+			set_surface(size.width_, size.height_);
+			Island::request_redraw(true);
+		});
+	}
 }
 
-void on_hovered(const Object::Event&) {
-    if (is_expended(Island::get_state()) || Island::get_island().current_priority > Island::k_priority_hover)
-        return;
-    hover(ctx.hovered() == bg);
+void on_hovered([[maybe_unused]] const Object::Event& event) {
+	if(is_expended(Island::get_state()) || Island::get_island().current_priority_ > Island::k_priority_hover)
+		return;
+	hover(ctx.get_hovered() == bg);
 }
 
 }
 
 namespace StateManager {
 void init(const Resources& arg_resources) {
-    island_state = Island::get_island();
-    resources    = arg_resources;
+	island_state = Island::get_island();
+	resources    = arg_resources;
 
-    root = ctx.create_root(island_state.island_width, island_state.island_height);
+	root = ctx.create_root(island_state.island_width_, island_state.island_height_);
 
-    bg = ctx.create_rect(root, Object::RectDesc{
-        .frame = Frame{
-            .x      = 0.f,
-            .y      = 0.f,
-            .width  = static_cast<float>(island_state.island_width),
-            .height = static_cast<float>(island_state.island_height),
-        },
+	bg = ctx.create_rect(root,
+		Object::RectDesc{
+			.frame_ =
+				Frame{
+					.x_      = 0.f,
+					.y_      = 0.f,
+					.width_  = static_cast<float>(island_state.island_width_),
+					.height_ = static_cast<float>(island_state.island_height_),
+				},
 
-        .color  = island_state.color,
-        .radius = island_state.radius,
-    });
+			.color_  = island_state.color_,
+			.radius_ = island_state.radius_,
+		});
 
-    ctx.set_layout(root, Object::LayoutData{
-        .dir     = Object::Direction::Row,
-        .justify = Object::Justify::Center,
-    });
+	ctx.set_layout(root,
+		Object::LayoutData{
+			.dir_     = Object::Direction::Row,
+			.justify_ = Object::Justify::Center,
+		});
 
-    ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Fixed);
-    ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Fixed);
-    ctx.on_click(bg, on_bg_click);
-    ctx.set_pivot(bg, .5f, 0.f);
-    ctx.on(bg, Object::EventType::HoverEnter | Object::EventType::HoverLeave, on_hovered);
+	ctx.set_size_mode(bg, Object::Axis::Horizontal, Object::SizeMode::Fixed);
+	ctx.set_size_mode(bg, Object::Axis::Vertical, Object::SizeMode::Fixed);
+	ctx.on_click(bg, on_bg_click);
+	ctx.set_pivot(bg, .5f, 0.f);
+	ctx.on(bg, Object::EventType::HoverEnter | Object::EventType::HoverLeave, on_hovered);
 
-    SysInfoView::init(ctx, {.value = resources.main_font, .label = resources.title}, StateManager::switch_state);
+	SysInfoView::init(ctx, {.value_ = resources.main_font_, .label_ = resources.title_}, StateManager::switch_state);
 }
 
-Object::Context& context() {
-    return ctx;
+Object::Context& get_context() {
+	return ctx;
 }
 
 void sync_surface() {
-    // Root follows the surface: it may only change in the frame the new buffer is used.
-    Wayland::sync_surface();
-    if (!root)
-        return;
-    // Actual size: the backend pads and rounds the requested one.
-    if (!Wayland::resize_pending()) {
-        const auto [w, h] = Wayland::get_surface_size();
-        ctx.set_size(root, static_cast<float>(w), static_cast<float>(h));
-        ctx.layout();
-    }
+	// Root follows the surface: it may only change in the frame the new buffer is used.
+	Wayland::sync_surface();
+	if(!root)
+		return;
+	// Actual size: the backend pads and rounds the requested one.
+	if(!Wayland::is_resize_pending()) {
+		const auto [w, h] = Wayland::get_surface_size();
+		ctx.set_size(root, static_cast<float>(w), static_cast<float>(h));
+		ctx.layout();
+	}
 
-    Wayland::set_blur(island_state.blur);
-    if (island_state.blur) {
-        const Frame f = ctx.absolute_frame(bg);
-        Wayland::set_blur_shape(f.x, f.y, f.width, f.height, ctx.rect(bg).radius());
-    }
+	Wayland::set_blur(island_state.is_blur_);
+	if(island_state.is_blur_) {
+		const Frame f{ctx.absolute_frame(bg)};
+		Wayland::set_blur_shape(f.x_, f.y_, f.width_, f.height_, ctx.rect(bg).get_radius());
+	}
 }
 
 void switch_state(const StateType state) {
-    stop();
+	stop();
 
-    Island::set_state(state);
-    if (ctx.scale(bg) != 1.f || ctx.is_animating(bg, Prop::Scale))
-        scale_bg(1.f);
+	Island::set_state(state);
+	if(ctx.scale(bg) != 1.f || ctx.is_animating(bg, Prop::Scale))
+		scale_bg(1.f);
 
-    if (state == StateType::Clock) {
-        resize(140, 38, false, 19);
-        ClockView::start(ctx, bg, resources.main_font);
-    }
+	if(state == StateType::Clock) {
+		resize(140, 38, false, 19);
+		ClockView::start(ctx, bg, resources.main_font_);
+	} else if(state == StateType::MusicPlayer) {
+		resize(410, 165, true, 32);
+		MusicPlayerView::start(ctx,
+			bg,
+			{
+				.title_  = resources.title_,
+				.artist_ = resources.artist_,
+				.time_   = resources.time_,
+				.icon_   = resources.icon_,
+			});
+	} else if(state == StateType::Osd) {
+		resize(SysInfoView::width(), 38, false, 19);
+		SysInfoView::start(bg);
+	}
 
-    else if (state == StateType::MusicPLayer) {
-        resize(410, 165, true, 32);
-        MusicPlayerView::start(
-            ctx,
-            bg,
-            {
-                .title  = resources.title,
-                .artist = resources.artist,
-                .time   = resources.time,
-                .icon   = resources.icon,
-            });
-    }
-
-    else if (state == StateType::Osd) {
-        resize(SysInfoView::width(), 38, false, 19);
-        SysInfoView::start(bg);
-    }
-
-    Island::request_redraw(true);
+	Island::request_redraw(true);
 }
 
 void stop() {
-    switch (Island::get_state()) {
-    case StateType::Clock:
-        ClockView::stop();
-        break;
-    case StateType::MusicPLayer:
-        MusicPlayerView::stop();
-        break;
-    case StateType::Osd:
-        SysInfoView::stop();
-        break;
-    default:
-        break;
-    }
+	switch(Island::get_state()) {
+		case StateType::Clock:
+			ClockView::stop();
+			break;
+		case StateType::MusicPlayer:
+			MusicPlayerView::stop();
+			break;
+		case StateType::Osd:
+			SysInfoView::stop();
+			break;
+		default:
+			break;
+	}
 }
 
-} // namespace StateManager
+}
