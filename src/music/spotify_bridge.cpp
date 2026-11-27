@@ -27,11 +27,14 @@ using namespace std::chrono;
 
 namespace SpotifyBridge::wire {
 
+namespace {
+
 struct ConfigFile {
     int    version{};
     int    port{};
     string token{};
 };
+}
 
 struct Message {
     string         type{};
@@ -50,12 +53,12 @@ namespace {
 using SpotifyBridge::wire::ConfigFile;
 using SpotifyBridge::wire::Message;
 
-constexpr size_t      kMaxMessage     = 16 * 1024;
-constexpr size_t      kMaxHandshake   = 8 * 1024;
-constexpr size_t      kMaxConnections = 4; // the client plus a few pending handshakes
-constexpr auto        kAuthTimeout    = 3s;
-constexpr auto        kRequestTimeout = 10s;
-constexpr string_view kSpotifyOrigin  = "https://xpui.app.spotify.com";
+constexpr size_t      k_max_message     = 16 * 1024;
+constexpr size_t      k_max_handshake   = 8 * 1024;
+constexpr size_t      k_max_connections = 4; // the client plus a few pending handshakes
+constexpr auto        k_auth_timeout    = 3s;
+constexpr auto        k_request_timeout = 10s;
+constexpr string_view k_spotify_origin  = "https://xpui.app.spotify.com";
 
 struct Conn {
     int                      fd = -1;
@@ -164,8 +167,9 @@ bool send_all(int fd, string_view bytes) {
 bool send_frame(int fd, uint8_t opcode, string_view payload) {
     string frame;
     frame.push_back(static_cast<char>(0x80 | opcode));
-    if (payload.size() < 126)
+    if (payload.size() < 126) {
         frame.push_back(static_cast<char>(payload.size()));
+    }
     else {
         frame.push_back(126);
         frame.push_back(static_cast<char>(payload.size() >> 8));
@@ -222,7 +226,7 @@ void arm_auth_timer() {
             earliest = c.opened;
     if (!earliest)
         return;
-    const auto left = max(duration_cast<microseconds>(*earliest + kAuthTimeout - steady_clock::now()), microseconds{1});
+    const auto left = max(duration_cast<microseconds>(*earliest + k_auth_timeout - steady_clock::now()), microseconds{1});
     auth_timer      = Timer::push(left, on_auth_timeout, 0);
 }
 
@@ -230,7 +234,7 @@ void on_auth_timeout() {
     auth_timer     = {};
     const auto now = steady_clock::now();
     for (Conn& c : conns)
-        if (c.fd >= 0 && !c.authed && now - c.opened >= kAuthTimeout)
+        if (c.fd >= 0 && !c.authed && now - c.opened >= k_auth_timeout)
             close_conn(c);
     erase_if(conns, [](const Conn& c) { return c.fd < 0; });
     arm_auth_timer();
@@ -325,12 +329,12 @@ bool handle_text(Conn& c, string_view text) {
 bool handle_handshake(Conn& c) {
     const size_t end = c.rx.find("\r\n\r\n");
     if (end == string::npos)
-        return c.rx.size() <= kMaxHandshake;
+        return c.rx.size() <= k_max_handshake;
     const string_view head{c.rx.data(), end + 2};
     const string_view key    = header_value(head, "Sec-WebSocket-Key");
     const string_view origin = header_value(head, "Origin");
     if (!head.starts_with("GET ") || key.empty() || key.size() > 64
-        || (!origin.empty() && origin != kSpotifyOrigin)) {
+        || (!origin.empty() && origin != k_spotify_origin)) {
         send_all(c.fd, "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
         return false;
     }
@@ -363,7 +367,7 @@ bool handle_frames(Conn& c) {
         }
         else if (len == 127)
             return false; // > 64 KiB, far above anything the extension sends
-        if (len > kMaxMessage)
+        if (len > k_max_message)
             return false;
         if (c.rx.size() < hdr + 4 + len)
             return true;
@@ -399,7 +403,7 @@ bool handle_readable(Conn& c) {
         const ssize_t n = recv(c.fd, buf, sizeof buf, MSG_DONTWAIT);
         if (n > 0) {
             c.rx.append(buf, static_cast<size_t>(n));
-            if (c.rx.size() > kMaxMessage + kMaxHandshake)
+            if (c.rx.size() > k_max_message + k_max_handshake)
                 return false;
             continue;
         }
@@ -421,7 +425,7 @@ void accept_pending() {
         const int fd = accept4(listen_fd, nullptr, nullptr, SOCK_NONBLOCK | SOCK_CLOEXEC);
         if (fd < 0)
             return; // EAGAIN, or a transient error retried on the next wakeup
-        if (conns.size() >= kMaxConnections) {
+        if (conns.size() >= k_max_connections) {
             close(fd);
             continue;
         }
@@ -452,7 +456,15 @@ void start_listening(uint16_t p) {
     addr.sin_port        = htons(p);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (bind(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof addr) != 0 || listen(fd, 4) != 0) {
-        Log::logger(Log::Warning, "Spotify favorites: cannot listen on 127.0.0.1:{} ({})", p, strerror(errno));
+        const int err = errno;
+        Log::logger(Log::Warning, "Spotify favorites: cannot listen on 127.0.0.1:{} ({})", p, strerror(err));
+        if (err == EADDRINUSE) {
+            Log::logger(
+                Log::Warning,
+                "Spotify favorites: port {} is already in use, probably by another Tide Island instance. Close one if you are running two Tide Islands.",
+                p
+                );
+        }
         close(fd);
         return;
     }
@@ -487,126 +499,126 @@ void apply_config() {
 }
 
 namespace SpotifyBridge {
-    void init() {
-        config_path = find_config_path();
-        reload();
-    }
+void init() {
+    config_path = find_config_path();
+    reload();
+}
 
-    void reload() {
-        if (config_path.empty())
-            return;
-        struct stat               info{};
-        optional<struct timespec> mtime{};
-        if (stat(config_path.c_str(), &info) == 0)
-            mtime = info.st_mtim;
-        const bool same = config_checked && mtime.has_value() == config_mtime.has_value()
-            && (!mtime || (mtime->tv_sec == config_mtime->tv_sec && mtime->tv_nsec == config_mtime->tv_nsec));
-        if (same)
-            return;
-        config_checked = true;
-        config_mtime   = mtime;
-        apply_config();
-    }
+void reload() {
+    if (config_path.empty())
+        return;
+    struct stat               info{};
+    optional<struct timespec> mtime{};
+    if (stat(config_path.c_str(), &info) == 0)
+        mtime = info.st_mtim;
+    const bool same = config_checked && mtime.has_value() == config_mtime.has_value()
+        && (!mtime || (mtime->tv_sec == config_mtime->tv_sec && mtime->tv_nsec == config_mtime->tv_nsec));
+    if (same)
+        return;
+    config_checked = true;
+    config_mtime   = mtime;
+    apply_config();
+}
 
-    void shutdown() {
-        listener = nullptr;
-        close_all();
-        reset_state();
-    }
+void shutdown() {
+    listener = nullptr;
+    close_all();
+    reset_state();
+}
 
-    const SpotifyBridge::State& state() { return st; }
+const SpotifyBridge::State& state() { return st; }
 
-    bool set_favorite(string_view uri, bool liked) {
-        if (client_fd < 0 || st.busy || !st.known || uri != st.track_uri || !is_track_uri(uri))
-            return false;
-        request_id       = to_string(++request_counter);
-        request_uri      = uri;
-        request_liked    = liked;
-        // uri is [A-Za-z0-9:] and id is digits: nothing to escape.
-        const string msg = format(R"({{"type":"setFavorite","id":"{}","uri":"{}","liked":{}}})", request_id, uri, liked);
-        if (!send_frame(client_fd, 0x1, msg)) {
-            request_id.clear();
-            request_uri.clear();
-            return false;
-        }
-        st.busy       = true;
-        request_timer = Timer::push(duration_cast<microseconds>(kRequestTimeout), on_request_timeout, 0);
-        notify();
-        return true;
-    }
-
-    void set_listener(void (*l)()) { listener = l; }
-
-    void append_poll_fds(vector<pollfd>& out) {
-        if (listen_fd < 0)
-            return;
-        out.push_back({.fd = listen_fd, .events = POLLIN, .revents = 0});
-        for (const Conn& c : conns)
-            out.push_back({.fd = c.fd, .events = POLLIN, .revents = 0});
-    }
-
-    void process(span<const pollfd> ready) {
-        bool accept_ready = false;
-        for (const pollfd& p : ready) {
-            if (!p.revents)
-                continue;
-            if (p.fd == listen_fd) {
-                accept_ready = true;
-                continue;
-            }
-            const auto it = find_if(conns.begin(), conns.end(), [&](const Conn& c) { return c.fd == p.fd; });
-            if (it == conns.end())
-                continue;
-            if ((p.revents & (POLLERR | POLLNVAL)) || !handle_readable(*it))
-                close_conn(*it);
-        }
-        erase_if(conns, [](const Conn& c) { return c.fd < 0; });
-        if (accept_ready)
-            accept_pending();
-        arm_auth_timer();
-    }
-
-    bool is_spotify_service(string_view service) {
-        // (^|.)spotify([.-]|$), case-insensitive, like the original SpotifyTrack.js
-        for (size_t i = 0; i + 7 <= service.size(); ++i) {
-            const bool word = equal(service.begin() + static_cast<ptrdiff_t>(i), service.begin() + static_cast<ptrdiff_t>(i + 7),
-                "spotify", [](char a, char b) { return tolower(a) == b; });
-            if (!word)
-                continue;
-            const bool before = i == 0 || service[i - 1] == '.';
-            const bool after  = i + 7 == service.size() || service[i + 7] == '.' || service[i + 7] == '-';
-            if (before && after)
-                return true;
-        }
+bool set_favorite(string_view uri, bool liked) {
+    if (client_fd < 0 || st.busy || !st.known || uri != st.track_uri || !is_track_uri(uri))
+        return false;
+    request_id       = to_string(++request_counter);
+    request_uri      = uri;
+    request_liked    = liked;
+    // uri is [A-Za-z0-9:] and id is digits: nothing to escape.
+    const string msg = format(R"({{"type":"setFavorite","id":"{}","uri":"{}","liked":{}}})", request_id, uri, liked);
+    if (!send_frame(client_fd, 0x1, msg)) {
+        request_id.clear();
+        request_uri.clear();
         return false;
     }
+    st.busy       = true;
+    request_timer = Timer::push(duration_cast<microseconds>(k_request_timeout), on_request_timeout, 0);
+    notify();
+    return true;
+}
 
-    string track_uri_from_mpris(string_view service, string_view track_id, string_view media_url) {
-        if (!is_spotify_service(service))
-            return {};
-        const auto from = [](string_view s) -> string {
-            if (is_track_uri(s))
-                return string{s};
-            constexpr string_view web = "https://open.spotify.com/";
-            if (s.starts_with(web)) {
-                s.remove_prefix(web.size());
-                if (s.starts_with("intl-"))
-                    s.remove_prefix(min(s.size(), s.find('/') + 1));
-                if (!s.starts_with("track/"))
-                    return {};
-                s.remove_prefix(6);
-                s = s.substr(0, s.find_first_of("?#"));
-            }
-            else if (s.starts_with("/com/spotify/track/"))
-                s.remove_prefix(19);
-            else
-                return {};
-            string uri = "spotify:track:" + string{s};
-            return is_track_uri(uri) ? uri : string{};
-        };
-        if (string uri = from(media_url); !uri.empty())
-            return uri;
-        return from(track_id);
+void set_listener(void (*l)()) { listener = l; }
+
+void append_poll_fds(vector<pollfd>& out) {
+    if (listen_fd < 0)
+        return;
+    out.push_back({.fd = listen_fd, .events = POLLIN, .revents = 0});
+    for (const Conn& c : conns)
+        out.push_back({.fd = c.fd, .events = POLLIN, .revents = 0});
+}
+
+void process(span<const pollfd> ready) {
+    bool accept_ready = false;
+    for (const pollfd& p : ready) {
+        if (!p.revents)
+            continue;
+        if (p.fd == listen_fd) {
+            accept_ready = true;
+            continue;
+        }
+        const auto it = find_if(conns.begin(), conns.end(), [&](const Conn& c) { return c.fd == p.fd; });
+        if (it == conns.end())
+            continue;
+        if ((p.revents & (POLLERR | POLLNVAL)) || !handle_readable(*it))
+            close_conn(*it);
     }
+    erase_if(conns, [](const Conn& c) { return c.fd < 0; });
+    if (accept_ready)
+        accept_pending();
+    arm_auth_timer();
+}
 
-} // namespace SpotifyBridge
+bool is_spotify_service(string_view service) {
+    // (^|.)spotify([.-]|$), case-insensitive, like the original SpotifyTrack.js
+    for (size_t i = 0; i + 7 <= service.size(); ++i) {
+        const bool word = equal(service.begin() + static_cast<ptrdiff_t>(i), service.begin() + static_cast<ptrdiff_t>(i + 7),
+            "spotify", [](char a, char b) { return tolower(a) == b; });
+        if (!word)
+            continue;
+        const bool before = i == 0 || service[i - 1] == '.';
+        const bool after  = i + 7 == service.size() || service[i + 7] == '.' || service[i + 7] == '-';
+        if (before && after)
+            return true;
+    }
+    return false;
+}
+
+string track_uri_from_mpris(string_view service, string_view track_id, string_view media_url) {
+    if (!is_spotify_service(service))
+        return {};
+    const auto from = [](string_view s) -> string {
+        if (is_track_uri(s))
+            return string{s};
+        constexpr string_view web = "https://open.spotify.com/";
+        if (s.starts_with(web)) {
+            s.remove_prefix(web.size());
+            if (s.starts_with("intl-"))
+                s.remove_prefix(min(s.size(), s.find('/') + 1));
+            if (!s.starts_with("track/"))
+                return {};
+            s.remove_prefix(6);
+            s = s.substr(0, s.find_first_of("?#"));
+        }
+        else if (s.starts_with("/com/spotify/track/"))
+            s.remove_prefix(19);
+        else
+            return {};
+        string uri = "spotify:track:" + string{s};
+        return is_track_uri(uri) ? uri : string{};
+    };
+    if (string uri = from(media_url); !uri.empty())
+        return uri;
+    return from(track_id);
+}
+
+}

@@ -21,10 +21,10 @@ struct Texture::Impl {
         if (image.id)
             sg_destroy_image(image);
 
-        view   = {};
-        image  = {};
-        width  = height = 0;
-        scale  = 1.0f;
+        view     = {};
+        image    = {};
+        width    = height = 0;
+        scale    = 1.0f;
         origin_x = origin_y = 0.0f;
     }
 
@@ -69,7 +69,7 @@ void Texture::upload(int width, int height, Format format,
         return;
     }
 
-    const auto pixel_width = static_cast<size_t>(width);
+    const auto pixel_width  = static_cast<size_t>(width);
     const auto pixel_height = static_cast<size_t>(height);
     if (pixel_width > numeric_limits<size_t>::max() / pixel_height / channels) {
         Log::fatal("Texture dimensions are too large");

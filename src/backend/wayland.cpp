@@ -859,7 +859,7 @@ namespace Wayland {
             Log::fatal("eglMakeCurrent failed");
         }
 
-        // Swap interval 0: the main loop paces frames itself (Timer::wait), so the
+        // Swap interval 0: the main loop paces frames itself (MainLoop::wait), so the
         // driver must not. With interval >= 1 NVIDIA's egl-wayland2 attaches
         // wp_fifo_v1 / wp_commit_timing_v1 to every commit; on Hyprland that lets the
         // layer size / viewport of a resize take effect a frame before the matching

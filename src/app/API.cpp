@@ -1,6 +1,7 @@
 #include "app/API.hpp"
 #include "backend/wayland.hpp"
 #include "graphics/renderer.hpp"
+#include "app/main_loop.hpp"
 #include "backend/timer.hpp"
 #include "backend/sysinfo/sysinfo.hpp"
 #include "music/media.hpp"
@@ -146,7 +147,7 @@ namespace API {
                 Renderer::end_frame();
             }
 
-            const bool redraw  = Timer::wait(ctx.animating() || island->need_redraw);
+            const bool redraw  = MainLoop::wait(ctx.animating() || island->need_redraw);
             // Pointer input gathered during the wait; callbacks usually change something visible.
             const bool handled = ctx.dispatch_events();
             Island::request_redraw(redraw || handled || island->need_redraw);
