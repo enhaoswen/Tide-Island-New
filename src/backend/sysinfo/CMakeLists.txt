@@ -11,4 +11,4 @@ target_link_libraries(tide_sysinfo
         PkgConfig::PIPEWIRE
 )
 
-target_compile_options(tide_sysinfo PRIVATE -Wall -Wextra)
+target_compile_options(tide_sysinfo PRIVATE -Wall -Wextra -Wpedantic -Werror)

@@ -76,7 +76,7 @@ target_link_libraries(Tide-island PRIVATE
         tide_sysinfo
 )
 
-target_compile_options(Tide-island PRIVATE -Wall -Wextra)
+target_compile_options(Tide-island PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 target_compile_options(Tide-island PRIVATE
         $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-enum-enum-conversion>

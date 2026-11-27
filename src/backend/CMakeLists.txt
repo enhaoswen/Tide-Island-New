@@ -25,4 +25,4 @@ target_link_libraries(tide_platform
         OpenGL::GLES3
 )
 
-target_compile_options(tide_platform PRIVATE -Wall -Wextra)
+target_compile_options(tide_platform PRIVATE -Wall -Wextra -Wpedantic -Werror)

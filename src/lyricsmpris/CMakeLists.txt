@@ -31,4 +31,4 @@ target_link_libraries(lyricsmpris PRIVATE
     PkgConfig::LYRICS_SYSTEMD PkgConfig::LYRICS_CURL
     lyricsmpris_glaze PkgConfig::LYRICS_UTF8
 )
-target_compile_options(lyricsmpris PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(lyricsmpris PRIVATE -Wall -Wextra -Wpedantic -Werror)

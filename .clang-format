@@ -1,20 +1,77 @@
 BasedOnStyle: LLVM
+Language: Cpp
+Standard: Latest
+
 IndentWidth: 4
+TabWidth: 4
+UseTab: ForContinuationAndIndentation
 ContinuationIndentWidth: 4
 ConstructorInitializerIndentWidth: 4
 BracedInitializerIndentWidth: 4
-TabWidth: 4
-UseTab: Never
-ColumnLimit: 0
-SortIncludes: Never
+AccessModifierOffset: -4
+IndentCaseLabels: true
+NamespaceIndentation: None
+ColumnLimit: 120
+
+BreakBeforeBraces: Attach
+FixNamespaceComments: false
+
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortLambdasOnASingleLine: All
+AllowShortEnumsOnASingleLine: false
+
 DerivePointerAlignment: false
 PointerAlignment: Left
 ReferenceAlignment: Pointer
+QualifierAlignment: Left
+
 AlignAfterOpenBracket: DontAlign
 AlignOperands: DontAlign
-BreakBeforeBraces: Custom
-BraceWrapping:
-  BeforeElse: true
-  BeforeCatch: true
-AllowShortIfStatementsOnASingleLine: Never
-AllowShortLoopsOnASingleLine: false
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignTrailingComments:
+  Kind: Always
+
+BinPackParameters: OnePerLine
+BinPackArguments: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllArgumentsOnNextLine: false
+
+BreakConstructorInitializers: AfterColon
+PackConstructorInitializers: Never
+
+SpaceBeforeParens: Never
+SpacesInAngles: Never
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: false
+Cpp11BracedListStyle: true
+
+SeparateDefinitionBlocks: Always
+MaxEmptyLinesToKeep: 100
+KeepEmptyLines:
+  AtStartOfFile: true
+  AtStartOfBlock: true
+  AtEndOfFile: false
+InsertNewlineAtEOF: true
+
+SortIncludes:
+  Enabled: true
+  IgnoreCase: true
+IncludeBlocks: Regroup
+IncludeIsMainRegex: '$'
+IncludeCategories:
+  - Regex: '^<[a-z_0-9]+>$'
+    Priority: 1
+  - Regex: '^<.*>$'
+    Priority: 2
+  - Regex: '^".*"$'
+    Priority: 3

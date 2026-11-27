@@ -7,9 +7,11 @@ Checks: '
   portability-*,
   modernize-*,
   readability-*,
+  misc-const-correctness,
+  google-readability-casting,
   -readability-uppercase-literal-suffix,
   -modernize-use-trailing-return-type,
-  -modernize-use-designated-initializers,
+  -modernize-use-nodiscard,
   -readability-magic-numbers,
   -bugprone-easily-swappable-parameters,
   -readability-isolate-declaration,
@@ -17,20 +19,71 @@ Checks: '
   -readability-math-missing-parentheses,
   -readability-implicit-bool-conversion,
   -readability-braces-around-statements,
+  -readability-function-cognitive-complexity,
+  -readability-function-size,
 '
 
 WarningsAsErrors: ''
 
-HeaderFilterRegex: '^(source|include)/.*'
+HeaderFilterRegex: '.*/src/.*'
 
 CheckOptions:
-  - key:             readability-identifier-naming.ClassCase
-    value:           CamelCase
-  - key:             readability-identifier-naming.VariableCase
-    value:           lower_case
-  - key:             readability-identifier-naming.FunctionCase
-    value:           lower_case
-    
-  - key:             readability-identifier-naming.IgnoreFailedSplit
-    value:           true
+  - key:   readability-identifier-naming.NamespaceCase
+    value: CamelCase
+  - key:   readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key:   readability-identifier-naming.StructCase
+    value: CamelCase
+  - key:   readability-identifier-naming.UnionCase
+    value: CamelCase
+  - key:   readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key:   readability-identifier-naming.EnumConstantCase
+    value: CamelCase
+  - key:   readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+  - key:   readability-identifier-naming.TypedefCase
+    value: CamelCase
+  - key:   readability-identifier-naming.ConceptCase
+    value: CamelCase
+  - key:   readability-identifier-naming.TemplateParameterCase
+    value: CamelCase
+
+  - key:   readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key:   readability-identifier-naming.MethodCase
+    value: lower_case
+  - key:   readability-identifier-naming.VariableCase
+    value: lower_case
+  - key:   readability-identifier-naming.ParameterCase
+    value: lower_case
+
+  - key:   readability-identifier-naming.MemberCase
+    value: lower_case
+  - key:   readability-identifier-naming.MemberSuffix
+    value: '_'
+
+  - key:   readability-identifier-naming.ConstexprVariableCase
+    value: lower_case
+  - key:   readability-identifier-naming.ConstexprVariablePrefix
+    value: 'k_'
+  - key:   readability-identifier-naming.GlobalConstantCase
+    value: lower_case
+  - key:   readability-identifier-naming.GlobalConstantPrefix
+    value: 'k_'
+  - key:   readability-identifier-naming.StaticConstantCase
+    value: lower_case
+  - key:   readability-identifier-naming.StaticConstantPrefix
+    value: 'k_'
+
+  - key:   readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+
+  - key:   readability-identifier-naming.IgnoreFailedSplit
+    value: true
+
+  - key:   misc-const-correctness.AnalyzeValues
+    value: true
+  - key:   misc-const-correctness.WarnPointersAsValues
+    value: false
 ...

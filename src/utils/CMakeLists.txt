@@ -6,4 +6,4 @@ target_compile_features(tide_utils PUBLIC cxx_std_23)
 
 target_link_libraries(tide_utils PUBLIC lyricsmpris_glaze)
 
-target_compile_options(tide_utils PRIVATE -Wall -Wextra)
+target_compile_options(tide_utils PRIVATE -Wall -Wextra -Wpedantic -Werror)
