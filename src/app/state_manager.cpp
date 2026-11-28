@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "app/island.hpp"
+#include "app/settings.hpp"
 #include "app/views/clock_view.hpp"
 #include "app/views/music_player.hpp"
 #include "app/views/sysinfo.hpp"
@@ -86,10 +87,6 @@ void on_bg_click(const Object::Event& e) {
 	}
 }
 
-void set_surface(const uint32_t width, const uint32_t height) {
-	Wayland::request_resize(width, height);
-}
-
 void hover(bool is_on);
 
 void resize(const uint32_t width, const uint32_t height, bool is_expended, float radius = -1.f) {
@@ -105,7 +102,7 @@ void resize(const uint32_t width, const uint32_t height, bool is_expended, float
 				if(ctx.get_hovered() == bg)
 					hover(true);
 				else
-					set_surface(width, height);
+					Wayland::request_resize(width, height);
 				Island::request_redraw(true);
 			}
 		};
@@ -141,9 +138,9 @@ void resize(const uint32_t width, const uint32_t height, bool is_expended, float
 	}
 
 	if(is_expended)
-		set_surface(width, height);
+		Wayland::request_resize(width, height);
 	else if(const auto [sw, sh] = Wayland::get_surface_size(); width > sw || height > sh)
-		set_surface(max(width, sw), max(height, sh)); // growing: room now, exact size once settled
+		Wayland::request_resize(max(width, sw), max(height, sh)); // growing: room now, exact size once settled
 }
 
 void scale_bg(const float to, AnimCallback on_done = {}) {
@@ -164,11 +161,11 @@ void hover(const bool is_on) {
 		const auto grown = [](const uint32_t v) {
 			return v + static_cast<uint32_t>(ceil(static_cast<float>(v) * (k_hover_scale - 1.f)));
 		};
-		set_surface(grown(size.width_), grown(size.height_));
+		Wayland::request_resize(grown(size.width_), grown(size.height_));
 		scale_bg(k_hover_scale);
 	} else {
 		scale_bg(1.f, [size] {
-			set_surface(size.width_, size.height_);
+			Wayland::request_resize(size.width_, size.height_);
 			Island::request_redraw(true);
 		});
 	}
@@ -234,8 +231,9 @@ void sync_surface() {
 		ctx.layout();
 	}
 
-	Wayland::set_blur(island_state.is_blur_);
-	if(island_state.is_blur_) {
+	const bool is_blur{Settings::get_settings().is_blur_};
+	Wayland::set_blur(is_blur);
+	if(is_blur) {
 		const Frame f{ctx.absolute_frame(bg)};
 		Wayland::set_blur_shape(f.x_, f.y_, f.width_, f.height_, ctx.rect(bg).get_radius());
 	}

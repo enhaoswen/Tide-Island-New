@@ -36,6 +36,7 @@ set(SRC
         src/app/API.cpp
         src/app/main_loop.cpp
         src/app/island.cpp
+        src/app/settings.cpp
         src/app/views/clock_view.cpp
         src/music/spotify_bridge.cpp
         src/command/command.cpp

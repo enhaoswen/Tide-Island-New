@@ -4,13 +4,14 @@
 
 #include "app/island.hpp"
 #include "app/main_loop.hpp"
+#include "app/settings.hpp"
 #include "app/state_manager.hpp"
 #include "app/views/clock_view.hpp"
 #include "app/views/sysinfo.hpp"
 #include "backend/egl_vendor.hpp"
-#include "backend/sysinfo/sysinfo.hpp"
 #include "backend/timer.hpp"
 #include "backend/wayland.hpp"
+#include "backend/sysinfo/sysinfo.hpp"
 #include "graphics/renderer.hpp"
 #include "graphics/text.hpp"
 #include "music/media.hpp"
@@ -20,7 +21,7 @@
 #include "utils/struct.hpp"
 
 using namespace std;
-using namespace std::chrono;
+using namespace chrono;
 
 namespace {
 
@@ -64,6 +65,9 @@ void init() {
 	Island::init();
 	island = &Island::get_island();
 	Log::logger(Log::LogLevel::Debug, "Island initialized successfully");
+
+	Settings::init();
+	Log::logger(Log::LogLevel::Debug, "Settings initialized successfully");
 
 	Wayland::init(island->island_width_, island->island_height_, island->zone_, island->anchor_top_);
 	Log::logger(Log::LogLevel::Debug, "Wayland initialized successfully");
@@ -118,17 +122,23 @@ void clear_status() {
 }
 
 void run() {
-	auto  last{steady_clock::now()};
-	auto& ctx{StateManager::get_context()};
+	auto        last{steady_clock::now()};
+	auto&       ctx{StateManager::get_context()};
+	const auto& settings{Settings::get_settings()};
 
 	while(island->is_running_) {
 
-		if(island->should_redraw_ && Wayland::is_frame_ready()) {
+		const nanoseconds frame_interval{settings.fps_ == 0 ? 0ns : nanoseconds{1s} / settings.fps_};
+		const nanoseconds frame_delay{frame_interval - (steady_clock::now() - last)};
+
+		if(island->should_redraw_ && Wayland::is_frame_ready() && frame_delay <= 0ns) {
 			Island::request_redraw(false);
 
+			const float max_dt_ms{max(33.f, 2.f * duration<float, milli>{frame_interval}.count())};
 			const auto  now{steady_clock::now()};
 			const float dt_ms{
-				std::min(static_cast<float>(duration_cast<microseconds>(now - last).count()) / 1000.0f, 33.f)};
+				min(static_cast<float>(duration_cast<microseconds>(now - last).count()) / 1000.0f, max_dt_ms),
+			};
 			last = now;
 
 			ctx.update(dt_ms * island->animation_scale_);
@@ -143,7 +153,12 @@ void run() {
 			Renderer::end_frame();
 		}
 
-		const bool should_redraw{MainLoop::wait(ctx.is_animating() || island->should_redraw_)};
+		const bool should_redraw{
+			MainLoop::wait(
+				ctx.is_animating() ||
+				island->should_redraw_,
+				frame_interval - (steady_clock::now() - last)),
+		};
 		// Pointer input gathered during the wait; callbacks usually change something visible.
 		const bool is_handled{ctx.dispatch_events()};
 		Island::request_redraw(should_redraw || is_handled || island->should_redraw_);

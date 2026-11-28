@@ -1,6 +1,7 @@
 #include "config.hpp"
 
 #include <algorithm>
+#include <ranges>
 #include <cstdlib>
 #include <string>
 #include <system_error>
@@ -70,6 +71,13 @@ bool write(const T& t, source_location location) {
 		}
 	}
 
+	// A raw value keeps the whitespace around it, e.g. the newline before a closing brace.
+	for(auto& value : entries | views::values) {
+		auto&      text{value.str};
+		const auto first{text.find_first_not_of(" \t\r\n")};
+		text = first == string::npos ? string{} : text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1);
+	}
+
 	string  json{};
 	Entries own{};
 	if(const auto error{glz::write_json(t, json)}) {
@@ -99,7 +107,7 @@ bool write(const T& t, source_location location) {
 	return true;
 }
 
-template bool read<IslandConfig>(IslandConfig&, source_location);
-template bool write<IslandConfig>(const IslandConfig&, source_location);
+template bool read<TideConfig>(TideConfig&, source_location);
+template bool write<TideConfig>(const TideConfig&, source_location);
 
 }

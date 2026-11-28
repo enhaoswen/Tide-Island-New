@@ -18,7 +18,6 @@ struct IslandState {
 	float     radius_{};
 	float     current_priority_{};
 	Color     color_{};
-	bool      is_blur_{false};
 	bool      should_redraw_{true};
 	bool      is_running_{true};
 	StateType state_{StateType::Clock};

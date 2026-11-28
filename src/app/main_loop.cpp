@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -33,7 +34,7 @@ vector<pollfd> fds;
 
 namespace MainLoop {
 
-bool wait(bool is_animating) {
+bool wait(bool is_animating, nanoseconds frame_delay) {
 	if(wayland_fd == -1) {
 		wayland_fd = Wayland::get_wayland_fd();
 		if(wayland_fd == -1)
@@ -52,17 +53,26 @@ bool wait(bool is_animating) {
 	const size_t media_end{fds.size()};
 	SpotifyBridge::append_poll_fds(fds);
 
-	int        timeout_ms{is_animating ? 16 : -1};
+	optional<nanoseconds> timeout{};
+	if(is_animating)
+		timeout = frame_delay > 0ns ? frame_delay : nanoseconds{16ms};
 	const auto media_deadline{Media::next_deadline()};
 	if(media_deadline) {
-		const auto left{ceil<milliseconds>(*media_deadline - steady_clock::now()).count()};
-		const int  ms{static_cast<int>(std::clamp<long long>(left, 0, numeric_limits<int>::max()))};
-		timeout_ms = timeout_ms < 0 ? ms : min(timeout_ms, ms);
+		const nanoseconds left{max(nanoseconds{*media_deadline - steady_clock::now()}, 0ns)};
+		timeout = timeout ? min(*timeout, left) : left;
+	}
+
+	timespec  ts{};
+	timespec const* ts_ptr{};
+	if(timeout) {
+		const auto secs{duration_cast<seconds>(*timeout)};
+		ts     = {.tv_sec = secs.count(), .tv_nsec = (*timeout - secs).count()};
+		ts_ptr = &ts;
 	}
 
 	int result{};
 	do {
-		result = poll(fds.data(), fds.size(), timeout_ms);
+		result = ppoll(fds.data(), fds.size(), ts_ptr, nullptr);
 	} while(result == -1 && errno == EINTR);
 
 	if(result == -1) {

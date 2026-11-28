@@ -1,5 +1,6 @@
 #include "app/island.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <source_location>
 #include <utility>
@@ -21,15 +22,14 @@ Island::IslandState island{
 	.color_         = Color{0, 0, 0, 1},
 };
 
-Config::IslandConfig to_config() {
-	Config::IslandConfig config{};
+Config::TideConfig to_config() {
+	Config::TideConfig config{};
 	config.island_width  = island.island_width_;
 	config.island_height = island.island_height_;
 	config.zone          = island.zone_;
 	config.anchor_top    = island.anchor_top_;
 	config.radius        = island.radius_;
 	config.color         = island.color_;
-	config.blur          = island.is_blur_;
 	return config;
 }
 
@@ -46,7 +46,7 @@ void init() {
 		return;
 	}
 
-	Config::IslandConfig config{to_config()};
+	Config::TideConfig config{to_config()};
 	if(!Config::read(config))
 		return;
 
@@ -61,7 +61,6 @@ void init() {
 	island.anchor_top_    = config.anchor_top;
 	island.radius_        = config.radius;
 	island.color_         = config.color;
-	island.is_blur_       = config.blur;
 }
 
 void set_anchor_top(int32_t distance) {

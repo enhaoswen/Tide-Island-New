@@ -8,14 +8,15 @@
 
 namespace Config {
 
-/// @brief Island configuration persisted as JSON; member names are the serialized keys.
-struct IslandConfig {
+/// @brief Configuration persisted as JSON; member names are the serialized keys.
+struct TideConfig {
 	uint16_t island_width{};
 	uint16_t island_height{};
 	int16_t  zone{};
 	int16_t  anchor_top{};
 	float    radius{};
 	Color    color{};
+	uint16_t fps{};
 	bool     blur{};
 };
 
@@ -33,8 +34,8 @@ bool read(T& t, std::source_location location = std::source_location::current())
 template<typename T>
 bool write(const T& t, std::source_location location = std::source_location::current());
 
-extern template bool read<IslandConfig>(IslandConfig&, std::source_location);
+extern template bool read<TideConfig>(TideConfig&, std::source_location);
 
-extern template bool write<IslandConfig>(const IslandConfig&, std::source_location);
+extern template bool write<TideConfig>(const TideConfig&, std::source_location);
 
 }
