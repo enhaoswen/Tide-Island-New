@@ -8,12 +8,13 @@ namespace Settings {
 struct AppSettings {
 	uint16_t fps_{}; // frame cap; 0 = uncapped
 	bool     is_blur_{false};
+	bool     is_24h_{true};
 };
 
 /// @brief Returns the loaded application settings.
 [[nodiscard]] const AppSettings& get_settings();
 
-/// @brief Loads the settings from the config file, writing the defaults if missing.
+/// @brief Applies the loaded config to the settings.
 void init();
 
 }

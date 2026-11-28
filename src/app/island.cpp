@@ -13,25 +13,7 @@ using namespace std;
 
 namespace {
 
-Island::IslandState island{
-	.island_width_  = 140,
-	.island_height_ = 38,
-	.zone_          = 40,
-	.anchor_top_    = 2,
-	.radius_        = 19,
-	.color_         = Color{0, 0, 0, 1},
-};
-
-Config::TideConfig to_config() {
-	Config::TideConfig config{};
-	config.island_width  = island.island_width_;
-	config.island_height = island.island_height_;
-	config.zone          = island.zone_;
-	config.anchor_top    = island.anchor_top_;
-	config.radius        = island.radius_;
-	config.color         = island.color_;
-	return config;
-}
+Island::IslandState island{};
 
 }
 
@@ -41,18 +23,9 @@ const Island::IslandState& get_island() {
 }
 
 void init() {
-	if(!Config::has_config()) {
-		Config::write(to_config());
-		return;
-	}
-
-	Config::TideConfig config{to_config()};
-	if(!Config::read(config))
-		return;
-
+	const Config::TideConfig& config{Config::get_config()};
 	if(config.island_width == 0 || config.island_height == 0 || !isfinite(config.radius) || config.radius < 0) {
-		Log::logger(Log::LogLevel::Error, "Invalid island dimensions, animation scale, radius, or priority");
-		return;
+		Log::fatal("Invalid island dimensions, animation scale, radius, or priority");
 	}
 
 	island.island_width_  = config.island_width;

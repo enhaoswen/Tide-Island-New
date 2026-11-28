@@ -8,6 +8,7 @@
 #include "app/state_manager.hpp"
 #include "app/views/clock_view.hpp"
 #include "app/views/sysinfo.hpp"
+#include "backend/config.hpp"
 #include "backend/egl_vendor.hpp"
 #include "backend/timer.hpp"
 #include "backend/wayland.hpp"
@@ -61,6 +62,8 @@ void on_pointer_leave() {
 
 namespace Api {
 void init() {
+	Config::init();
+	Log::logger(Log::LogLevel::Debug, "Config initialized successfully");
 
 	Island::init();
 	island = &Island::get_island();
@@ -83,9 +86,10 @@ void init() {
 
 	Media::init();
 	SpotifyBridge::init();
-	Log::logger(Log::LogLevel::Debug, "Media initialized (available: {})", Media::is_available());
+	Log::logger(Log::LogLevel::Debug, "Media initialized successfully");
 
 	SysInfo::init();
+	Log::logger(Log::LogLevel::Debug, "Sysinfo initialized successfully");
 
 	Wayland::set_pointer_callbacks({
 		.motion_ = on_pointer_motion,

@@ -1,10 +1,13 @@
 #include "app/views/clock_view.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <format>
 #include <string>
 
 #include "app/API.hpp"
+#include "app/settings.hpp"
 #include "backend/timer.hpp"
 #include "utils/log.hpp"
 
@@ -22,7 +25,12 @@ void update() {
 	const auto now{chrono::system_clock::now()};
 	auto       view{context->text(time_text)};
 
-	const string s{format("{:%H:%M}", chrono::current_zone()->to_local(now))};
+	const auto local{chrono::current_zone()->to_local(now)};
+	string     s{Settings::get_settings().is_24h_ ? format("{:%H:%M}", local) : format("{:%I:%M %p}", local)};
+	if(s.front() == '0' && !Settings::get_settings().is_24h_)
+		s.erase(0, 1);
+	if(!Settings::get_settings().is_24h_)
+		ranges::transform(s, s.begin(), [](unsigned char c) { return static_cast<char>(tolower(c)); });
 	if(s != last) {
 		last = s;
 		view.set_text(s);

@@ -32,7 +32,7 @@ inline constexpr float k_priority_expended{5.f};
 /// @brief Returns the process-wide island state.
 [[nodiscard]] const IslandState& get_island();
 
-/// @brief Loads the island configuration from disk, or writes the defaults.
+/// @brief Applies the loaded config to the island state.
 void init();
 
 /// @brief Sets the island's distance from the top edge in pixels.

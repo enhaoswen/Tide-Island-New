@@ -6,12 +6,6 @@ namespace {
 
 Settings::AppSettings settings{};
 
-Config::TideConfig to_config() {
-	Config::TideConfig config{};
-	config.fps = settings.fps_;
-	return config;
-}
-
 }
 
 namespace Settings {
@@ -21,12 +15,10 @@ const AppSettings& get_settings() {
 }
 
 void init() {
-	Config::TideConfig config{to_config()};
-	if(!Config::read(config))
-		return;
-
-	settings.fps_ = config.fps;
-	Config::write(config);
+	const Config::TideConfig& config{Config::get_config()};
+	settings.fps_     = config.fps;
+	settings.is_blur_ = config.blur;
+	settings.is_24h_  = config.twenty_four_h;
 }
 
 }

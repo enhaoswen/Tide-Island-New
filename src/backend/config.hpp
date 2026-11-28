@@ -18,7 +18,14 @@ struct TideConfig {
 	Color    color{};
 	uint16_t fps{};
 	bool     blur{};
+	bool     twenty_four_h{};
 };
+
+/// @brief Loads the config file, writing the default config first if it is missing.
+void init();
+
+/// @brief Returns the config loaded by init().
+[[nodiscard]] const TideConfig& get_config();
 
 /// @brief Returns the path to the user's config file.
 [[nodiscard]] std::filesystem::path get_path();
